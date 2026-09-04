@@ -161,21 +161,39 @@ const getLogContext = (): any => {
 class SocketService {
   private socket: Socket | null = null;
   private listeners: Record<string, Set<SocketEventListener>> = {};
+  private isConnecting = false;
 
-  async connect(): Promise<void> {
+  /**
+   * PR-3: opens the shared connection.
+   *
+   * Pass the JWT explicitly wherever possible. AuthContext updates its in-memory
+   * token BEFORE the AsyncStorage write resolves, so reading storage here right
+   * after login races and can pick up the previous (or a null) value. Falls back
+   * to storage when omitted, preserving the original behaviour.
+   */
+  async connect(authToken?: string): Promise<void> {
     const startTime = Date.now();
     const { callLogger } = require('./callLogger');
     const ctx = getLogContext();
     callLogger.info('SOCKET', 'ENTER: connect', ctx);
 
-    if (this.socket && this.socket.connected) {
+    // PR-3: one socket per process. This used to bail only when the existing socket
+    // was already CONNECTED, so a second call during the connecting window built a
+    // second socket and orphaned the first.
+    if (this.socket) {
       const duration = Date.now() - startTime;
-      callLogger.info('SOCKET', `Already connected. Duration: ${duration}ms`, ctx);
+      callLogger.info('SOCKET', `Socket instance already exists (connected=${this.socket.connected}). Skipping duplicate connect. Duration: ${duration}ms`, ctx);
       return;
     }
 
+    if (this.isConnecting) {
+      callLogger.info('SOCKET', 'Connect already in progress. Ignoring duplicate call.', ctx);
+      return;
+    }
+    this.isConnecting = true;
+
     try {
-      const token = await AsyncStorage.getItem('authToken');
+      const token = authToken ?? (await AsyncStorage.getItem('authToken'));
       if (!token) {
         const duration = Date.now() - startTime;
         callLogger.warn('SOCKET', `Cannot connect without auth token. Duration: ${duration}ms`, ctx);
@@ -191,6 +209,12 @@ class SocketService {
         transports: ['websocket', 'polling'], // Allow polling fallback for RN reliability
         reconnection: true,
       });
+
+      // PR-3: attach queued listeners NOW rather than inside the 'connect' handler.
+      // Rebinding only on 'connect' meant a listener for 'connect' itself was attached
+      // after that event had already fired, so it never ran for the first connection -
+      // which is precisely what SocketProvider needs to observe.
+      this.rebindListeners();
 
       this.socket.on('connect', () => {
         const connDuration = Date.now() - startTime;
@@ -220,7 +244,23 @@ class SocketService {
       const duration = Date.now() - startTime;
       callLogger.error('SOCKET', `EXIT: connect - FAILURE. Duration: ${duration}ms`, ctx, error);
       throw error;
+    } finally {
+      this.isConnecting = false;
     }
+  }
+
+  /**
+   * PR-3: revive a dropped socket, or create one if there is none. Safe to call
+   * repeatedly - used when the app returns to the foreground.
+   */
+  async ensureConnected(authToken?: string): Promise<void> {
+    if (this.socket) {
+      if (!this.socket.connected) {
+        this.socket.connect();
+      }
+      return;
+    }
+    await this.connect(authToken);
   }
 
   disconnect() {
@@ -230,10 +270,17 @@ class SocketService {
     callLogger.info('SOCKET', 'ENTER: disconnect', ctx);
 
     if (this.socket) {
+      this.socket.removeAllListeners();
       this.socket.disconnect();
       this.socket = null;
     }
-    this.listeners = {};
+    this.isConnecting = false;
+
+    // PR-3: this.listeners is deliberately NOT cleared. Listeners belong to
+    // long-lived providers (CallProvider, later ChatProvider) which unregister via
+    // off() in their own effect cleanup. Wiping the registry here left a
+    // logout -> login cycle with those providers still mounted but silently
+    // unsubscribed until a full app restart.
     const duration = Date.now() - startTime;
     callLogger.info('SOCKET', `EXIT: disconnect - SUCCESS. Duration: ${duration}ms`, ctx);
   }
@@ -273,6 +320,16 @@ class SocketService {
     if (!this.socket || !this.socket.connected) {
       const duration = Date.now() - startTime;
       callLogger.warn('SOCKET', `Emit FAILED for event: ${event}. Socket not connected. Duration: ${duration}ms`, ctx);
+      // PR-3: always settle the acknowledgement. Callers waiting on an ack (an
+      // optimistic chat bubble, a call action) used to hang forever when the socket
+      // happened to be down.
+      if (ack) {
+        ack({
+          success: false,
+          code: 'SOCKET_DISCONNECTED',
+          message: 'Socket is not connected.',
+        });
+      }
       return;
     }
     

@@ -11,6 +11,7 @@ import { LocationProvider } from './src/context/LocationContext';
 import { NearbySpaProvider } from './src/context/NearbySpaContext';
 import { ProfileProvider } from './src/context/ProfileContext';
 import { PaymentProvider } from './src/context/PaymentContext';
+import { SocketProvider } from './src/context/SocketContext';
 import { CallProvider } from './src/context/CallContext';
 
 function App() {
@@ -49,17 +50,19 @@ function App() {
     <GestureHandlerRootView style={styles.gestureRoot}>
       <SafeAreaProvider>
         <AuthProvider>
-          <LocationProvider>
-            <ProfileProvider>
-              <NearbySpaProvider>
-                <PaymentProvider>
-                  <CallProvider>
-                    <AppNavigator />
-                  </CallProvider>
-                </PaymentProvider>
-              </NearbySpaProvider>
-            </ProfileProvider>
-          </LocationProvider>
+          <SocketProvider>
+            <LocationProvider>
+              <ProfileProvider>
+                <NearbySpaProvider>
+                  <PaymentProvider>
+                    <CallProvider>
+                      <AppNavigator />
+                    </CallProvider>
+                  </PaymentProvider>
+                </NearbySpaProvider>
+              </ProfileProvider>
+            </LocationProvider>
+          </SocketProvider>
         </AuthProvider>
         <Toast />
       </SafeAreaProvider>

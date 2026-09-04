@@ -465,10 +465,12 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [setCallState, cleanupAndResetCall]);
 
-  // Handle Socket Events
+  // Handle Socket Events.
+  // PR-3: the connection lifecycle now belongs to SocketProvider
+  // (src/context/SocketContext.tsx). This provider only registers and unregisters
+  // listeners. socketService.on() queues them when no socket exists yet and rebinds
+  // on every (re)connect, so registration order does not matter.
   useEffect(() => {
-    socketService.connect();
-
     callManager.setContextActions({
       setCallState,
       setSession,
@@ -670,7 +672,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       socketService.off('call_cancel', handleCanceled);
       socketService.off('call_end', handleEnded);
       socketService.off('call_accepted_elsewhere', handleAcceptedElsewhere);
-      socketService.disconnect();
+      // PR-3: do NOT disconnect here. The socket is shared with other features and
+      // is owned by SocketProvider.
     };
   }, [setCallState, cleanupAndResetCall]);
 
