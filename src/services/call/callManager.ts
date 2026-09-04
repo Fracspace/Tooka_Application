@@ -1,5 +1,5 @@
 import { CallSession, CallState } from '../../types/call';
-import { callService } from './callService';
+import { callService, callActionBody, extractApiErrorMessage } from './callService';
 import { ringtoneService } from './ringtoneService';
 import authAxiosClient from '../../api/authAxiosClient';
 import { navigationRef } from '../../navigation/NavigationService';
@@ -10,6 +10,9 @@ export interface CallContextActions {
   setSession: (session: CallSession | null) => void;
   cleanupAndResetCall: (reason?: string) => void;
   getCallState: () => CallState;
+  // PR-2: lets this flow surface the backend's user-facing rejection copy instead of
+  // leaving the screen on a bare "Call Failed".
+  setErrorMessage: (message: string | null) => void;
 }
 
 const getLogContext = (): any => {
@@ -59,6 +62,15 @@ class CallManager {
       return false;
     }
 
+    // PR-2: validate before anything else. A call_ringing with no callSessionId used to
+    // build a session with `sessionId: undefined` - breaking every later id match - and
+    // on the busy path below it POSTed to /chat/calls/undefined/reject.
+    if (!payload?.callSessionId) {
+      console.error('[IncomingCall] Ignoring call_ringing with no callSessionId', payload);
+      callLogger.error('CALL', 'EXIT: handleIncomingCall - invalid payload (no callSessionId)', ctx, { payload });
+      return false;
+    }
+
     const currentState = this.contextActions.getCallState();
     if (currentState !== CallState.IDLE) {
       console.log(`[IncomingCall] Duplicate or conflicting call received while in state: ${currentState}. Ignoring/Rejecting.`);
@@ -67,7 +79,10 @@ class CallManager {
       // Auto-reject incoming call if we are already in another call
       try {
         const restStart = Date.now();
-        await authAxiosClient.post(`/chat/calls/${payload.callSessionId}/reject`);
+        await authAxiosClient.post(
+          `/chat/calls/${payload.callSessionId}/reject`,
+          callActionBody({ sessionId: payload.callSessionId, spaId: payload.spaId }),
+        );
         callLogger.info('REST', `Auto-rejected conflicting call session: ${payload.callSessionId}. Duration: ${Date.now() - restStart}ms`, ctx);
       } catch (e) {
         console.error('[IncomingCall] Failed to auto-reject conflicting call', e);
@@ -130,9 +145,46 @@ class CallManager {
       callLogger.warn('NAVIGATION', `navigationRef not ready. Bypassed IncomingCallScreen navigation.`, ctx);
     }
 
+    // PR-2: fill in what call_ringing does not carry (booking_id, spa_id,
+    // conversation_id, agora uids). Fire-and-forget - the ringing UI is already up and
+    // must never wait on this.
+    this.hydrateIncomingSession(session.sessionId).catch((e) => {
+      callLogger.warn('SESSION', 'hydrateIncomingSession threw', ctx, e);
+    });
+
     const duration = Date.now() - startTime;
     callLogger.info('CALL', `EXIT: handleIncomingCall - SUCCESS. Duration: ${duration}ms`, ctx);
     return true;
+  }
+
+  // PR-2: see fetchSessionDetails in callService for why this exists.
+  private async hydrateIncomingSession(sessionId: string): Promise<void> {
+    const { callLogger } = require('./callLogger');
+    const details = await callService.fetchSessionDetails(sessionId);
+    if (!details) return;
+
+    const pending = callService.getPendingSession();
+    // The user may have accepted or rejected, or the caller may have cancelled, while
+    // this request was in flight. Only merge if the same session is still pending.
+    if (!pending || pending.sessionId !== sessionId) {
+      callLogger.info('SESSION', `hydrateIncomingSession skipped: ${sessionId} is no longer the pending session`, getLogContext());
+      return;
+    }
+
+    if (details.booking_id) pending.bookingId = details.booking_id;
+    if (details.spa_id) pending.spaId = details.spa_id;
+    if (details.conversation_id) pending.conversationId = details.conversation_id;
+    if (details.call_type) pending.callType = details.call_type;
+    if (details.direction) pending.direction = details.direction;
+    if (details.status) pending.status = details.status;
+    if (details.agora_uid_user !== undefined) pending.agoraUidUser = details.agora_uid_user;
+    if (details.agora_uid_spa !== undefined) pending.agoraUidSpa = details.agora_uid_spa;
+    if (details.spa_id) pending.caller.id = details.spa_id;
+    if (details.user_id) pending.receiver.id = details.user_id;
+
+    callLogger.info('SESSION', `Incoming session hydrated from GET /chat/calls/${sessionId}`, getLogContext(), pending);
+    // New object so React re-renders with the filled-in fields.
+    this.contextActions?.setSession({ ...pending });
   }
 
   async acceptCall(): Promise<void> {
@@ -168,7 +220,10 @@ class CallManager {
       // Step 1: REST accept
       const restStart = Date.now();
       console.log(`[REST] POST /chat/calls/${pending.sessionId}/accept`);
-      const response = await authAxiosClient.post(`/chat/calls/${pending.sessionId}/accept`);
+      const response = await authAxiosClient.post(
+        `/chat/calls/${pending.sessionId}/accept`,
+        callActionBody(pending),
+      );
       const data = response.data?.data || response.data;
       callLogger.info('REST', `Accept API Response. Status: ${response.status}, Duration: ${Date.now() - restStart}ms`, ctx, data);
 
@@ -233,7 +288,10 @@ class CallManager {
       const navStart = Date.now();
       if (navigationRef.isReady()) {
         const currentRoute = navigationRef.getCurrentRoute()?.name;
-        if (currentRoute === 'IncomingCall') {
+        if (currentRoute === 'CallScreen') {
+          // PR-2: answered from CallScreen's own INCOMING layout - we are already here.
+          callLogger.info('NAVIGATION', 'Already on CallScreen; no navigation needed.', ctx);
+        } else if (currentRoute === 'IncomingCall') {
           navigationRef.dispatch(
             StackActions.replace('CallScreen', {
               bookingId: pending.bookingId,
@@ -273,6 +331,8 @@ class CallManager {
       callLogger.info('CALL', `EXIT: acceptCall - SUCCESS. Duration: ${totalDuration}ms`, ctx);
     } catch (error) {
       console.error('[IncomingCall] Failed to accept call:', error);
+      // PR-2: surface the reason. Every accept failure used to render as "Call Failed".
+      this.contextActions.setErrorMessage(extractApiErrorMessage(error, 'Could not answer the call.'));
       // Bug #3: Only cleanup after a real failure
       this.contextActions.setCallState(CallState.FAILED);
       this.contextActions.cleanupAndResetCall('agora_join_failed');
@@ -316,7 +376,10 @@ class CallManager {
     try {
       const restStart = Date.now();
       console.log(`[REST] POST /chat/calls/${pending.sessionId}/reject`);
-      await authAxiosClient.post(`/chat/calls/${pending.sessionId}/reject`);
+      await authAxiosClient.post(
+        `/chat/calls/${pending.sessionId}/reject`,
+        callActionBody(pending),
+      );
       callLogger.info('REST', `rejectCall API response. Duration: ${Date.now() - restStart}ms`, ctx);
     } catch (error) {
       console.error('[IncomingCall] Error rejecting call', error);

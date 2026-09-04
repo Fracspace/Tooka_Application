@@ -11,7 +11,7 @@ const AUDIO_ROUTE = {
   BLUETOOTH: 5,
 } as const;
 import { socketService } from '../services/call/socketService';
-import { callService } from '../services/call/callService';
+import { callService, extractApiErrorMessage } from '../services/call/callService';
 import { agoraService } from '../services/call/agoraService';
 import { callManager } from '../services/call/callManager';
 import { ringtoneService } from '../services/call/ringtoneService';
@@ -217,6 +217,20 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const cleanupAndResetCall = useCallback(async (reason: string = 'unknown') => {
     if (isCleaningUpRef.current) return;
+
+    // PR-2a: nothing left to tear down. Now that PR-1 releases the latch, several
+    // independent paths each run a full cleanup for the same call (cancelCall's
+    // finally, the echoed call_cancel handler, the outgoing timeout). They are harmless
+    // no-ops but each printed an empty CALL SUMMARY - three per cancelled call.
+    const hasSession =
+      !!sessionRef.current ||
+      !!callService.getPendingSession() ||
+      !!callService.getConnectingSession() ||
+      !!callService.getActiveSession();
+    if (!hasSession && callStateRef.current === CallState.IDLE) {
+      return;
+    }
+
     isCleaningUpRef.current = true;
 
     try {
@@ -254,7 +268,10 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsMuted(false);
       setIsSpeaker(false);
       setDuration(0);
-      setErrorMessage(null);
+      // PR-2: errorMessage is deliberately NOT cleared here. Cleanup runs ~2s after a
+      // terminal state, so clearing it wiped the explanation off the screen while the
+      // user was still looking at it. Every entry point (initiateCall,
+      // acceptIncomingCall, handleRinging) clears it when a new call begins.
 
       // PR-1: null the refs synchronously. They are normally synced by a useEffect
       // that only runs on the NEXT render, so between cleanup and that render the
@@ -456,7 +473,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCallState,
       setSession,
       cleanupAndResetCall,
-      getCallState: () => callStateRef.current
+      getCallState: () => callStateRef.current,
+      setErrorMessage,
     });
 
     // const handleRinging = (payload: any) => {
@@ -625,11 +643,25 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       cleanupAndResetCall('call_ended_remotely');
     };
 
+    // PR-2: the backend emits call_accepted_elsewhere to the devices that did NOT
+    // accept. Without this a second device logged into the same account rings forever
+    // after the call has been answered somewhere else.
+    const handleAcceptedElsewhere = (payload: any) => {
+      if (!isForCurrentSession(payload, 'call_accepted_elsewhere')) return;
+      console.log('[Socket] Call was accepted on another device.');
+      ringtoneService.stop();
+      callManager.handleRemoteEndOrCancel(
+        payload?.callSessionId || sessionRef.current?.sessionId || '',
+        'call_accepted_elsewhere',
+      );
+    };
+
     socketService.on('call_ringing', handleRinging);
     socketService.on('call_accept', handleAnswered);
     socketService.on('call_reject', handleDeclined);
     socketService.on('call_cancel', handleCanceled);
     socketService.on('call_end', handleEnded);
+    socketService.on('call_accepted_elsewhere', handleAcceptedElsewhere);
 
     return () => {
       socketService.off('call_ringing', handleRinging);
@@ -637,6 +669,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       socketService.off('call_reject', handleDeclined);
       socketService.off('call_cancel', handleCanceled);
       socketService.off('call_end', handleEnded);
+      socketService.off('call_accepted_elsewhere', handleAcceptedElsewhere);
       socketService.disconnect();
     };
   }, [setCallState, cleanupAndResetCall]);
@@ -664,35 +697,31 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }, 60000);
     } catch (error) {
       console.error('[CallContext] Failed to initiate call', error);
+      // PR-2: the backend sends user-facing copy on rejection. This catch never set
+      // errorMessage, so a rejected call showed a bare "Call Failed" with no reason.
+      setErrorMessage(extractApiErrorMessage(error, 'Could not start the call. Please try again.'));
       setCallState(CallState.FAILED);
       setTimeout(() => cleanupAndResetCall(), 2000);
     }
   }, [setCallState, cleanupAndResetCall]);
 
+  // PR-2: both surfaces now run the SAME implementation. These used to call
+  // callService.answerCall/declineCall - a second, divergent flow that did the REST
+  // call and then stopped: it never joined the Agora channel and never set CONNECTED,
+  // so answering from CallScreen's INCOMING layout hung in CONNECTING forever.
+  // callManager owns answering and rejecting; these are thin wrappers kept so the
+  // context API (and CallScreen) does not have to change.
   const acceptIncomingCall = useCallback(async () => {
-    if (!sessionRef.current || callStateRef.current !== CallState.INCOMING) return;
+    if (callStateRef.current !== CallState.INCOMING) return;
     isCleaningUpRef.current = false;
     setErrorMessage(null);
-    try {
-      setCallState(CallState.CONNECTING);
-      await callService.answerCall(sessionRef.current);
-    } catch (error) {
-      console.error('[CallContext] Failed to accept call', error);
-      setCallState(CallState.FAILED);
-      setTimeout(() => cleanupAndResetCall(), 2000);
-    }
-  }, [setCallState, cleanupAndResetCall]);
+    await callManager.acceptCall();
+  }, []);
 
   const declineIncomingCall = useCallback(async () => {
-    if (!sessionRef.current || callStateRef.current !== CallState.INCOMING) return;
-    try {
-      await callService.declineCall(sessionRef.current);
-      setCallState(CallState.REJECTED);
-      setTimeout(() => cleanupAndResetCall(), 2000);
-    } catch (error) {
-      cleanupAndResetCall();
-    }
-  }, [setCallState, cleanupAndResetCall]);
+    if (callStateRef.current !== CallState.INCOMING) return;
+    await callManager.rejectCall();
+  }, []);
 
   const cancelCall = useCallback(async () => {
     if (!sessionRef.current || (callStateRef.current !== CallState.OUTGOING && callStateRef.current !== CallState.RINGING)) return;

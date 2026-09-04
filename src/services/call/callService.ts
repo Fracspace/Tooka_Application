@@ -4,7 +4,29 @@ import { ringtoneService } from './ringtoneService';
 import { CallSession, CallRequest } from '../../types/call';
 import authAxiosClient from '../../api/authAxiosClient';
 
-// TODO: Replace with real API calls
+// PR-2: one body shape for every call action. The live accept path POSTed no body at
+// all, the duplicate (now deleted) path sent { spa_id }, and the auto-reject sent
+// nothing - three request shapes for the same family of endpoints. spa_id is omitted
+// rather than sent as an empty string when we do not know it yet.
+export const callActionBody = (session: { sessionId: string; spaId?: string }) => {
+  const body: Record<string, string> = { call_session_id: session.sessionId };
+  if (session.spaId) body.spa_id = session.spaId;
+  return body;
+};
+
+// PR-2: the backend returns user-facing copy on rejection (e.g. BOOKING_NOT_ACTIVE ->
+// "This booking is expired..."). Nothing surfaced it, so every failure rendered as a
+// bare "Call Failed" with no reason.
+export const extractApiErrorMessage = (error: any, fallback: string): string => {
+  const data = error?.response?.data;
+  return (
+    data?.error?.message ||
+    data?.message ||
+    (typeof data?.error === 'string' ? data.error : undefined) ||
+    error?.message ||
+    fallback
+  );
+};
 
 const getLogContext = (session?: CallSession | null): any => {
   try {
@@ -206,7 +228,17 @@ class CallService {
       };
 
       this.createPendingSession(session);
-      
+
+      // PR-2a: DO NOT REMOVE THIS EMIT. The backend guide says REST /request and the
+      // call_request socket event are alternatives, so PR-2 dropped this one. Live
+      // testing proved the guide wrong: POST /chat/calls/request creates the session and
+      // emits call_ringing to the CALLER's own user:{id} room (we receive it ~140ms
+      // before the HTTP response, with a spa-centric payload: callerName "Spa Owner",
+      // direction "inbound"), but it never reaches spa:{spaId} - the portal never rings
+      // and `ringing_at` stays null. Only this socket event rings the spa. Both are sent
+      // deliberately; empirically the backend keeps them on ONE session id, so the
+      // accept still matches our pending session.
+      // Remove this only once the backend fans REST /request out to the spa room.
       socketService.emit('call_request', {
         bookingId: session.bookingId,
         callType: session.callType
@@ -220,73 +252,6 @@ class CallService {
     } catch (error: any) {
       const duration = Date.now() - startTime;
       callLogger.error('REST', `EXIT: initiateCall - FAILURE. Status: ${error?.response?.status || 'Unknown'}, Duration: ${duration}ms`, ctx, error);
-      throw error;
-    }
-  }
-
-  async answerCall(session: CallSession): Promise<void> {
-    const startTime = Date.now();
-    const { callLogger } = require('./callLogger');
-    const ctx = getLogContext(session);
-    callLogger.info('REST', 'ENTER: answerCall', ctx, { sessionId: session.sessionId });
-
-    try {
-      console.log(`[REST] POST /chat/calls/${session.sessionId}/accept`);
-      
-      const response = await authAxiosClient.post(`/chat/calls/${session.sessionId}/accept`, {
-        spa_id: session.spaId,
-      });
-      
-      const duration = Date.now() - startTime;
-      callLogger.info('REST', `answerCall API Response. Status: ${response.status}, Duration: ${duration}ms`, ctx, response.data);
-
-      const data = response.data?.data || response.data;
-
-      // Bug #8: Validate token object
-      if (
-        !data?.token?.token ||
-        !data?.token?.channel ||
-        data?.token?.uid === undefined
-      ) {
-        throw new Error('Backend failed to return valid Agora credentials.');
-      }
-
-      // Log token information in a sanitized format
-      const tokenObj = data.token;
-      callLogger.info('TOKEN', `Token details received - Channel: ${tokenObj.channel}, UID: ${tokenObj.uid}, Role: ${tokenObj.role || 'publisher'}`, ctx, {
-        tokenTruncated: tokenObj.token ? `${tokenObj.token.substring(0, 15)}...[REDACTED]...${tokenObj.token.substring(tokenObj.token.length - 15)}` : 'N/A'
-      });
-
-      // Diff session fields
-      const oldSessionCopy = { ...session };
-
-      // Bug #1 & Bug #2
-      session.token = data.token.token;
-      session.channelName = data.token.channel;
-      session.uid = data.token.uid;
-
-      if (data.callSession) {
-        if (data.callSession.id) session.sessionId = data.callSession.id;
-        if (data.callSession.booking_id) session.bookingId = data.callSession.booking_id;
-        if (data.callSession.spa_id) session.spaId = data.callSession.spa_id;
-        if (data.callSession.conversation_id) session.conversationId = data.callSession.conversation_id;
-        if (data.callSession.status) session.status = data.callSession.status;
-        if (data.callSession.direction) session.direction = data.callSession.direction;
-        if (data.callSession.agora_uid_user !== undefined) session.agoraUidUser = data.callSession.agora_uid_user;
-        if (data.callSession.agora_uid_spa !== undefined) session.agoraUidSpa = data.callSession.agora_uid_spa;
-      }
-
-      const diffStr = callLogger.diffObjects(oldSessionCopy, session);
-      callLogger.info('SESSION', `Session updated in answerCall (Diff):\n${diffStr}`, ctx);
-
-      socketService.emit('call_accept', session.sessionId);
-      console.log(`[Socket] Emitted call_accept. Session: ${session.sessionId}`);
-
-      const totalDuration = Date.now() - startTime;
-      callLogger.info('REST', `EXIT: answerCall - SUCCESS. Duration: ${totalDuration}ms`, ctx);
-    } catch (error: any) {
-      const duration = Date.now() - startTime;
-      callLogger.error('REST', `EXIT: answerCall - FAILURE. Status: ${error?.response?.status || 'Unknown'}, Duration: ${duration}ms`, ctx, error);
       throw error;
     }
   }
@@ -363,32 +328,6 @@ class CallService {
     callLogger.info('SOCKET', `EXIT: handleCallAccepted - SUCCESS. Duration: ${duration}ms`, ctx);
   }
 
-  async declineCall(session: CallSession): Promise<void> {
-    const startTime = Date.now();
-    const { callLogger } = require('./callLogger');
-    const ctx = getLogContext(session);
-    callLogger.info('REST', 'ENTER: declineCall', ctx, { sessionId: session.sessionId });
-
-    try {
-      console.log(`[REST] POST /chat/calls/${session.sessionId}/reject`);
-      const response = await authAxiosClient.post(`/chat/calls/${session.sessionId}/reject`, {
-        spa_id: session.spaId,
-      });
-      
-      const duration = Date.now() - startTime;
-      callLogger.info('REST', `declineCall API Response. Status: ${response.status}, Duration: ${duration}ms`, ctx, response.data);
-
-      socketService.emit('call_reject', session.sessionId);
-      console.log(`[Socket] Emitted call_reject. Session: ${session.sessionId}`);
-      
-      const totalDuration = Date.now() - startTime;
-      callLogger.info('REST', `EXIT: declineCall - SUCCESS. Duration: ${totalDuration}ms`, ctx);
-    } catch (error: any) {
-      const duration = Date.now() - startTime;
-      callLogger.error('REST', `EXIT: declineCall - FAILURE. Status: ${error?.response?.status || 'Unknown'}, Duration: ${duration}ms`, ctx, error);
-    }
-  }
-
   async cancelCall(session: CallSession): Promise<void> {
     const startTime = Date.now();
     const { callLogger } = require('./callLogger');
@@ -397,9 +336,10 @@ class CallService {
 
     try {
       console.log(`[REST] POST /chat/calls/${session.sessionId}/cancel`);
-      const response = await authAxiosClient.post(`/chat/calls/${session.sessionId}/cancel`, {
-        spa_id: session.spaId,
-      });
+      const response = await authAxiosClient.post(
+        `/chat/calls/${session.sessionId}/cancel`,
+        callActionBody(session),
+      );
       
       const duration = Date.now() - startTime;
       callLogger.info('REST', `cancelCall API Response. Status: ${response.status}, Duration: ${duration}ms`, ctx, response.data);
@@ -423,21 +363,46 @@ class CallService {
     try {
       console.log(`[REST] POST /chat/calls/${session.sessionId}/end`);
       const response = await authAxiosClient.post(`/chat/calls/${session.sessionId}/end`, {
-        spa_id: session.spaId,
+        ...callActionBody(session),
         duration_seconds: durationSeconds,
       });
       
       const duration = Date.now() - startTime;
       callLogger.info('REST', `endCall API Response. Status: ${response.status}, Duration: ${duration}ms`, ctx, response.data);
 
+      // PR-2a: restored for the same reason as call_request. REST /request was proven
+      // to fan out only to the caller's own room, so the same asymmetry is assumed for
+      // /end until tested - without this emit the portal can stay in a call after the
+      // app hangs up. Costs one redundant server call; a stuck call costs more.
       socketService.emit('call_end', session.sessionId);
       console.log(`[Socket] Emitted call_end. Session: ${session.sessionId}`);
-      
+
       const totalDuration = Date.now() - startTime;
       callLogger.info('REST', `EXIT: endCall - SUCCESS. Duration: ${totalDuration}ms`, ctx);
     } catch (error: any) {
       const duration = Date.now() - startTime;
       callLogger.error('REST', `EXIT: endCall - FAILURE. Status: ${error?.response?.status || 'Unknown'}, Duration: ${duration}ms`, ctx, error);
+    }
+  }
+
+  // PR-2: call_ringing carries only { callSessionId, channel, callerName, callType,
+  // direction } - no booking_id, spa_id or conversation_id. Without them the incoming
+  // session is built with empty strings, which is why the accept/reject bodies had
+  // nothing to send, the call screen could not identify the spa, and "Try Again" could
+  // never work after an incoming call.
+  async fetchSessionDetails(sessionId: string): Promise<any | null> {
+    const { callLogger } = require('./callLogger');
+    const ctx = getLogContext();
+    try {
+      const response = await authAxiosClient.get(`/chat/calls/${sessionId}`);
+      const data = response.data?.data || response.data;
+      const callSession = data?.callSession || data;
+      callLogger.info('REST', `fetchSessionDetails OK for ${sessionId}`, ctx, callSession);
+      return callSession || null;
+    } catch (error: any) {
+      // Non-fatal: the call still works, it is just missing display/metadata fields.
+      callLogger.warn('REST', `fetchSessionDetails FAILED for ${sessionId}. Status: ${error?.response?.status || 'Unknown'}`, ctx);
+      return null;
     }
   }
 
