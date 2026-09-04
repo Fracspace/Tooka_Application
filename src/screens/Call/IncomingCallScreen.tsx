@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, SafeAreaView } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import React, { useCallback, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, SafeAreaView, BackHandler } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { CallState } from '../../types/call';
 import { useCallContext } from '../../context/CallContext';
 import { callManager } from '../../services/call/callManager';
@@ -32,14 +32,32 @@ const IncomingCallScreen: React.FC = () => {
     ).start();
   }, [pulseAnim]);
 
-  // Only go back if call explicitly ended, rejected, or failed while this screen is active
+  // Only go back if the call reached a terminal state while this screen is active.
+  // PR-4: MISSED and NO_ANSWER added - MISSED is now reachable via the ring timeout,
+  // and without it this screen would stay up after the ringtone stopped.
   useEffect(() => {
-    if (callState === CallState.ENDED || callState === CallState.REJECTED || callState === CallState.FAILED) {
+    if (
+      callState === CallState.ENDED ||
+      callState === CallState.REJECTED ||
+      callState === CallState.FAILED ||
+      callState === CallState.MISSED ||
+      callState === CallState.NO_ANSWER
+    ) {
       if (navigation.isFocused() && navigation.canGoBack()) {
         navigation.goBack();
       }
     }
   }, [callState, navigation]);
+
+  // PR-4: block the Android hardware back button. Backing out used to dismiss this
+  // screen while the ringtone kept looping and the state stayed INCOMING - leaving no
+  // way to answer or reject, and no UI to get back to.
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => true);
+      return () => subscription.remove();
+    }, []),
+  );
 
   const handleAccept = async () => {
     await callManager.acceptCall();

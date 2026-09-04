@@ -1,5 +1,6 @@
 import { CallSession, CallState } from '../../types/call';
 import { callService, callActionBody, extractApiErrorMessage } from './callService';
+import SpaApi from '../../api/SpaApi';
 import { ringtoneService } from './ringtoneService';
 import authAxiosClient from '../../api/authAxiosClient';
 import { navigationRef } from '../../navigation/NavigationService';
@@ -71,6 +72,17 @@ class CallManager {
       return false;
     }
 
+    // PR-4: defence in depth. The backend broadcasts call_ringing to the caller too,
+    // so without this an echo of our OWN outgoing call reached the busy branch below
+    // and auto-rejected it - killing the user's call while the spa kept ringing.
+    if (
+      callService.isOwnCallSession(payload?.callSessionId) ||
+      callService.matchesOutgoingIntent(payload?.channel)
+    ) {
+      callLogger.info('CALL', 'EXIT: handleIncomingCall - IGNORED (ringing echo for our own outgoing call).', ctx, { payload });
+      return false;
+    }
+
     const currentState = this.contextActions.getCallState();
     if (currentState !== CallState.IDLE) {
       console.log(`[IncomingCall] Duplicate or conflicting call received while in state: ${currentState}. Ignoring/Rejecting.`);
@@ -102,7 +114,9 @@ class CallManager {
       bookingId: '',
       spaId: '',
       conversationId: '',
-      direction: payload.direction,
+      // PR-5: pinned app-centric, not payload.direction (which is spa-centric). This
+      // is what tells CallScreen and ActiveCallBar that the caller is the remote party.
+      direction: 'inbound',
       callType: payload.callType,
       agoraUidUser: 0,
       agoraUidSpa: 0,
@@ -175,7 +189,7 @@ class CallManager {
     if (details.spa_id) pending.spaId = details.spa_id;
     if (details.conversation_id) pending.conversationId = details.conversation_id;
     if (details.call_type) pending.callType = details.call_type;
-    if (details.direction) pending.direction = details.direction;
+    // PR-5: direction is ours (app-centric) - see callService.initiateCall.
     if (details.status) pending.status = details.status;
     if (details.agora_uid_user !== undefined) pending.agoraUidUser = details.agora_uid_user;
     if (details.agora_uid_spa !== undefined) pending.agoraUidSpa = details.agora_uid_spa;
@@ -185,6 +199,33 @@ class CallManager {
     callLogger.info('SESSION', `Incoming session hydrated from GET /chat/calls/${sessionId}`, getLogContext(), pending);
     // New object so React re-renders with the filled-in fields.
     this.contextActions?.setSession({ ...pending });
+
+    // PR-5: `call_ringing` sends callerName: "Spa Owner" - a ROLE, not the spa. The
+    // user needs to know WHICH spa is calling, and neither call_ringing nor
+    // GET /chat/calls/{id} carries the spa's name, so resolve it from spa_id.
+    if (details.spa_id) {
+      await this.resolveSpaIdentity(sessionId, details.spa_id);
+    }
+  }
+
+  private async resolveSpaIdentity(sessionId: string, spaId: string): Promise<void> {
+    const { callLogger } = require('./callLogger');
+    try {
+      const spa = await SpaApi.getSpaDetails(spaId);
+      if (!spa?.name) return;
+
+      const pending = callService.getPendingSession() || callService.getActiveSession();
+      if (!pending || pending.sessionId !== sessionId) return;
+
+      pending.caller.name = spa.name;
+      pending.caller.avatarUrl = spa.cover_photo_url || pending.caller.avatarUrl || '';
+
+      callLogger.info('SESSION', `Resolved calling spa: ${spa.name}`, getLogContext());
+      this.contextActions?.setSession({ ...pending });
+    } catch (e) {
+      // Non-fatal - the call still works, the header just keeps its fallback name.
+      callLogger.warn('SESSION', `Could not resolve spa ${spaId} for the incoming call`, getLogContext(), e);
+    }
   }
 
   async acceptCall(): Promise<void> {
@@ -256,7 +297,7 @@ class CallManager {
         if (data.callSession.spa_id) pending.spaId = data.callSession.spa_id;
         if (data.callSession.conversation_id) pending.conversationId = data.callSession.conversation_id;
         if (data.callSession.status) pending.status = data.callSession.status;
-        if (data.callSession.direction) pending.direction = data.callSession.direction;
+        // PR-5: direction is ours (app-centric) - see callService.initiateCall.
         if (data.callSession.agora_uid_user !== undefined) pending.agoraUidUser = data.callSession.agora_uid_user;
         if (data.callSession.agora_uid_spa !== undefined) pending.agoraUidSpa = data.callSession.agora_uid_spa;
       }

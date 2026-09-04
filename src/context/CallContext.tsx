@@ -37,12 +37,19 @@ interface CallContextType {
 
 const CallContext = createContext<CallContextType | undefined>(undefined);
 
+// PR-4
+const INCOMING_TIMEOUT_MS = 45_000;   // ring this long, then MISSED
+const OUTGOING_TIMEOUT_MS = 60_000;   // dial this long, then NO_ANSWER
+const TERMINAL_DISPLAY_MS = 2_000;    // how long a terminal state stays on screen
+
 // Define allowed transitions for strict state machine
 const ALLOWED_TRANSITIONS: Record<CallState, CallState[]> = {
   [CallState.IDLE]: [CallState.OUTGOING, CallState.INCOMING],
-  [CallState.OUTGOING]: [CallState.RINGING, CallState.CONNECTING, CallState.ENDED, CallState.FAILED, CallState.REJECTED],
-  [CallState.INCOMING]: [CallState.CONNECTING, CallState.ENDED, CallState.REJECTED],
-  [CallState.RINGING]: [CallState.CONNECTING, CallState.ENDED, CallState.REJECTED],
+  // PR-4: MISSED and NO_ANSWER had no inbound edge from ANY state, so both were
+  // unreachable - CallStatus and CallFooter rendered branches that could never show.
+  [CallState.OUTGOING]: [CallState.RINGING, CallState.CONNECTING, CallState.ENDED, CallState.FAILED, CallState.REJECTED, CallState.NO_ANSWER],
+  [CallState.INCOMING]: [CallState.CONNECTING, CallState.ENDED, CallState.REJECTED, CallState.MISSED],
+  [CallState.RINGING]: [CallState.CONNECTING, CallState.ENDED, CallState.REJECTED, CallState.NO_ANSWER],
   [CallState.CONNECTING]: [CallState.CONNECTED, CallState.FAILED, CallState.ENDED],
   [CallState.CONNECTED]: [CallState.RECONNECTING, CallState.ENDED, CallState.FAILED],
   [CallState.RECONNECTING]: [CallState.CONNECTED, CallState.FAILED, CallState.ENDED],
@@ -105,6 +112,10 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const durationRef = useRef(duration);
   const outgoingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const incomingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // PR-4: wall-clock start of the connected call, so duration is elapsed time rather
+  // than a count of setInterval ticks (which stall when the app is backgrounded).
+  const connectedAtRef = useRef<number | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const endCallRef = useRef<(() => Promise<void>) | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
@@ -178,10 +189,22 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Duration Timer Management
   useEffect(() => {
     if (callState === CallState.CONNECTED) {
+      // PR-4: anchor to a timestamp. Counting ticks under-reported every call the
+      // user backgrounded, because JS timers are throttled or suspended there.
+      if (!connectedAtRef.current) {
+        connectedAtRef.current = Date.now();
+      }
+
+      const tick = () => {
+        const startedAt = connectedAtRef.current;
+        if (startedAt) {
+          setDuration(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+        }
+      };
+
+      tick(); // paint immediately rather than after the first second
       if (!durationTimerRef.current) {
-        durationTimerRef.current = setInterval(() => {
-          setDuration((prev) => prev + 1);
-        }, 1000);
+        durationTimerRef.current = setInterval(tick, 1000);
       }
     } else {
       if (durationTimerRef.current) {
@@ -189,6 +212,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         durationTimerRef.current = null;
       }
       if (callState === CallState.IDLE) {
+        connectedAtRef.current = null;
         setDuration(0);
       }
     }
@@ -250,6 +274,11 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearTimeout(outgoingTimeoutRef.current);
         outgoingTimeoutRef.current = null;
       }
+      if (incomingTimeoutRef.current) {
+        clearTimeout(incomingTimeoutRef.current);
+        incomingTimeoutRef.current = null;
+      }
+      connectedAtRef.current = null;
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
@@ -298,6 +327,37 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isCleaningUpRef.current = false;
     }
   }, []);
+
+  // PR-4: ring for a bounded time, then give up. Nothing could ever reach MISSED, so
+  // if the caller's cancel was lost (app killed, socket dropped) the callee's phone
+  // rang forever with no way out but force-quitting.
+  useEffect(() => {
+    if (callState === CallState.INCOMING) {
+      if (!incomingTimeoutRef.current) {
+        incomingTimeoutRef.current = setTimeout(() => {
+          incomingTimeoutRef.current = null;
+          if (callStateRef.current !== CallState.INCOMING) return;
+
+          console.warn(`[CallContext] Incoming call timed out after ${INCOMING_TIMEOUT_MS / 1000}s`);
+          ringtoneService.stop();
+          setCallState(CallState.MISSED);
+
+          // PR-5: tell the backend. PR-4 left this out on the assumption that the
+          // caller's own timeout would end the session - the spa portal has no such
+          // timeout, so it carried on ringing after this device had given up.
+          const missedSession = sessionRef.current || callService.getPendingSession();
+          if (missedSession) {
+            callService.reportMissedCall(missedSession).catch(() => undefined);
+          }
+
+          setTimeout(() => cleanupAndResetCall('missed_no_answer'), TERMINAL_DISPLAY_MS);
+        }, INCOMING_TIMEOUT_MS);
+      }
+    } else if (incomingTimeoutRef.current) {
+      clearTimeout(incomingTimeoutRef.current);
+      incomingTimeoutRef.current = null;
+    }
+  }, [callState, setCallState, cleanupAndResetCall]);
 
   // AppState Listener to track background/foreground transitions & handle stale state recovery
   useEffect(() => {
@@ -530,18 +590,39 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const handleRinging = (payload: any) => {
       setErrorMessage(null);
 
-      // Check if this ringing event belongs to the outgoing call WE just initiated
-      const isMyOutgoingCall =
-        callStateRef.current === CallState.OUTGOING ||
-        (sessionRef.current?.sessionId && sessionRef.current.sessionId === payload?.callSessionId);
+      // PR-4: correlate by IDENTITY, not by local state. The old check treated any
+      // call_ringing as our own ringback whenever we happened to be in OUTGOING, so a
+      // genuine incoming call arriving while the user was dialling was silently
+      // swallowed. `payload.direction` is no help - it describes the session from the
+      // SPA's point of view ('inbound' = inbound to the spa) and reads 'inbound' on
+      // calls this user placed.
+      const incomingSessionId: string | undefined = payload?.callSessionId;
+      const incomingChannel: string | undefined = payload?.channel;
 
-      if (isMyOutgoingCall) {
-        // We initiated this call -> transition our UI to RINGING
-        setCallState(CallState.RINGING);
-      } else {
-        // Someone else is calling us -> handle as incoming call
-        callManager.handleIncomingCall(payload);
+      const isOwnCall =
+        callService.isOwnCallSession(incomingSessionId) ||
+        callService.matchesOutgoingIntent(incomingChannel);
+
+      if (isOwnCall) {
+        // Ringback for the call we just placed.
+        if (callStateRef.current === CallState.OUTGOING) {
+          setCallState(CallState.RINGING);
+        }
+        return;
       }
+
+      if (!incomingSessionId) {
+        // No id to correlate on. If we are dialling, assume it is our own ringback
+        // rather than inventing an incoming call from an unidentifiable payload.
+        if (callStateRef.current === CallState.OUTGOING) {
+          setCallState(CallState.RINGING);
+          return;
+        }
+        // Otherwise let handleIncomingCall reject it (it drops id-less payloads).
+      }
+
+      // A genuinely different call: presented when IDLE, auto-rejected when busy.
+      callManager.handleIncomingCall(payload);
     };
 
 
@@ -684,22 +765,35 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     isCleaningUpRef.current = false;
     setErrorMessage(null);
+    // PR-4: mark the attempt BEFORE awaiting. call_ringing for this call can reach us
+    // before /chat/calls/request responds with a session id, and this is what lets
+    // handleRinging recognise it as ours during that window.
+    callService.setOutgoingIntent(request.bookingId);
     try {
       setCallState(CallState.OUTGOING);
       const newSession = await callService.initiateCall(request);
       setSession(newSession);
 
-      // Start 60-second timeout
       outgoingTimeoutRef.current = setTimeout(async () => {
-        console.warn('[CallContext] Outgoing call timed out after 60 seconds');
-        if (callStateRef.current === CallState.OUTGOING || callStateRef.current === CallState.RINGING) {
-          setCallState(CallState.ENDED);
-          await callService.cancelCall(sessionRef.current!);
-          cleanupAndResetCall();
+        outgoingTimeoutRef.current = null;
+        if (callStateRef.current !== CallState.OUTGOING && callStateRef.current !== CallState.RINGING) {
+          return;
         }
-      }, 60000);
+        console.warn(`[CallContext] Outgoing call timed out after ${OUTGOING_TIMEOUT_MS / 1000}s`);
+        // PR-4: NO_ANSWER, not ENDED - the callee never picked up, and "No Answer"
+        // is what CallStatus is written to display.
+        setCallState(CallState.NO_ANSWER);
+        // PR-4: was `sessionRef.current!`. A non-null assertion inside an async
+        // setTimeout throws an unhandled rejection when the session has already gone.
+        const unansweredSession = sessionRef.current || callService.getPendingSession();
+        if (unansweredSession) {
+          await callService.cancelCall(unansweredSession);
+        }
+        setTimeout(() => cleanupAndResetCall('no_answer'), TERMINAL_DISPLAY_MS);
+      }, OUTGOING_TIMEOUT_MS);
     } catch (error) {
       console.error('[CallContext] Failed to initiate call', error);
+      callService.clearOutgoingIntent();
       // PR-2: the backend sends user-facing copy on rejection. This catch never set
       // errorMessage, so a rejected call showed a bare "Call Failed" with no reason.
       setErrorMessage(extractApiErrorMessage(error, 'Could not start the call. Please try again.'));

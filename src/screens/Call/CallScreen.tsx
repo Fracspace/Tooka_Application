@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import React, { useCallback, useEffect, useRef } from 'react';
+import { View, StyleSheet, Alert, BackHandler } from 'react-native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useCallContext } from '../../context/CallContext';
 import { useMicrophonePermission } from '../../hooks/useMicrophonePermission';
 import { CallState } from '../../types/call';
@@ -54,21 +54,49 @@ export default function CallScreen() {
         return;
       }
       if (callState === CallState.IDLE && bookingId && spaId && !isIncoming) {
-        await initiateCall({ bookingId, spaId, callType: callType || 'voice' });
+        // PR-4: pass the spa's display details through - the /request response has no
+        // spa profile, so without these the session receiver is the literal 'Spa'.
+        await initiateCall({
+          bookingId,
+          spaId,
+          callType: callType || 'voice',
+          spaName,
+          spaAvatarUrl: spaAvatar,
+        });
       }
     };
     start();
-  }, [callState, bookingId, spaId, callType, isIncoming, initiateCall, requestPermission, navigation]);
+  }, [callState, bookingId, spaId, callType, spaName, spaAvatar, isIncoming, initiateCall, requestPermission, navigation]);
 
-  // Handle auto-close on IDLE
+  // PR-4: close once the call is over.
+  // The old guard was `callState === IDLE && !bookingId && !isIncoming`, but bookingId
+  // is always truthy for calls started from BookingCard - so it never fired and the
+  // user was left staring at a black screen with no controls (CallControls and
+  // CallFooter both render null for IDLE) until they found the chevron.
+  const hasBeenActiveRef = useRef(false);
   useEffect(() => {
-    if (callState === CallState.IDLE && !bookingId && !isIncoming) {
-      // If idle and not trying to start a call, close screen
-      if (navigation.canGoBack()) {
-        navigation.goBack();
-      }
+    if (callState !== CallState.IDLE) {
+      hasBeenActiveRef.current = true;
+      return;
+    }
+    // Still IDLE and a call is about to start: wait for it.
+    if (!hasBeenActiveRef.current && (bookingId || isIncoming)) {
+      return;
+    }
+    if (navigation.canGoBack()) {
+      navigation.goBack();
     }
   }, [callState, bookingId, isIncoming, navigation]);
+
+  // PR-4: swallow the Android hardware back button while a call is on screen.
+  // Back used to pop the screen and leave the call running with no way back to it.
+  // The chevron (handleMinimize) is still the deliberate way out.
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => true);
+      return () => subscription.remove();
+    }, []),
+  );
 
   const handleMinimize = () => {
     if (navigation.canGoBack()) navigation.goBack();
@@ -83,8 +111,17 @@ export default function CallScreen() {
     handleMinimize();
   };
 
-  const displayName = session?.receiver?.name || spaName || 'Unknown User';
-  const displayAvatar = session?.receiver?.avatarUrl || spaAvatar;
+  // PR-4: show the OTHER party. On an incoming call the remote party is the caller;
+  // session.receiver is us and its name is the literal 'Me', which this used to
+  // display. 'Me'/'Spa' are placeholders the services fall back to - never show them.
+  // PR-5: prefer the session's own (app-centric) direction over the route param, so
+  // this is right however the screen was reached - including via ActiveCallBar.
+  const isIncomingCall = session ? session.direction === 'inbound' : !!isIncoming;
+  const remoteParty = isIncomingCall ? session?.caller : session?.receiver;
+  const remoteName = remoteParty?.name;
+  const isPlaceholderName = !remoteName || remoteName === 'Me' || remoteName === 'Spa';
+  const displayName = (isPlaceholderName ? spaName : remoteName) || spaName || 'Unknown User';
+  const displayAvatar = remoteParty?.avatarUrl || spaAvatar;
 
   return (
     <View style={styles.container}>

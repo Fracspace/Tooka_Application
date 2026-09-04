@@ -24,6 +24,11 @@ export interface CallRequest {
   bookingId: string;
   spaId: string;
   callType: 'voice' | 'video';
+  // PR-4: the /request response carries no spa profile, so the session's receiver
+  // was hardcoded to the literal string 'Spa' on every outgoing call. The caller
+  // already knows these from the booking - pass them through.
+  spaName?: string;
+  spaAvatarUrl?: string;
 }
 
 export interface CallSession {

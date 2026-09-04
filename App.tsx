@@ -13,6 +13,7 @@ import { ProfileProvider } from './src/context/ProfileContext';
 import { PaymentProvider } from './src/context/PaymentContext';
 import { SocketProvider } from './src/context/SocketContext';
 import { CallProvider } from './src/context/CallContext';
+import { ActiveCallBar } from './src/screens/Call/components/ActiveCallBar';
 
 function App() {
   const { isRestartRequired, currentlyRunningBundle, newReleaseBundle } = useStallionUpdate();
@@ -57,6 +58,9 @@ function App() {
                   <PaymentProvider>
                     <CallProvider>
                       <AppNavigator />
+                      {/* PR-5: overlays every screen, so a minimised call is always
+                          reachable again. Renders nothing unless a call is live. */}
+                      <ActiveCallBar />
                     </CallProvider>
                   </PaymentProvider>
                 </NearbySpaProvider>

@@ -233,16 +233,18 @@ const AppNavigator = () => {
 
         <Stack.Screen name="wellnessArticle" component={WellnessArticleScreen} />
 
+        {/* PR-4: gestureEnabled false so a call screen cannot be swipe-dismissed
+            out from under a live call. Leaving is deliberate (chevron / end call). */}
         <Stack.Screen
           name="CallScreen"
           component={CallScreen}
-          options={{ presentation: 'fullScreenModal' }}
+          options={{ presentation: 'fullScreenModal', gestureEnabled: false }}
         />
 
         <Stack.Screen
           name="IncomingCall"
           component={IncomingCallScreen}
-          options={{ presentation: 'fullScreenModal' }}
+          options={{ presentation: 'fullScreenModal', gestureEnabled: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>

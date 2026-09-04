@@ -43,10 +43,75 @@ const getLogContext = (session?: CallSession | null): any => {
   }
 };
 
+/**
+ * PR-4: how long an "I am placing a call" marker stays valid. Long enough to cover
+ * a slow /chat/calls/request round trip, short enough that a crashed attempt cannot
+ * suppress a genuine incoming call later.
+ */
+const OUTGOING_INTENT_TTL_MS = 90_000;
+
+interface OutgoingIntent {
+  bookingId: string;
+  startedAt: number;
+}
+
 class CallService {
   private pendingSession: CallSession | null = null;
   private connectingSession: CallSession | null = null;
   private activeSession: CallSession | null = null;
+
+  /**
+   * PR-4: set synchronously the moment the user taps call, BEFORE the REST request
+   * that creates the session. The backend broadcasts call_ringing to the caller as
+   * well, and that event can land before the REST response has given us a session id
+   * (observed: ringing at 10:19:05.258, HTTP 201 at 10:19:05.395). During that window
+   * this marker is the only way to recognise our own call.
+   */
+  private outgoingIntent: OutgoingIntent | null = null;
+
+  setOutgoingIntent(bookingId: string): void {
+    this.outgoingIntent = { bookingId, startedAt: Date.now() };
+  }
+
+  clearOutgoingIntent(): void {
+    this.outgoingIntent = null;
+  }
+
+  getOutgoingIntent(): OutgoingIntent | null {
+    if (!this.outgoingIntent) {
+      return null;
+    }
+    if (Date.now() - this.outgoingIntent.startedAt > OUTGOING_INTENT_TTL_MS) {
+      this.outgoingIntent = null;
+      return null;
+    }
+    return this.outgoingIntent;
+  }
+
+  /** True when this session id is one we are already tracking locally. */
+  isOwnCallSession(sessionId?: string | null): boolean {
+    if (!sessionId) {
+      return false;
+    }
+    return (
+      this.pendingSession?.sessionId === sessionId ||
+      this.connectingSession?.sessionId === sessionId ||
+      this.activeSession?.sessionId === sessionId
+    );
+  }
+
+  /**
+   * True when an Agora channel belongs to the booking we are currently dialling.
+   * Channels are shaped `tooka_<bookingId>_<suffix>`, which lets us correlate a
+   * call_ringing payload with our own attempt before we know the session id.
+   */
+  matchesOutgoingIntent(channelName?: string | null): boolean {
+    const intent = this.getOutgoingIntent();
+    if (!intent || typeof channelName !== 'string' || !channelName) {
+      return false;
+    }
+    return channelName.includes(intent.bookingId);
+  }
 
   getActiveSession(): CallSession | null {
     return this.activeSession;
@@ -108,6 +173,7 @@ class CallService {
     this.activeSession = null;
     this.connectingSession = null;
     this.pendingSession = null;
+    this.outgoingIntent = null;
   }
 
   async cleanup(reason: string): Promise<void> {
@@ -204,8 +270,10 @@ class CallService {
         // Receiver (backend doesn't return spa profile yet)
         receiver: {
           id: data.callSession.spa_id,
-          name: 'Spa', // TODO: Replace with spa name when available
-          avatarUrl: '',
+          // PR-4: was hardcoded 'Spa', and CallScreen prefers session.receiver.name
+          // over the route param - so every outgoing call displayed "Spa".
+          name: request.spaName || 'Spa',
+          avatarUrl: request.spaAvatarUrl || '',
           role: 'receiver',
         },
 
@@ -221,7 +289,10 @@ class CallService {
         conversationId: data.callSession.conversation_id,
 
         callType: data.callSession.call_type,
-        direction: data.callSession.direction,
+        // PR-5: app-centric, deliberately NOT data.callSession.direction. The backend
+        // reports direction from the SPA's point of view and returns 'inbound' for a
+        // call this user placed, which made "who is the other party?" unanswerable.
+        direction: 'outbound',
 
         agoraUidUser: data.callSession.agora_uid_user,
         agoraUidSpa: data.callSession.agora_uid_spa,
@@ -316,7 +387,8 @@ class CallService {
       if (callSession.spa_id) this.pendingSession.spaId = callSession.spa_id;
       if (callSession.conversation_id) this.pendingSession.conversationId = callSession.conversation_id;
       if (callSession.status) this.pendingSession.status = callSession.status;
-      if (callSession.direction) this.pendingSession.direction = callSession.direction;
+      // PR-5: direction is ours (app-centric); never clobber it with the spa-centric
+      // value the backend sends.
       if (callSession.agora_uid_user !== undefined) this.pendingSession.agoraUidUser = callSession.agora_uid_user;
       if (callSession.agora_uid_spa !== undefined) this.pendingSession.agoraUidSpa = callSession.agora_uid_spa;
     }
@@ -326,6 +398,36 @@ class CallService {
 
     const duration = Date.now() - startTime;
     callLogger.info('SOCKET', `EXIT: handleCallAccepted - SUCCESS. Duration: ${duration}ms`, ctx);
+  }
+
+  /**
+   * PR-5: a missed call must be reported to the backend, or the CALLER rings forever.
+   * PR-4 assumed the caller's own timeout would end the session - true for this app
+   * (60s), but the spa portal has no such timeout, so it kept ringing after the
+   * callee's screen had already gone.
+   *
+   * /reject is the only endpoint that ends a ringing call from the callee's side, so
+   * the backend records this as "rejected". The local state stays MISSED so the user
+   * still sees "Missed Call" rather than "Call Declined". Ask the backend team for a
+   * distinct missed reason (or a `reason` field on reject) to close that gap.
+   */
+  async reportMissedCall(session: CallSession): Promise<void> {
+    const startTime = Date.now();
+    const { callLogger } = require('./callLogger');
+    const ctx = getLogContext(session);
+    callLogger.info('REST', 'ENTER: reportMissedCall', ctx, { sessionId: session.sessionId });
+
+    try {
+      console.log(`[REST] POST /chat/calls/${session.sessionId}/reject (missed)`);
+      await authAxiosClient.post(
+        `/chat/calls/${session.sessionId}/reject`,
+        callActionBody(session),
+      );
+      callLogger.info('REST', `EXIT: reportMissedCall - SUCCESS. Duration: ${Date.now() - startTime}ms`, ctx);
+    } catch (error: any) {
+      // Non-fatal for us: we have already stopped ringing locally.
+      callLogger.error('REST', `EXIT: reportMissedCall - FAILURE. Status: ${error?.response?.status || 'Unknown'}, Duration: ${Date.now() - startTime}ms`, ctx, error);
+    }
   }
 
   async cancelCall(session: CallSession): Promise<void> {
