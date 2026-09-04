@@ -13,6 +13,9 @@ export const CrashlyticsKeys = {
 
   PAYMENT_ID: 'payment_id',
 
+  CALL_SESSION_ID: 'call_session_id',
+  CALL_STATE: 'call_state',
+
   APP_VERSION: 'app_version',
 } as const;
 

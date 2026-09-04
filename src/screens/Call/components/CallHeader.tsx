@@ -8,7 +8,12 @@ interface CallHeaderProps {
   title?: string;
 }
 
-export const CallHeader: React.FC<CallHeaderProps> = React.memo(({ onMinimize, title = 'End-to-end Encrypted' }) => {
+// PR-6: the default title was 'End-to-end Encrypted'. Agora media is encrypted in
+// transit but is NOT end-to-end encrypted unless enableEncryption() is configured with
+// our own key, which it is not - so that was a false security claim shown on every
+// call. This says something that is actually true, and is the real product promise:
+// calls are routed through Agora precisely so phone numbers are never exchanged.
+export const CallHeader: React.FC<CallHeaderProps> = React.memo(({ onMinimize, title = 'Number stays private' }) => {
   const insets = useSafeAreaInsets();
 
   return (

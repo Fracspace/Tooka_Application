@@ -1,6 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { Crashlytics, CrashlyticsKeys } from '../firebase/crashlytics';
+
+/**
+ * Verbose console output and the on-screen CallInspectorOverlay. Dev only.
+ *
+ * PR-6: this used to gate log() ENTIRELY, which meant every callLogger call in the
+ * whole feature was a no-op in release: no breadcrumbs, no Crashlytics trail, and
+ * persistSessionLogs wrote empty timelines. A field bug report came with no evidence
+ * at all. Logging now always runs; this flag only controls how noisy it is locally.
+ */
 export const ENABLE_CALL_DIAGNOSTICS = __DEV__;
+
+/** Ring-buffer bounds. Timelines are retained in release now, so they must be finite. */
+const MAX_TIMELINE_ENTRIES = 300;
+const MAX_RETAINED_SESSIONS = 5;
 
 export enum LogLevel {
   INFO = 'INFO',
@@ -38,6 +52,10 @@ class CallLogger {
   private sequenceNumbers: Record<string, number> = {};
   private sessionTimelines: Record<string, string[]> = {};
   private audioSnapshots: Record<string, AudioStateSnapshot> = {};
+  // PR-6: session ids in first-seen order, so the maps above can be pruned. They
+  // previously grew for the lifetime of the process - one entry per call, forever.
+  private sessionOrder: string[] = [];
+  private lastReportedState: string | null = null;
 
   // For visual overlay live rendering
   private activeSessionId: string | null = null;
@@ -171,14 +189,39 @@ class CallLogger {
     return changed.length > 0 ? changed.join('\n') : '  * No fields changed';
   }
 
+  private trackSession(sessionId: string) {
+    // 'global' and 'NO_SESSION' are shared buckets, not per-call sessions.
+    if (sessionId === 'global' || sessionId === 'NO_SESSION') return;
+    if (this.sessionOrder.includes(sessionId)) return;
+    this.sessionOrder.push(sessionId);
+
+    while (this.sessionOrder.length > MAX_RETAINED_SESSIONS) {
+      const oldest = this.sessionOrder.shift();
+      if (!oldest) continue;
+      delete this.sessionTimelines[oldest];
+      delete this.audioSnapshots[oldest];
+      delete this.sequenceNumbers[oldest];
+    }
+  }
+
   log(category: string, message: string, ctx: CallLogContext | null | undefined, details?: any, level: LogLevel = LogLevel.INFO) {
-    if (!ENABLE_CALL_DIAGNOSTICS) return;
+    // DEBUG is the high-frequency stuff - onNetworkQuality and
+    // onAudioVolumeIndication fire every 300ms. Never ship that to Crashlytics.
+    if (level === LogLevel.DEBUG && !ENABLE_CALL_DIAGNOSTICS) return;
 
     const time = this.formatTime();
     const sessionId = ctx?.sessionId || 'NO_SESSION';
     if (ctx?.sessionId && this.activeSessionId !== ctx.sessionId) {
       this.activeSessionId = ctx.sessionId;
+      // Stamp the crash report so a crash mid-call names the session.
+      Crashlytics.setCustomKey(CrashlyticsKeys.CALL_SESSION_ID, ctx.sessionId);
     }
+    // Only on change - calls log a lot, and setAttribute crosses the bridge.
+    if (ctx?.callState && ctx.callState !== this.lastReportedState) {
+      this.lastReportedState = ctx.callState;
+      Crashlytics.setCustomKey(CrashlyticsKeys.CALL_STATE, ctx.callState);
+    }
+    this.trackSession(sessionId);
     const state = ctx?.callState || 'UNKNOWN';
 
     // Sequence Number per session
@@ -204,27 +247,57 @@ class CallLogger {
 
     const logMsg = `${prefix} ${message}${detailsStr}`;
 
-    // Output to console
-    switch (level) {
-      case LogLevel.INFO:
-      case LogLevel.DEBUG:
-        console.log(logMsg);
-        break;
-      case LogLevel.WARN:
-        console.warn(logMsg);
-        break;
-      case LogLevel.ERROR:
-        console.error(logMsg);
-        break;
+    // Console output stays development-only: in release it is invisible anyway, and
+    // the sanitized `details` payload is the noisiest part of every line.
+    if (ENABLE_CALL_DIAGNOSTICS) {
+      switch (level) {
+        case LogLevel.INFO:
+        case LogLevel.DEBUG:
+          console.log(logMsg);
+          break;
+        case LogLevel.WARN:
+          console.warn(logMsg);
+          break;
+        case LogLevel.ERROR:
+          console.error(logMsg);
+          break;
+      }
     }
 
-    // Append to virtual file log timeline
+    // PR-6: breadcrumbs, in every build. Deliberately WITHOUT `detailsStr` - that is
+    // where tokens, payloads and profile data live. The prefix carries session id,
+    // call state, category and level; the message carries timings and status codes.
+    if (level !== LogLevel.DEBUG) {
+      Crashlytics.log(`${prefix} ${message}`);
+
+      if (level === LogLevel.ERROR) {
+        Crashlytics.recordError(
+          details instanceof Error ? details : new Error(`${prefix} ${message}`),
+        );
+      }
+    }
+
+    // PR-6: never fold a SUMMARY back into the timeline. printCallSummary() renders
+    // the timeline INTO its output and then logs it, so each summary used to embed the
+    // previous one - the nested CALL SUMMARY blocks visible in field logs. Harmless
+    // when timelines were dev-only; real memory growth now that they are retained.
+    if (category === 'SUMMARY') {
+      this.onLogCallbacks.forEach((cb) => cb(logMsg));
+      return;
+    }
+
+    // Append to the in-memory timeline, ring-buffered so a long call cannot grow it
+    // without bound now that it is retained in release too.
     if (!this.sessionTimelines[seqKey]) {
       this.sessionTimelines[seqKey] = [];
     }
-    this.sessionTimelines[seqKey].push(logMsg);
+    const timeline = this.sessionTimelines[seqKey];
+    timeline.push(logMsg);
+    if (timeline.length > MAX_TIMELINE_ENTRIES) {
+      timeline.splice(0, timeline.length - MAX_TIMELINE_ENTRIES);
+    }
 
-    // Trigger overlay callback
+    // Trigger overlay callback (the overlay itself is dev-only)
     this.onLogCallbacks.forEach((cb) => cb(logMsg));
   }
 

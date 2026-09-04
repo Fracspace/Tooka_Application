@@ -199,7 +199,10 @@ class CallService {
 
     // Expected to be called after movePendingToConnecting, so we join using connectingSession
     const session = this.connectingSession;
-    console.log('[Agora] Session while joining Agora: ', session);
+    // PR-6: was `console.log('[Agora] Session while joining Agora: ', session)`, which
+    // printed the whole session - Agora token included - in EVERY build, ungated.
+    // callLogger.sanitize() redacts token-shaped keys; the raw console.log did not.
+    callLogger.info('AGORA', 'Session while joining Agora', ctx, session);
     if (!session || !session.token || !session.channelName || session.uid === undefined) {
       const duration = Date.now() - startTime;
       const err = new Error(`[CallFlow] Cannot join session without valid Agora credentials.`);
