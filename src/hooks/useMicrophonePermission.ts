@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { PermissionsAndroid, Platform } from 'react-native';
 
+import { ensureMicrophonePermission } from '../utils/microphonePermission';
+
 export const useMicrophonePermission = () => {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
 
@@ -18,28 +20,13 @@ export const useMicrophonePermission = () => {
     checkPermission();
   }, []);
 
+  // PR-7: delegates to the shared util so the placing-a-call path and the answering
+  // path (callManager, which cannot use hooks) run exactly the same logic.
   const requestPermission = async () => {
-    if (Platform.OS === 'android') {
-      try {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-          {
-            title: 'Microphone Permission',
-            message: 'Tooka needs access to your microphone to make calls.',
-            buttonNeutral: 'Ask Me Later',
-            buttonNegative: 'Cancel',
-            buttonPositive: 'OK',
-          }
-        );
-        const result = granted === PermissionsAndroid.RESULTS.GRANTED;
-        setHasPermission(result);
-        return result;
-      } catch (err) {
-        console.warn(err);
-        return false;
-      }
-    }
-    return true; // iOS fallback
+    const result = await ensureMicrophonePermission();
+    const granted = result === 'granted';
+    setHasPermission(granted);
+    return granted;
   };
 
   return { hasPermission, requestPermission };

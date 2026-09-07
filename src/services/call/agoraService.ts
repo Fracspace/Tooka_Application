@@ -411,6 +411,12 @@ class AgoraService {
 
           console.log("[Agora] Forced microphone ON after join");
 
+          // PR-7: pin the route on every join. The engine keeps the last
+          // setEnableSpeakerphone() value for the life of the process, while the UI
+          // resets isSpeaker to false after each call - so call #2 started on
+          // speakerphone while the button showed earpiece.
+          this.engine?.setEnableSpeakerphone(false);
+
           const duration = Date.now() - startTime;
           callLogger.info(
             'AGORA',
@@ -552,6 +558,30 @@ class AgoraService {
     } catch (e) {
       const duration = Date.now() - startTime;
       callLogger.error('AGORA', `EXIT: setEnableSpeakerphone - FAILURE. Duration: ${duration}ms`, ctx, e);
+      throw e;
+    }
+  }
+
+  /**
+   * PR-7: hand the engine a fresh token. Agora tokens are minted with
+   * expires_in: 3600, and nothing renewed them - a call crossing the hour mark simply
+   * dropped with error 109 ("Token expired. Please rejoin.") and no recovery.
+   */
+  async renewToken(token: string): Promise<void> {
+    const startTime = Date.now();
+    const { callLogger } = require('./callLogger');
+    const ctx = getLogContext();
+
+    if (!this.isInitialized || !this.engine) {
+      callLogger.warn('AGORA', 'renewToken ignored. Engine not initialized.', ctx);
+      return;
+    }
+
+    try {
+      const result = this.engine.renewToken(token);
+      callLogger.info('AGORA', `EXIT: renewToken - SUCCESS. Result: ${result}, Duration: ${Date.now() - startTime}ms`, ctx);
+    } catch (e) {
+      callLogger.error('AGORA', `EXIT: renewToken - FAILURE. Duration: ${Date.now() - startTime}ms`, ctx, e);
       throw e;
     }
   }

@@ -1,6 +1,10 @@
 import { CallSession, CallState } from '../../types/call';
 import { callService, callActionBody, extractApiErrorMessage } from './callService';
 import SpaApi from '../../api/SpaApi';
+import {
+  ensureMicrophonePermission,
+  promptForMicrophoneSettings,
+} from '../../utils/microphonePermission';
 import { ringtoneService } from './ringtoneService';
 import authAxiosClient from '../../api/authAxiosClient';
 import { navigationRef } from '../../navigation/NavigationService';
@@ -258,6 +262,25 @@ class CallManager {
     }
 
     try {
+      // PR-7: Step 0 - the microphone. Answering used to go straight to joinChannel
+      // with no permission check at all (only the OUTGOING path checked, in
+      // CallScreen), so a user who had denied it joined fine and was simply
+      // inaudible, with nothing on screen explaining why.
+      const permission = await ensureMicrophonePermission();
+      if (permission !== 'granted') {
+        callLogger.warn('CALL', `Microphone permission ${permission}. Aborting accept.`, ctx);
+        this.contextActions.setErrorMessage(
+          'Microphone access is off, so the spa would not be able to hear you.',
+        );
+        if (permission === 'blocked') {
+          promptForMicrophoneSettings();
+        }
+        this.isAccepting = false;
+        // Decline rather than answering into silence - the caller learns immediately.
+        await this.rejectCall();
+        return;
+      }
+
       // Step 1: REST accept
       const restStart = Date.now();
       console.log(`[REST] POST /chat/calls/${pending.sessionId}/accept`);

@@ -511,6 +511,71 @@ class CallService {
     }
   }
 
+  /**
+   * PR-7: obtain a fresh Agora token for a live call.
+   *
+   * The socket event `call:get-token` is the documented route, but the backend guide
+   * contradicts itself on its payload shape (its table says `{ callSessionId }`, its
+   * code sample says a bare string) and GET /chat/calls/events-guide - the stated
+   * tie-breaker - returns 401. So: try the socket with an ack and a short timeout,
+   * then fall back to REST, which is known to work. If both fail we are no worse off
+   * than before, and PR-6 means the failure now shows up in Crashlytics.
+   */
+  async renewToken(session: CallSession): Promise<string | null> {
+    const startTime = Date.now();
+    const { callLogger } = require('./callLogger');
+    const ctx = getLogContext(session);
+    callLogger.info('TOKEN', 'ENTER: renewToken', ctx, { sessionId: session.sessionId });
+
+    const fromSocket = await new Promise<string | null>((resolve) => {
+      let settled = false;
+      const finish = (value: string | null) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+
+      const timeoutId = setTimeout(() => {
+        callLogger.warn('TOKEN', 'call:get-token ack timed out after 5s. Falling back to REST.', ctx);
+        finish(null);
+      }, 5000);
+
+      try {
+        socketService.emit('call:get-token', session.sessionId, (response: any) => {
+          clearTimeout(timeoutId);
+          const token = response?.token?.token || response?.token || response?.data?.token?.token;
+          finish(typeof token === 'string' ? token : null);
+        });
+      } catch (e) {
+        clearTimeout(timeoutId);
+        callLogger.warn('TOKEN', 'call:get-token emit threw. Falling back to REST.', ctx, e);
+        finish(null);
+      }
+    });
+
+    if (fromSocket) {
+      callLogger.info('TOKEN', `EXIT: renewToken - SUCCESS via socket. Duration: ${Date.now() - startTime}ms`, ctx);
+      return fromSocket;
+    }
+
+    try {
+      const response = await authAxiosClient.get(`/chat/calls/${session.sessionId}`);
+      const data = response.data?.data || response.data;
+      const token = data?.token?.token || (typeof data?.token === 'string' ? data.token : null);
+
+      if (token) {
+        callLogger.info('TOKEN', `EXIT: renewToken - SUCCESS via REST. Duration: ${Date.now() - startTime}ms`, ctx);
+        return token;
+      }
+
+      callLogger.error('TOKEN', `EXIT: renewToken - FAILURE. Neither transport returned a token. Duration: ${Date.now() - startTime}ms`, ctx);
+      return null;
+    } catch (error: any) {
+      callLogger.error('TOKEN', `EXIT: renewToken - FAILURE. Status: ${error?.response?.status || 'Unknown'}, Duration: ${Date.now() - startTime}ms`, ctx, error);
+      return null;
+    }
+  }
+
   async toggleMute(isMuted: boolean): Promise<void> {
     const startTime = Date.now();
     const { callLogger } = require('./callLogger');

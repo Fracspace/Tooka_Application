@@ -17,6 +17,7 @@ import { callManager } from '../services/call/callManager';
 import { ringtoneService } from '../services/call/ringtoneService';
 import { AGORA_CONFIG } from '../config/agora';
 import { callLogger, ENABLE_CALL_DIAGNOSTICS } from '../services/call/callLogger';
+import { promptForMicrophoneSettings } from '../utils/microphonePermission';
 
 interface CallContextType {
   callState: CallState;
@@ -122,6 +123,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const previousAudioRouteRef = useRef<number | null>(null);
   const isFocusLostRef = useRef<boolean>(false);
   const isCleaningUpRef = useRef<boolean>(false);
+  const micDeniedRef = useRef<boolean>(false);
+  const isRenewingTokenRef = useRef<boolean>(false);
 
   useEffect(() => {
     sessionRef.current = session;
@@ -286,6 +289,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       previousAudioRouteRef.current = null;
       isFocusLostRef.current = false;
+      micDeniedRef.current = false;
+      isRenewingTokenRef.current = false;
 
       try {
         printCallSummary(sessionToSummarize, durationToSummarize, reason);
@@ -425,6 +430,31 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
+    const renewTokenNow = async (reason: string) => {
+      if (isRenewingTokenRef.current) return;
+      const liveSession =
+        callService.getActiveSession() ||
+        callService.getConnectingSession() ||
+        sessionRef.current;
+      if (!liveSession) return;
+
+      isRenewingTokenRef.current = true;
+      try {
+        const token = await callService.renewToken(liveSession);
+        if (token) {
+          liveSession.token = token;
+          await agoraService.renewToken(token);
+          console.log(`[CALL] Agora token renewed (${reason})`);
+        } else {
+          console.warn(`[CALL] Token renewal failed (${reason}); the call will drop at expiry`);
+        }
+      } catch (e) {
+        console.error('[CallContext] Token renewal threw', e);
+      } finally {
+        isRenewingTokenRef.current = false;
+      }
+    };
+
     const handlers = {
       // onJoinChannelSuccess is handled directly via Promise in callService.joinPendingSession()
       onLeaveChannel: () => {
@@ -473,6 +503,11 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const prev = previousAudioRouteRef.current;
         previousAudioRouteRef.current = routing;
 
+        // PR-7: drive the speaker button from the ACTUAL route. It was previously
+        // only ever set optimistically by toggleSpeaker, so plugging in a headset or
+        // connecting Bluetooth mid-call left the button showing the wrong thing.
+        setIsSpeaker(routing === AUDIO_ROUTE.SPEAKER || routing === AUDIO_ROUTE.LOUDSPEAKER);
+
         if (prev !== null && prev !== routing) {
           const isBluetooth = (r: number) => r === AUDIO_ROUTE.BLUETOOTH;
           const isHeadset = (r: number) => r === AUDIO_ROUTE.HEADSET || r === AUDIO_ROUTE.HEADPHONES;
@@ -491,6 +526,20 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       },
       onLocalAudioStateChanged: (connection: any, state: number, error: number) => {
+        // PR-7: LocalAudioStreamReasonDeviceNoPermission. This is the only mic-denial
+        // signal available on iOS without a new native dependency, and on Android it
+        // also catches permission revoked mid-call. Without it a denied mic produced
+        // a connected, completely silent call with no explanation.
+        if (error === 2) {
+          if (!micDeniedRef.current) {
+            micDeniedRef.current = true;
+            console.warn('[CALL] Microphone permission denied by the OS');
+            setErrorMessage('Microphone access is off. The spa cannot hear you.');
+            promptForMicrophoneSettings();
+          }
+          return;
+        }
+
         if (error === 3 || error === 8) {
           if (!isFocusLostRef.current) {
             isFocusLostRef.current = true;
@@ -513,8 +562,17 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setErrorMessage(friendlyMsg);
         }
       },
+      // PR-7: Agora tokens are minted with expires_in: 3600 and nothing renewed them,
+      // so any call crossing the hour mark died with error 109 and no recovery. Agora
+      // fires onTokenPrivilegeWillExpire ~30s ahead; onRequestToken means it already
+      // expired, so both routes lead here.
       onTokenPrivilegeWillExpire: () => {
-        console.warn('[CallContext] Token will expire soon');
+        console.warn('[CallContext] Token will expire soon. Renewing.');
+        renewTokenNow('privilege_will_expire');
+      },
+      onRequestToken: () => {
+        console.warn('[CallContext] Agora requested a new token.');
+        renewTokenNow('request_token');
       },
     };
 
