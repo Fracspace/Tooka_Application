@@ -2,7 +2,8 @@ import React from 'react';
 import { ImageSourcePropType, Text, useWindowDimensions, View } from 'react-native';
 
 import ProfileAvatar from './ProfileAvatar';
-import { styles } from '../styles';
+import { colors, styles } from '../styles';
+import Icon from 'react-native-vector-icons/Ionicons';
 
 const AVATAR = {
   uri: 'https://duixj37yn5405.cloudfront.net/appImages/profile11.png',
@@ -29,12 +30,18 @@ function UserInfoCard({ name, email, phone, avatarSource, onEditPress }: Props):
           <Text style={styles.userName} numberOfLines={1}>
             {name}
           </Text>
-          <Text style={styles.userEmail} numberOfLines={1}>
-            {email}
-          </Text>
-          <Text style={styles.userPhone} numberOfLines={1}>
-            {phone}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+            <Icon name={'mail-outline'} size={15} color={colors.primary}/>
+            <Text style={styles.userEmail} numberOfLines={1}>
+              {email}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Icon name={'call-outline'} size={15} color={colors.primary}/>
+            <Text style={styles.userPhone} numberOfLines={1}>
+              {phone}
+            </Text>
+          </View>
         </View>
       </View>
     </View>

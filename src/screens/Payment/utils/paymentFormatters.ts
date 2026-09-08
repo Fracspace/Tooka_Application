@@ -29,6 +29,8 @@ export function getPaymentStatusUI(
 
   switch (normalized) {
     case 'captured':
+    case 'completed':
+    case 'success':
       return {
         label: 'Completed',
         textColor: STATUS_COLORS.completed.text,
@@ -42,10 +44,14 @@ export function getPaymentStatusUI(
         textColor: STATUS_COLORS.pending.text,
         backgroundColor: STATUS_COLORS.pending.bg,
       };
+    case 'cancelled':
+    case 'cancelled_by_user':
+    case 'cancelled_by_spa':
+    case 'expired':
     case 'failed':
     case 'chargeback':
       return {
-        label: 'Failed',
+        label: normalized.includes('cancel') || normalized === 'expired' ? 'Cancelled' : 'Failed',
         textColor: STATUS_COLORS.failed.text,
         backgroundColor: STATUS_COLORS.failed.bg,
       };
@@ -88,20 +94,31 @@ export function extractPaymentDate(
   rawRecord: Record<string, unknown> | undefined,
 ): string | undefined {
   if (!rawRecord) return undefined;
-  
+
+  // Check payment.payment_time first
+  const payment = rawRecord.payment as Record<string, unknown> | undefined;
+  if (typeof payment?.payment_time === 'string' && payment.payment_time.trim()) {
+    return payment.payment_time;
+  }
+
   // Use updated_at or created_at as best available proxy until a dedicated timestamp exists
-  const timestamp = rawRecord.updated_at || rawRecord.createdAt || rawRecord.created_at;
-  
+  const timestamp =
+    rawRecord.updated_at ||
+    rawRecord.createdAt ||
+    rawRecord.created_at ||
+    rawRecord.appointment_at ||
+    rawRecord.appointmentAt;
+
   if (typeof timestamp !== 'string' || !timestamp.trim()) {
     return undefined;
   }
-  
+
   return timestamp;
 }
 
 export function formatDateTime(isoString: string | undefined): string | undefined {
   if (!isoString) return undefined;
-  
+
   const date = new Date(isoString);
   if (Number.isNaN(date.getTime())) return undefined;
 
@@ -110,7 +127,7 @@ export function formatDateTime(isoString: string | undefined): string | undefine
     month: 'short',
     year: 'numeric',
   });
-  
+
   const formattedTime = date.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
@@ -118,4 +135,69 @@ export function formatDateTime(isoString: string | undefined): string | undefine
   });
 
   return `${formattedDate} | ${formattedTime.toUpperCase()}`;
+}
+
+export function formatPaymentMethod(payment: unknown): { label: string; icon: string } {
+  if (!payment || typeof payment !== 'object') {
+    return { label: 'Payment Method Unavailable', icon: 'card-outline' };
+  }
+
+  const p = payment as Record<string, any>;
+  const method = p.payment_method;
+
+  // Card details
+  if (method?.card) {
+    const network = method.card.card_network || 'Card';
+    const number = method.card.card_number ? String(method.card.card_number).trim() : '';
+    const last4 = number.length >= 4 ? number.slice(-4) : (method.card.last4 || '');
+    return {
+      label: last4 ? `${network} •••• ${last4}` : network,
+      icon: 'card-outline',
+    };
+  }
+
+  // UPI details
+  if (method?.upi) {
+    const upiId = method.upi.upi_id || method.upi.channel || 'UPI';
+    return {
+      label: upiId,
+      icon: 'card-outline',
+    };
+  }
+
+  // Netbanking
+  if (method?.netbanking) {
+    const bankName = method.netbanking.netbanking_bank_name || method.netbanking.channel || 'Netbanking';
+    return {
+      label: bankName,
+      icon: 'business-outline',
+    };
+  }
+
+  // Wallet / App
+  if (method?.app || method?.wallet) {
+    const provider = method.app?.provider || method.wallet?.provider || 'Wallet';
+    return {
+      label: provider,
+      icon: 'wallet-outline',
+    };
+  }
+
+  // Payment group fallback
+  if (p.payment_group) {
+    const group = String(p.payment_group).toUpperCase();
+    return {
+      label: group === 'UPI' ? 'UPI Payment' : group,
+      icon: 'card-outline',
+    };
+  }
+
+  if (p.displayName || p.type) {
+    return {
+      label: String(p.displayName || p.type),
+      icon: 'card-outline',
+    };
+  }
+
+  return { label: 'Payment Method Unavailable', icon: 'card-outline' };
 }

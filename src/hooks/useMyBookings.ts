@@ -116,6 +116,7 @@ export function useMyBookings() {
 
   return useMemo(
     () => ({
+      allBookings,
       upcomingBookings,
       completedBookings,
       cancelledBookings,
@@ -127,6 +128,7 @@ export function useMyBookings() {
       onRefresh,
     }),
     [
+      allBookings,
       upcomingBookings,
       completedBookings,
       cancelledBookings,

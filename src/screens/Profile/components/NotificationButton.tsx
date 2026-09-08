@@ -30,7 +30,7 @@ function NotificationButton({ onPress }: Props): React.ReactElement {
         accessibilityRole="button"
         accessibilityLabel="Notifications"
       >
-        <Ionicons name="notifications-outline" size={20} color={colors.primary} />
+        <Ionicons name="notifications-outline" size={20} color={colors.black} />
       </Pressable>
     </Animated.View>
   );
