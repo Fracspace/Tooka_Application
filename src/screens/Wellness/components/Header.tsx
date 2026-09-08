@@ -34,16 +34,16 @@ export const Header: React.FC<HeaderProps> = React.memo(({ title = 'Wellness Ins
           backgroundColor: 'rgba(255, 255, 255, 0.1)'
         }} />
       </View>
-      <View style={{position:'absolute',top:40,left:20,right:20, flexDirection:'row',alignItems:'center'}}>
-        <TouchableOpacity 
-          style={styles.backButton} 
+      <View style={{ position: 'absolute', top: 60, left: 20, right: 20, flexDirection: 'row', alignItems: 'center' }}>
+        <TouchableOpacity
+          style={styles.backButton}
           onPress={() => navigation.goBack()}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
           <Ionicons name="chevron-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
-        
+
         <Text style={styles.headerTitle} numberOfLines={1}>
           {title}
         </Text>

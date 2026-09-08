@@ -52,7 +52,7 @@ export const styles = StyleSheet.create({
     height: 220,
     borderRadius: SIZES.radius,
     alignSelf: 'center',
-    marginTop: -100,
+    marginTop: -80,
   },
   // Category Pill
   categoryPill: {

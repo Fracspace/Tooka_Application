@@ -17,20 +17,20 @@ function Header(): React.ReactElement {
 
   return (
     <View style={[styles.header, { paddingTop: insets.top + 24 }]}>
-      <View style={{}}/>
+      {/* <View style={{}}/> */}
       <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => {navigation.goBack()}}
-          android_ripple={{ color: 'rgba(255,255,255,0.25)', borderless: true }}
-          style={({ pressed }) => [
-            styles.backButton,
-            pressed && styles.backButtonPressed,
-          ]}
-          hitSlop={10}
-        >
-          <Icon name="chevron-back" size={22} color={'#FFF'} />
-        </Pressable>
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+        onPress={() => { navigation.goBack() }}
+        android_ripple={{ color: 'rgba(255,255,255,0.25)', borderless: true }}
+        style={({ pressed }) => [
+          styles.backButton,
+          pressed && styles.backButtonPressed,
+        ]}
+        hitSlop={40}
+      >
+        <Icon name="chevron-back" size={22} color={'#FFF'} />
+      </Pressable>
       <View style={styles.headerCircleLarge} />
       <View style={styles.headerCircleSoft} />
       <View style={styles.headerDotLeft} />

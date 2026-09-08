@@ -32,7 +32,7 @@ import GradientButton from './components/GradientButton';
 import Header from './components/Header';
 import PhoneInput from './components/PhoneInput';
 import ProfilePhotoCard from './components/ProfilePhotoCard';
-import { DATE_FORMATTER, INITIAL_FORM } from './constants';
+import { DATE_FORMATTER } from './constants';
 import { styles } from './styles';
 import type { EditProfileForm, Gender } from './types';
 import type { RootStackParamList } from '../../../navigation/AppNavigator';
@@ -67,48 +67,40 @@ function EditProfileScreen(): React.ReactElement {
   const navigation = useNavigation<EditProfileNavigationProp>();
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
-  const [form, setForm] = useState<EditProfileForm>(INITIAL_FORM);
-  // console.log('EditProfileScreen Render. Form:', form);
+  const {
+    profile,
+    currentLocation,
+    saving,
+    avatarUploading,
+    updateProfile,
+    uploadAvatar,
+    setResidentialLocation,
+    refreshProfile,
+    loading: profileLoading,
+  } = useProfile();
+
+  const [form, setForm] = useState<EditProfileForm>(() => formFromProfile(profile));
+  const hasHydratedRef = React.useRef<boolean>(!!profile);
+
+  // If profile was not ready when screen mounted, hydrate once it arrives
+  useEffect(() => {
+    if (!hasHydratedRef.current && profile) {
+      hasHydratedRef.current = true;
+      setForm(formFromProfile(profile));
+    }
+  }, [profile]);
+
+  // If profile is missing and not already loading, refresh it once
+  useEffect(() => {
+    if (!profile && !profileLoading) {
+      void refreshProfile();
+    }
+  }, [profile, profileLoading, refreshProfile]);
+
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
   const [showPlacesSearch, setShowPlacesSearch] = useState<boolean>(false);
   const [submitted, setSubmitted] = useState<boolean>(false);
   const [imagePicking, setImagePicking] = useState<boolean>(false);
-  const { profile, currentLocation, saving, avatarUploading, updateProfile, uploadAvatar, setResidentialLocation } = useProfile();
-  // console.log('EditProfileScreen Render. Profile:', profile, 'CurrentLocation:', currentLocation, 'Saving:', saving);
-  const profileHydrationKey = useMemo(
-    () => [
-      profile?.id,
-      profile?.displayName,
-      profile?.fullName,
-      profile?.username,
-      profile?.email,
-      profile?.phone,
-      profile?.gender,
-      profile?.dateOfBirth,
-      profile?.avatarUrl,
-      profile?.residentialLocation?.formattedAddress,
-      profile?.residentialLocation?.latitude,
-      profile?.residentialLocation?.longitude,
-    ].join('|'),
-    [
-      profile?.avatarUrl,
-      profile?.dateOfBirth,
-      profile?.displayName,
-      profile?.email,
-      profile?.fullName,
-      profile?.gender,
-      profile?.id,
-      profile?.phone,
-      profile?.residentialLocation?.formattedAddress,
-      profile?.residentialLocation?.latitude,
-      profile?.residentialLocation?.longitude,
-      profile?.username,
-    ],
-  );
-
-  useEffect(() => {
-    setForm(formFromProfile(profile));
-  }, [profileHydrationKey]);
 
   const minimumDate = useMemo(() => {
     const date = new Date();
@@ -235,10 +227,9 @@ function EditProfileScreen(): React.ReactElement {
         addressLine1: lines.addressLine1,
         addressLine2: lines.addressLine2,
       }));
-      setResidentialLocation(residentialLocation);
       setShowPlacesSearch(false);
     },
-    [setResidentialLocation],
+    [],
   );
 
   const handlePlacesFail = useCallback((error: unknown) => {
@@ -360,9 +351,7 @@ function EditProfileScreen(): React.ReactElement {
               <PhoneInput
                 countryCode={form.countryCode}
                 phoneNumber={form.phoneNumber}
-                onChangePhoneNumber={(value) =>
-                  updateField('phoneNumber', value.replace(/\D/g, ''))
-                }
+                editable={false}
               />
             </View>
 

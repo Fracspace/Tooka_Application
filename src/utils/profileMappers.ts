@@ -103,7 +103,7 @@ export const normalizeProfileResponse = (response: ProfileApiResponse): UserProf
     dateOfBirth: pickString(raw, ['dateOfBirth', 'dob']),
     preferredLanguage: pickString(raw, ['preferredLanguage']),
     preferredCurrency: pickString(raw, ['preferredCurrency']),
-    city: pickString(raw, ['city']),
+    city: pickString(raw, ['cityName', 'city']),
     citySlug: pickString(raw, ['citySlug']),
     cityId: pickString(raw, ['cityId']),
     isPhoneVerified: booleanOrNull(raw.isPhoneVerified),

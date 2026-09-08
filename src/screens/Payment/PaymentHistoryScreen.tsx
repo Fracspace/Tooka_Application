@@ -35,7 +35,7 @@ const PALETTE = {
 };
 
 const DEFAULT_ILLUSTRATION = {
-  uri: 'https://cdn-icons-png.flaticon.com/512/6598/6598519.png',
+  uri: 'https://d2f15ematxpwp4.cloudfront.net/appImages/PaymentHistory.png',
 };
 
 export const PaymentHistoryScreen: React.FC = () => {
@@ -84,7 +84,7 @@ export const PaymentHistoryScreen: React.FC = () => {
       );
     }
 
-    const illustrationSize = isTablet ? 240 : Math.min(width * 0.5, 200);
+    const illustrationSize = isTablet ? 400 : Math.min(width * 0.8, 300);
 
     return (
       <View style={styles.emptyContainer}>
@@ -93,7 +93,7 @@ export const PaymentHistoryScreen: React.FC = () => {
           style={{
             width: illustrationSize,
             height: illustrationSize,
-            marginBottom: 24,
+            marginBottom: 0,
             opacity: 0.8,
           }}
           resizeMode="contain"
@@ -110,7 +110,7 @@ export const PaymentHistoryScreen: React.FC = () => {
   }, [loading, refreshing, allPayments.length, isTablet, width]);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <StatusBar
         barStyle="light-content"
         backgroundColor={PALETTE.heroOrange}
@@ -147,13 +147,13 @@ export const PaymentHistoryScreen: React.FC = () => {
       {/* ── Content Overlapping Header ── */}
       <View style={styles.contentWrapper}>
         <View style={[styles.contentContainer, { maxWidth: contentMaxWidth }]}>
-          
+
           {/* Filter Chip */}
-          <View style={styles.filterContainer}>
+          {/* <View style={styles.filterContainer}>
             <View style={styles.filterChip}>
               <Text style={styles.filterChipText}>All Payments</Text>
             </View>
-          </View>
+          </View> */}
 
           {/* List */}
           <FlatList
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
   headerRightSpacer: {
     width: 40, // Match back button width to center title
   },
-  
+
   // Decorative
   bubble1: {
     position: 'absolute',
@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
-  
+
   // Filter
   filterContainer: {
     paddingHorizontal: 20,
@@ -289,8 +289,8 @@ const styles = StyleSheet.create({
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 60,
+    // justifyContent: 'center',
+    paddingTop: 0,
     paddingHorizontal: 32,
   },
   emptyTitle: {
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
-  
+
   // Skeleton
   skeletonCard: {
     width: '100%',

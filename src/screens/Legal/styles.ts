@@ -24,7 +24,7 @@ export const layout = {
   contentMaxWidth: 700,
   cardBorderRadius: 36,
   headerOverlap: 28,
-  headerMinHeight: 120,
+  headerMinHeight: 150,
 };
 
 export const styles = StyleSheet.create({

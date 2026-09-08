@@ -53,18 +53,19 @@ export const styles = StyleSheet.create({
     paddingBottom: 48,
   },
   backButton: {
-      position: 'absolute',
-      left: 16,
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: colors.backBtnBg,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    backButtonPressed: {
-      opacity: Platform.OS === 'ios' ? 0.7 : 1,
-    },
+    position: 'absolute',
+    left: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.backBtnBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100
+  },
+  backButtonPressed: {
+    opacity: Platform.OS === 'ios' ? 0.7 : 1,
+  },
   headerCircleLarge: {
     position: 'absolute',
     width: 330,
@@ -202,6 +203,10 @@ export const styles = StyleSheet.create({
   inputDisabled: {
     backgroundColor: COLORS.white,
     opacity: 0.92,
+  },
+  inputShellDisabled: {
+    backgroundColor: '#F9F7F5',
+    opacity: 0.85,
   },
   inputLabel: {
     fontFamily: FONTS.body,

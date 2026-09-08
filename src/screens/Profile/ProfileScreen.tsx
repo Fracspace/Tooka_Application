@@ -173,23 +173,23 @@ const ProfileScreen: React.FC = () => {
         iconName: 'receipt-outline',
         onPress: () => navigation.navigate('NoPayment'),
       },
-      {
-        id: 'saved-spas',
-        title: 'Saved Spas',
-        iconName: 'heart-outline',
-        onPress: () => showUnavailableToast('Saved Spas'),
-      },
+      // {
+      //   id: 'saved-spas',
+      //   title: 'Saved Spas',
+      //   iconName: 'heart-outline',
+      //   onPress: () => showUnavailableToast('Saved Spas'),
+      // },
       {
         id: 'rate-app',
         title: 'Rate our App',
         iconName: 'star-outline',
         // onPress: () => showUnavailableToast('Rate our App'),
         onPress: () => {
-          if(Platform.OS === 'ios') {
+          if (Platform.OS === 'ios') {
             openExternalUrl('https://apps.apple.com/in/app/tooka-near-you/id6784173654', 'Rate our App')
-          }else if(Platform.OS === 'android') {
+          } else if (Platform.OS === 'android') {
             openExternalUrl('https://play.google.com/store/apps/details?id=com.fracspace.tooka', 'Rate our App')
-          }else{
+          } else {
             showUnavailableToast('Rate our App')
           }
         },

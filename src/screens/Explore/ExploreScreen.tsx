@@ -25,7 +25,7 @@ import {
 import axios from 'axios';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import MapView, {
@@ -230,6 +230,10 @@ const SpaMarker = memo<SpaMarkerProps>(
 
 const ExploreScreen: React.FC = () => {
   const navigation = useNavigation<ExploreNavigationProp>();
+  const route = useRoute<any>();
+  const paramDateId = route?.params?.selectedDateId;
+  const paramSlotId = route?.params?.selectedSlotId;
+
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { location, loading } = useLocation();
@@ -263,8 +267,32 @@ const ExploreScreen: React.FC = () => {
 
   // Availability & Booking State
   const scheduleDates = useMemo(() => buildScheduleDates(), []);
-  const [selectedDateId, setSelectedDateId] = useState(scheduleDates[0]?.id ?? '');
-  const [selectedSlotId, setSelectedSlotId] = useState('');
+  const [selectedDateId, setSelectedDateId] = useState(
+    paramDateId && scheduleDates.some((d) => d.id === paramDateId)
+      ? paramDateId
+      : scheduleDates[0]?.id ?? '',
+  );
+  const [selectedSlotId, setSelectedSlotId] = useState(paramSlotId ?? '');
+  const pendingSlotIdRef = useRef<string>(paramSlotId ?? '');
+  const selectedSlotIdRef = useRef<string>(selectedSlotId);
+
+  useEffect(() => {
+    selectedSlotIdRef.current = selectedSlotId;
+  }, [selectedSlotId]);
+
+  useEffect(() => {
+    if (paramDateId && scheduleDates.some((d) => d.id === paramDateId)) {
+      setSelectedDateId(paramDateId);
+    }
+  }, [paramDateId, scheduleDates]);
+
+  useEffect(() => {
+    if (paramSlotId) {
+      pendingSlotIdRef.current = paramSlotId;
+      setSelectedSlotId(paramSlotId);
+    }
+  }, [paramSlotId]);
+
   const [slots, setSlots] = useState<BookingSlot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
@@ -381,7 +409,9 @@ const ExploreScreen: React.FC = () => {
 
       setLoadingSlots(true);
       setAvailabilityError(null);
-      setSelectedSlotId('');
+      if (!pendingSlotIdRef.current && !selectedSlotIdRef.current) {
+        setSelectedSlotId('');
+      }
 
       try {
         const nextSlots = await BookingApi.getAvailability({
@@ -392,6 +422,15 @@ const ExploreScreen: React.FC = () => {
 
         if (availabilityRequestIdRef.current === requestId) {
           setSlots(nextSlots);
+          const targetSlotId = pendingSlotIdRef.current || selectedSlotIdRef.current;
+          if (
+            targetSlotId &&
+            nextSlots.some((s) => s.slotId === targetSlotId && s.status === 'available')
+          ) {
+            setSelectedSlotId(targetSlotId);
+          } else if (!nextSlots.some((s) => s.slotId === selectedSlotIdRef.current)) {
+            setSelectedSlotId('');
+          }
         }
       } catch (err) {
         if (controller.signal.aborted || axios.isCancel(err)) return;
@@ -418,10 +457,12 @@ const ExploreScreen: React.FC = () => {
   const handleSelectDate = useCallback((dateId: string) => {
     setSelectedDateId(dateId);
     setSelectedSlotId('');
+    pendingSlotIdRef.current = '';
   }, []);
 
   const handleSelectSlot = useCallback((slotId: string) => {
     setSelectedSlotId(slotId);
+    pendingSlotIdRef.current = slotId;
   }, []);
 
   const handleProceedBooking = useCallback(async () => {
@@ -435,6 +476,9 @@ const ExploreScreen: React.FC = () => {
       navigation.navigate('Login', {
         spaId: selectedSpa.id,
         openBooking: true,
+        selectedDateId,
+        selectedSlotId: selectedSlotIdRef.current || selectedSlotId || undefined,
+        fromScreen: 'Explore',
       });
       return;
     }
@@ -675,7 +719,10 @@ const ExploreScreen: React.FC = () => {
 
   const handleBookSpa = useCallback(
     (spa: ExploreSpa) => {
-      navigation.navigate('SpaDetails', { spaId: spa.id });
+      navigation.navigate('SpaDetails', {
+        spaId: spa.id,
+        fromScreen: 'Explore',
+      });
     },
     [navigation],
   );
@@ -892,6 +939,9 @@ const ExploreScreen: React.FC = () => {
                   navigation.navigate('Login', {
                     spaId: currentSpaId,
                     openBooking: true,
+                    selectedDateId,
+                    selectedSlotId: selectedSlotIdRef.current || selectedSlotId || undefined,
+                    fromScreen: 'Explore',
                   });
                 }
               }}

@@ -21,6 +21,7 @@ import { getProfileErrorMessage } from '../utils/profileValidation';
 import { mergeProfile } from '../utils/profileMappers';
 import { resolveImageUri } from '../types/profileImage';
 import { syncProfileMetadata } from '../services/profile/profileSync';
+import { readAuthSession } from '../utils/authStorage';
 
 const ProfileContext = createContext<ProfileContextValue | undefined>(undefined);
 
@@ -95,7 +96,8 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const refreshProfile = useCallback(
     async (options?: { force?: boolean }): Promise<UserProfile | null> => {
-      if (!isAuthenticated || authLoading) {
+      const session = await readAuthSession();
+      if ((!isAuthenticated && !session.isLoggedIn && !session.token) || authLoading) {
         return null;
       }
 

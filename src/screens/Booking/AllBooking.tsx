@@ -1,6 +1,7 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
+  Image,
   Pressable,
   RefreshControl,
   StyleProp,
@@ -31,6 +32,10 @@ const TABS: Array<{ label: string; section: BookingTab }> = [
   { label: 'Completed', section: 'completed' },
   { label: 'Cancelled', section: 'cancelled' },
 ];
+
+const NO_BOOKINGS_ILLUSTRATION = {
+  uri: 'https://d2f15ematxpwp4.cloudfront.net/appImages/BookingHistory.png',
+};
 
 const EMPTY_STATE_MESSAGES: Record<BookingSection, string> = {
   upcoming: 'No upcoming bookings',
@@ -75,10 +80,36 @@ const AllBookingScreen: React.FC = () => {
     onRefresh,
   } = useMyBookings();
 
-  // console.log("Upcomming booking: ", upcomingBookings);
+  const availableTabs = useMemo(() => {
+    return TABS.filter((tab) => {
+      switch (tab.section) {
+        case 'upcoming':
+          return upcomingBookings.length > 0;
+        case 'completed':
+          return completedBookings.length > 0;
+        case 'cancelled':
+          return cancelledBookings.length > 0;
+        default:
+          return false;
+      }
+    });
+  }, [upcomingBookings.length, completedBookings.length, cancelledBookings.length]);
+
+  const effectiveActiveTab = useMemo(() => {
+    if (availableTabs.length > 0 && !availableTabs.some((t) => t.section === activeTab)) {
+      return availableTabs[0].section;
+    }
+    return activeTab;
+  }, [activeTab, availableTabs]);
+
+  useEffect(() => {
+    if (availableTabs.length > 0 && !availableTabs.some((t) => t.section === activeTab)) {
+      setActiveTab(availableTabs[0].section);
+    }
+  }, [availableTabs, activeTab]);
 
   const activeBookings = useMemo(() => {
-    switch (activeTab) {
+    switch (effectiveActiveTab) {
       case 'upcoming':
         return upcomingBookings;
       case 'completed':
@@ -88,7 +119,7 @@ const AllBookingScreen: React.FC = () => {
       default:
         return upcomingBookings;
     }
-  }, [activeTab, upcomingBookings, completedBookings, cancelledBookings]);
+  }, [effectiveActiveTab, upcomingBookings, completedBookings, cancelledBookings]);
 
   const handleTabPress = useCallback((section: BookingTab) => {
     setActiveTab(section);
@@ -113,34 +144,38 @@ const AllBookingScreen: React.FC = () => {
     [],
   );
 
-  const listHeader = useMemo(
-    () => (
+  const listHeader = useMemo(() => {
+    if (availableTabs.length === 0) {
+      return null;
+    }
+
+    return (
       <>
-        <View
-          style={[styles.tabContainer, isTablet && styles.tabContainerTablet]}
-        >
-          {TABS.map((tab, index) => (
-            <TabButton
-              key={tab.section}
-              label={tab.label}
-              isActive={activeTab === tab.section}
-              onPress={() => handleTabPress(tab.section)}
-              style={index === 1 ? styles.tabButtonMiddle : undefined}
-            />
-          ))}
-        </View>
+        {availableTabs.length >= 2 && (
+          <View
+            style={[styles.tabContainer, isTablet && styles.tabContainerTablet]}
+          >
+            {availableTabs.map((tab) => (
+              <TabButton
+                key={tab.section}
+                label={tab.label}
+                isActive={effectiveActiveTab === tab.section}
+                onPress={() => handleTabPress(tab.section)}
+              />
+            ))}
+          </View>
+        )}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
-            {activeTab === 'upcoming' && 'Upcoming Bookings'}
-            {activeTab === 'completed' && 'Completed Bookings'}
-            {activeTab === 'cancelled' && 'Cancelled Bookings'}
+            {effectiveActiveTab === 'upcoming' && 'Upcoming Bookings'}
+            {effectiveActiveTab === 'completed' && 'Completed Bookings'}
+            {effectiveActiveTab === 'cancelled' && 'Cancelled Bookings'}
           </Text>
         </View>
       </>
-    ),
-    [activeTab, handleTabPress, isTablet],
-  );
+    );
+  }, [availableTabs, effectiveActiveTab, handleTabPress, isTablet]);
 
   const listEmpty = useMemo(() => {
     if (error) {
@@ -155,12 +190,36 @@ const AllBookingScreen: React.FC = () => {
       );
     }
 
+    if (availableTabs.length === 0) {
+      const illustrationSize = isTablet ? 400 : Math.min(width * 0.8, 300);
+
+      return (
+        <View style={styles.emptyContainer}>
+          <Image
+            source={NO_BOOKINGS_ILLUSTRATION}
+            style={{
+              width: illustrationSize,
+              height: illustrationSize,
+              marginBottom: -40,
+            }}
+            resizeMode="contain"
+            accessible
+            accessibilityLabel="No bookings yet"
+          />
+          <Text style={styles.emptyTitle}>No Bookings Yet</Text>
+          <Text style={styles.emptyText}>
+            You haven't made any bookings so far. When you book a spa or wellness service, it will appear here.
+          </Text>
+        </View>
+      );
+    }
+
     return (
       <View style={styles.stateContainer}>
-        <Text style={styles.stateTitle}>{EMPTY_STATE_MESSAGES[activeTab]}</Text>
+        <Text style={styles.stateTitle}>{EMPTY_STATE_MESSAGES[effectiveActiveTab]}</Text>
       </View>
     );
-  }, [activeTab, error, refetch]);
+  }, [availableTabs.length, effectiveActiveTab, error, isTablet, refetch, width]);
 
   if (loading && !hasFetchedOnce) {
     return (
@@ -207,6 +266,7 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     flexDirection: 'row',
+    gap: 8,
     backgroundColor: '#FFFFFF',
     borderRadius: 28,
     padding: 8,
@@ -280,6 +340,29 @@ const styles = StyleSheet.create({
     color: '#8A8A8A',
     fontWeight: '600',
     textAlign: 'center',
+  },
+  emptyContainer: {
+    paddingVertical: 80,
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontFamily: 'Sora-SemiBold',
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1E1E1E',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontFamily: 'WorkSans-Regular',
+    fontSize: 14,
+    color: '#8A8A8A',
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 290,
   },
   retryButton: {
     marginTop: 18,

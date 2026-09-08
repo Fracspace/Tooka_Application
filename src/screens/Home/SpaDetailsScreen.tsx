@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  BackHandler,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -94,7 +95,17 @@ const getErrorMessage = (error: unknown): string => {
 function SpaDetailsScreen(): React.ReactElement {
   const navigation = useNavigation<SpaDetailsNavigationProp>();
   const route = useRoute<SpaDetailsRouteProp>();
-  const { spaId, serviceId, serviceName, openEnquiry, openBooking } = route.params;
+  const {
+    spaId,
+    serviceId,
+    serviceName,
+    openEnquiry,
+    openBooking,
+    selectedDateId: paramDateId,
+    selectedSlotId: paramSlotId,
+    fromLogin,
+    fromScreen,
+  } = route.params;
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
 
@@ -106,8 +117,32 @@ function SpaDetailsScreen(): React.ReactElement {
 
   // Availability & Booking State
   const scheduleDates = useMemo(() => buildScheduleDates(), []);
-  const [selectedDateId, setSelectedDateId] = useState(scheduleDates[0]?.id ?? '');
-  const [selectedSlotId, setSelectedSlotId] = useState('');
+  const [selectedDateId, setSelectedDateId] = useState(
+    paramDateId && scheduleDates.some((d) => d.id === paramDateId)
+      ? paramDateId
+      : scheduleDates[0]?.id ?? '',
+  );
+  const [selectedSlotId, setSelectedSlotId] = useState(paramSlotId ?? '');
+  const pendingSlotIdRef = useRef<string>(paramSlotId ?? '');
+  const selectedSlotIdRef = useRef<string>(selectedSlotId);
+
+  useEffect(() => {
+    selectedSlotIdRef.current = selectedSlotId;
+  }, [selectedSlotId]);
+
+  useEffect(() => {
+    if (paramDateId && scheduleDates.some((d) => d.id === paramDateId)) {
+      setSelectedDateId(paramDateId);
+    }
+  }, [paramDateId, scheduleDates]);
+
+  useEffect(() => {
+    if (paramSlotId) {
+      pendingSlotIdRef.current = paramSlotId;
+      setSelectedSlotId(paramSlotId);
+    }
+  }, [paramSlotId]);
+
   const [slots, setSlots] = useState<BookingSlot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
@@ -188,7 +223,9 @@ function SpaDetailsScreen(): React.ReactElement {
 
       setLoadingSlots(true);
       setAvailabilityError(null);
-      setSelectedSlotId('');
+      if (!pendingSlotIdRef.current && !selectedSlotIdRef.current) {
+        setSelectedSlotId('');
+      }
 
       try {
         const nextSlots = await BookingApi.getAvailability({
@@ -199,6 +236,15 @@ function SpaDetailsScreen(): React.ReactElement {
 
         if (requestIdRef.current === requestId) {
           setSlots(nextSlots);
+          const targetSlotId = pendingSlotIdRef.current || selectedSlotIdRef.current;
+          if (
+            targetSlotId &&
+            nextSlots.some((s) => s.slotId === targetSlotId && s.status === 'available')
+          ) {
+            setSelectedSlotId(targetSlotId);
+          } else if (!nextSlots.some((s) => s.slotId === selectedSlotIdRef.current)) {
+            setSelectedSlotId('');
+          }
         }
       } catch (err) {
         if (controller.signal.aborted || axios.isCancel(err)) return;
@@ -226,10 +272,12 @@ function SpaDetailsScreen(): React.ReactElement {
   const handleSelectDate = useCallback((dateId: string) => {
     setSelectedDateId(dateId);
     setSelectedSlotId('');
+    pendingSlotIdRef.current = '';
   }, []);
 
   const handleSelectSlot = useCallback((slotId: string) => {
     setSelectedSlotId(slotId);
+    pendingSlotIdRef.current = slotId;
   }, []);
 
   // Primary Booking Proceed & Cashfree Payment Handler
@@ -247,6 +295,9 @@ function SpaDetailsScreen(): React.ReactElement {
         serviceId: activeServiceId,
         serviceName: targetService?.name ?? serviceName,
         openBooking: true,
+        selectedDateId,
+        selectedSlotId: selectedSlotIdRef.current || selectedSlotId || undefined,
+        fromScreen: fromScreen ?? 'Home',
       });
       return;
     }
@@ -349,17 +400,34 @@ function SpaDetailsScreen(): React.ReactElement {
     spaId,
   ]);
 
-  // Handle openBooking auto-continuation after authentication
-  useEffect(() => {
-    if (!openBooking) return;
-    if (!isAuthenticated || !spa) return;
-
-    navigation.setParams({ openBooking: false });
-
-    if (selectedSlot) {
-      handleProceedBooking();
+  const handleBack = useCallback(() => {
+    if (fromLogin) {
+      if (fromScreen === 'Explore') {
+        navigation.navigate('BottomNavigation', { screen: 'Explore' });
+      } else {
+        navigation.navigate('BottomNavigation', { screen: 'Home' });
+      }
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else if (fromScreen === 'Explore') {
+      navigation.navigate('BottomNavigation', { screen: 'Explore' });
+    } else {
+      navigation.navigate('BottomNavigation', { screen: 'Home' });
     }
-  }, [openBooking, isAuthenticated, spa, selectedSlot, handleProceedBooking, navigation]);
+  }, [fromLogin, fromScreen, navigation]);
+
+  useEffect(() => {
+    if (!fromLogin) return;
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (fromScreen === 'Explore') {
+        navigation.navigate('BottomNavigation', { screen: 'Explore' });
+      } else {
+        navigation.navigate('BottomNavigation', { screen: 'Home' });
+      }
+      return true;
+    });
+    return () => backHandler.remove();
+  }, [fromLogin, fromScreen, navigation]);
 
   if (spa) {
     Crashlytics.setCustomKey(CrashlyticsKeys.SPA_ID, spa.id);
@@ -452,10 +520,13 @@ function SpaDetailsScreen(): React.ReactElement {
                 serviceId: targetServiceId,
                 serviceName: targetServiceName,
                 openBooking: true,
+                selectedDateId,
+                selectedSlotId,
+                fromScreen: fromScreen ?? 'Home',
               });
             }
           }}
-          onBack={() => navigation.goBack()}
+          onBack={handleBack}
           dates={bookingDates}
           selectedDateId={selectedDateId}
           onSelectDate={handleSelectDate}

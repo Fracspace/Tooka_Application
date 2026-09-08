@@ -10,7 +10,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   imageUri = 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1000&q=80',
 }) => {
   const { width, height } = useWindowDimensions();
-  const heroHeight = height * 0.42;
+  const heroHeight = height * 0.35;
   const curveHeight = 50; // Depth of the curve
 
   // SVG path for clipping the image:
