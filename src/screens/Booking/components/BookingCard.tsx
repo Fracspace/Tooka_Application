@@ -436,7 +436,9 @@ const BookingCard = React.memo<BookingCardProps>(function BookingCard({
       </View>
 
       {/* ── Bottom Actions ── */}
-      <BookingActions section={section} booking={booking} />
+      {section === 'upcoming' &&
+        <BookingActions section={section} booking={booking} />
+      }
     </View>
   );
 });
@@ -451,7 +453,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     borderWidth: 1,
     borderColor: C.border,
-    padding: 14,
+    padding: 10,
     shadowColor: '#1A1A1A',
     shadowOpacity: 0.05,
     shadowRadius: 10,

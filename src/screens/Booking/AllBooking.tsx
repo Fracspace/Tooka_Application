@@ -1,9 +1,12 @@
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Image,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleProp,
   StyleSheet,
   Text,
@@ -15,7 +18,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import FullScreenLoader from '../../components/loaders/FullScreenLoader';
 import { useMyBookings } from '../../hooks/useMyBookings';
+import type { RootStackParamList } from '../../navigation/AppNavigator';
 import type { BackendBookingListItem, BookingSection } from '../../types/booking';
+import AllBookingHeader from './components/AllBookingHeader';
 import BookingCard from './components/BookingCard';
 
 type BookingTab = BookingSection;
@@ -34,7 +39,7 @@ const TABS: Array<{ label: string; section: BookingTab }> = [
 ];
 
 const NO_BOOKINGS_ILLUSTRATION = {
-  uri: 'https://d2f15ematxpwp4.cloudfront.net/appImages/BookingHistory.png',
+  uri: 'https://d2f15ematxpwp4.cloudfront.net/appImages/nobookings.png',
 };
 
 const EMPTY_STATE_MESSAGES: Record<BookingSection, string> = {
@@ -44,7 +49,7 @@ const EMPTY_STATE_MESSAGES: Record<BookingSection, string> = {
   'no-show': 'No cancelled bookings',
 };
 
-const TabButton = React.memo<TabButtonProps>(function TabButton({
+const TabButton = React.memo<TabButtonProps>(function RenderTabButton({
   label,
   isActive,
   onPress,
@@ -65,6 +70,7 @@ const TabButton = React.memo<TabButtonProps>(function TabButton({
 
 const AllBookingScreen: React.FC = () => {
   const { width } = useWindowDimensions();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const isTablet = width >= 768;
   const [activeTab, setActiveTab] = useState<BookingTab>('upcoming');
 
@@ -125,6 +131,18 @@ const AllBookingScreen: React.FC = () => {
     setActiveTab(section);
   }, []);
 
+  const handleBack = useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('Home');
+    }
+  }, [navigation]);
+
+  const handleExploreNow = useCallback(() => {
+    navigation.navigate('Home');
+  }, [navigation]);
+
   const renderBooking = useCallback(
     ({ item, index }: { item: BackendBookingListItem; index: number }) => (
       <BookingCard
@@ -166,13 +184,13 @@ const AllBookingScreen: React.FC = () => {
           </View>
         )}
 
-        <View style={styles.sectionHeader}>
+        {/* <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
             {effectiveActiveTab === 'upcoming' && 'Upcoming Bookings'}
             {effectiveActiveTab === 'completed' && 'Completed Bookings'}
             {effectiveActiveTab === 'cancelled' && 'Cancelled Bookings'}
           </Text>
-        </View>
+        </View> */}
       </>
     );
   }, [availableTabs, effectiveActiveTab, handleTabPress, isTablet]);
@@ -190,36 +208,12 @@ const AllBookingScreen: React.FC = () => {
       );
     }
 
-    if (availableTabs.length === 0) {
-      const illustrationSize = isTablet ? 400 : Math.min(width * 0.8, 300);
-
-      return (
-        <View style={styles.emptyContainer}>
-          <Image
-            source={NO_BOOKINGS_ILLUSTRATION}
-            style={{
-              width: illustrationSize,
-              height: illustrationSize,
-              marginBottom: -40,
-            }}
-            resizeMode="contain"
-            accessible
-            accessibilityLabel="No bookings yet"
-          />
-          <Text style={styles.emptyTitle}>No Bookings Yet</Text>
-          <Text style={styles.emptyText}>
-            You haven't made any bookings so far. When you book a spa or wellness service, it will appear here.
-          </Text>
-        </View>
-      );
-    }
-
     return (
       <View style={styles.stateContainer}>
         <Text style={styles.stateTitle}>{EMPTY_STATE_MESSAGES[effectiveActiveTab]}</Text>
       </View>
     );
-  }, [availableTabs.length, effectiveActiveTab, error, isTablet, refetch, width]);
+  }, [effectiveActiveTab, error, refetch]);
 
   if (loading && !hasFetchedOnce) {
     return (
@@ -229,26 +223,77 @@ const AllBookingScreen: React.FC = () => {
     );
   }
 
+  const hasBookings = availableTabs.length > 0;
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <FlatList
-        data={activeBookings}
-        key={isTablet ? 'tablet' : 'phone'}
-        numColumns={isTablet ? 2 : 1}
-        keyExtractor={keyExtractor}
-        renderItem={renderBooking}
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#FFB02E"
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
+      {/* ── Top Hero / Header Area (Shown in both states) ── */}
+      <AllBookingHeader onBack={handleBack} />
+
+      {/* ── Content Container Overlapping Header ── */}
+      <View style={styles.contentWrapper}>
+        {!hasBookings ? (
+          /* ── CASE A: NO BOOKINGS EMPTY STATE ── */
+          <ScrollView
+            contentContainerStyle={styles.emptyScrollContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#FFB02E"
+                colors={['#FFB02E']}
+              />
+            }
+          >
+            <Image
+              source={NO_BOOKINGS_ILLUSTRATION}
+              style={styles.emptyIllustration}
+              resizeMode="contain"
+              accessible
+              accessibilityLabel="No bookings yet"
+            />
+            <Text style={styles.emptyHeading}>
+              Your next wellness moment awaits ✨
+            </Text>
+            <Text style={styles.emptySubheading}>
+              {'Explore nearby spas and book your first\nsession.'}
+            </Text>
+            <Pressable
+              style={({ pressed }) => [
+                styles.exploreButton,
+                pressed && { opacity: 0.85 },
+              ]}
+              onPress={handleExploreNow}
+              accessibilityRole="button"
+              accessibilityLabel="Explore Now"
+            >
+              <Text style={styles.exploreButtonText}>Explore Now →</Text>
+            </Pressable>
+          </ScrollView>
+        ) : (
+          /* ── CASE B: BOOKINGS EXIST (Preserved Booking UI) ── */
+          <FlatList
+            data={activeBookings}
+            key={isTablet ? 'tablet' : 'phone'}
+            numColumns={isTablet ? 2 : 1}
+            keyExtractor={keyExtractor}
+            renderItem={renderBooking}
+            contentContainerStyle={styles.container}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#FFB02E"
+                colors={['#FFB02E']}
+              />
+            }
+            ListHeaderComponent={listHeader}
+            ListEmptyComponent={listEmpty}
           />
-        }
-        ListHeaderComponent={listHeader}
-        ListEmptyComponent={listEmpty}
-      />
+        )}
+      </View>
     </SafeAreaView>
   );
 };
@@ -256,21 +301,29 @@ const AllBookingScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFF7EE',
+    backgroundColor: '#FFB02E',
+  },
+  contentWrapper: {
+    flex: 1,
+    backgroundColor: '#FAF6EF',
+    marginTop: -32, // Smooth overlap onto header
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    overflow: 'hidden',
   },
   container: {
     paddingHorizontal: 16,
     paddingBottom: 120,
-    paddingTop: 20,
+    paddingTop: 24,
     flexGrow: 1,
   },
   tabContainer: {
     flexDirection: 'row',
-    gap: 8,
+    // gap: 8,
     backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    padding: 8,
-    marginBottom: 18,
+    borderRadius: 10,
+    // padding: 8,
+    marginBottom: 15,
     shadowColor: '#000',
     shadowOpacity: 0.06,
     shadowRadius: 12,
@@ -285,7 +338,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 14,
     paddingHorizontal: 12,
-    borderRadius: 24,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
@@ -314,7 +367,7 @@ const styles = StyleSheet.create({
     color: '#1E1E1E',
   },
   bookingCardItem: {
-    marginBottom: 16,
+    marginBottom: 8,
   },
   bookingCardItemTablet: {
     width: '48%',
@@ -341,29 +394,52 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-  emptyContainer: {
-    paddingVertical: 80,
-    paddingHorizontal: 28,
+
+  // ─── New No Bookings Empty State ───
+  emptyScrollContent: {
     alignItems: 'center',
     justifyContent: 'center',
+    paddingTop: 36,
+    paddingBottom: 120, // Accommodate floating bottom navigation bar
+    paddingHorizontal: 24,
+    flexGrow: 1,
   },
-  emptyTitle: {
-    fontFamily: 'Sora-SemiBold',
+  emptyIllustration: {
+    width: 250,
+    height: 250,
+  },
+  emptyHeading: {
+    fontFamily: 'Sora-Bold',
     fontSize: 18,
     fontWeight: '700',
-    color: '#1E1E1E',
+    color: '#1A1816',
     textAlign: 'center',
+    marginTop: 18,
     marginBottom: 8,
   },
-  emptyText: {
+  emptySubheading: {
     fontFamily: 'WorkSans-Regular',
     fontSize: 14,
-    color: '#8A8A8A',
-    fontWeight: '500',
+    color: '#707070',
     textAlign: 'center',
-    lineHeight: 20,
-    maxWidth: 290,
+    lineHeight: 22,
+    maxWidth: 320,
   },
+  exploreButton: {
+    backgroundColor: '#FFAE2B',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    marginTop: 24,
+    alignSelf: 'center',
+  },
+  exploreButtonText: {
+    fontFamily: 'Sora-SemiBold',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
   retryButton: {
     marginTop: 18,
     backgroundColor: '#FFB02E',

@@ -21,7 +21,7 @@ import {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const FALLBACK_IMAGE = {
-  uri: 'https://d2f15ematxpwp4.cloudfront.net/appImages/nopay1.png',
+  uri: 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=400&q=60',
 };
 
 const PALETTE = {
