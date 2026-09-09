@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Linking, Platform } from 'react-native';
 import {
   FlatList,
@@ -47,7 +47,6 @@ import { getLocationDisplayParts } from '../../services/locationAddress';
 import { useProfile } from '../../context/ProfileContext';
 import { Analytics, AnalyticsEvents, AnalyticsScreens } from '../../services/firebase/analytics';
 import { Crashlytics } from '../../services/firebase/crashlytics';
-import { useAuth } from '../../context/AuthContext';
 import { restart } from 'react-native-stallion';
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
@@ -108,7 +107,7 @@ interface WellnessInsightItem {
   image: string;
 }
 
-const PLACEHOLDER_IMAGE = 'https://via.placeholder.com/300';
+const PLACEHOLDER_IMAGE = 'https://d2f15ematxpwp4.cloudfront.net/appImages/Spacover.jpg';
 const DEFAULT_LOCATION = 'Hyderabad';
 const DEFAULT_RATING = 4.5;
 const DEFAULT_BADGE = 'Premium';
@@ -134,6 +133,9 @@ const HomeScreen: React.FC = () => {
     refreshing: contextRefreshing,
     refresh: contextRefresh,
     error: contextError,
+    loadNextPage,
+    loadingMore,
+    retry,
   } = useNearbySpas();
   const {
     searchQuery,
@@ -164,10 +166,10 @@ const HomeScreen: React.FC = () => {
     [contextSpas],
   );
 
-//   const navigation = useNavigation();
+  //   const navigation = useNavigation();
 
-// const { spas } = useNearbySpa();
-// const { location } = useLocation();
+  // const { spas } = useNearbySpa();
+  // const { location } = useLocation();
 
   useEffect(() => {
     // Analytics.logScreen(AnalyticsScreens.Home);
@@ -175,8 +177,8 @@ const HomeScreen: React.FC = () => {
     Analytics.logEvent(AnalyticsEvents.HOME_VIEWED);
   }, []);
   useEffect(() => {
-  Crashlytics.log('Application Started');
-}, []);
+    Crashlytics.log('Application Started');
+  }, []);
 
 
 
@@ -184,15 +186,13 @@ const HomeScreen: React.FC = () => {
   const offer = offerData as OfferItem;
   const wellnessInsight = wellnessInsightData as WellnessInsightItem;
 
-  const { isAuthenticated } = useAuth();
-
   const resolvedCity = useMemo(() => {
     const pCity = profile?.city?.trim();
     const lCity = location?.city?.trim();
-    return pCity || lCity || 'Hyderabad';
+    return lCity || pCity || 'Hyderabad';
   }, [profile?.city, location?.city]);
 
-  const { spas, loading, error, refreshing, refetch, onRefresh } = useSpaDiscovery(resolvedCity, isAuthenticated);
+  const { spas, loading, error, refreshing, refetch, onRefresh } = useSpaDiscovery(resolvedCity);
 
   const locationDisplay = useMemo(() => {
     const address = location ? {
@@ -237,9 +237,71 @@ const HomeScreen: React.FC = () => {
     [spas, location?.latitude, location?.longitude],
   );
 
+  const mapRef = useRef<MapView | null>(null);
+
+  const handleMapReady = useCallback(() => {
+    if (location?.latitude != null && location?.longitude != null) {
+      mapRef.current?.animateToRegion(
+        {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          latitudeDelta: 0.04,
+          longitudeDelta: 0.04,
+        },
+        300,
+      );
+    }
+  }, [location?.latitude, location?.longitude]);
+
+  useEffect(() => {
+    if (location?.latitude != null && location?.longitude != null) {
+      mapRef.current?.animateToRegion(
+        {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          latitudeDelta: 0.04,
+          longitudeDelta: 0.04,
+        },
+        500,
+      );
+    }
+  }, [location?.latitude, location?.longitude]);
+
   const previewSpas = useMemo(() => {
-    return nearbySpas.slice(0, 4);
-  }, [nearbySpas]);
+    if (nearbySpas.length > 0) {
+      return nearbySpas
+        .slice(0, 5)
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          latitude: Number(s.latitude),
+          longitude: Number(s.longitude),
+        }))
+        .filter(
+          (s) =>
+            !isNaN(s.latitude) &&
+            !isNaN(s.longitude) &&
+            s.latitude !== 0 &&
+            s.longitude !== 0,
+        );
+    }
+
+    return spas
+      .slice(0, 5)
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        latitude: Number(s.lat),
+        longitude: Number(s.lng),
+      }))
+      .filter(
+        (s) =>
+          !isNaN(s.latitude) &&
+          !isNaN(s.longitude) &&
+          s.latitude !== 0 &&
+          s.longitude !== 0,
+      );
+  }, [nearbySpas, spas]);
 
   const isSearchActive = normalizedQuery.length >= 2;
 
@@ -262,7 +324,7 @@ const HomeScreen: React.FC = () => {
         price: `₹ ${spa.starting_price ?? DEFAULT_PRICE}`,
         oldPrice: '',
         badge: DEFAULT_BADGE,
-        image: spa.image ?? PLACEHOLDER_IMAGE,
+        image: spa.image === "" ? PLACEHOLDER_IMAGE : spa.image ?? PLACEHOLDER_IMAGE,
         favorite: false,
       };
     });
@@ -337,12 +399,11 @@ const HomeScreen: React.FC = () => {
   );
 
   const isRefreshing = refreshing || contextRefreshing;
-  const { loadNextPage, loadingMore, retry } = useNearbySpas();
 
   const handleRefresh = useCallback(async () => {
     await Promise.all([
       onRefresh(),
-      contextRefresh().catch(() => {}),
+      contextRefresh().catch(() => { }),
     ]);
   }, [onRefresh, contextRefresh]);
 
@@ -377,8 +438,8 @@ const HomeScreen: React.FC = () => {
         contentContainerStyle={[styles.content, isTablet && styles.contentTablet]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}
-        // onScroll={handleScroll}
-        // scrollEventThrottle={16}
+      // onScroll={handleScroll}
+      // scrollEventThrottle={16}
       >
         <Header
           location={locationDisplay.primary}
@@ -436,7 +497,7 @@ const HomeScreen: React.FC = () => {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Curated for you</Text>
-          <Pressable onPress={() => {}}>
+          <Pressable onPress={() => { }}>
             {/* <Text style={styles.sectionAction}>See all</Text> */}
           </Pressable>
         </View>
@@ -518,105 +579,108 @@ const HomeScreen: React.FC = () => {
 
         <View style={styles.nearbySection}>
 
-            <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>
-                    Explore Around you
-                </Text>
-
-                <Pressable
-                    onPress={() =>
-                        navigation.navigate('Explore')
-                    }>
-                    <Text style={styles.sectionAction}>
-                        View Map
-                    </Text>
-                </Pressable>
-            </View>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>
+              Explore Around you
+            </Text>
 
             <Pressable
-                // activeOpacity={0.9}
-                style={styles.mapCard}
-                onPress={() =>
-                    navigation.navigate('Explore')
-                }>
-
-                <View style={styles.mapContainer}>
-
-                    <MapView
-                        style={styles.map}
-                        pointerEvents="none"
-                        scrollEnabled={false}
-                        zoomEnabled={false}
-                        rotateEnabled={false}
-                        pitchEnabled={false}
-                        toolbarEnabled={false}
-                        loadingEnabled
-                        initialRegion={{
-                            latitude:
-                                location?.latitude ??
-                                17.41217,
-                            longitude:
-                                location?.longitude ??
-                                78.42293,
-                            latitudeDelta: 0.01,
-                            longitudeDelta: 0.01,
-                        }}>
-
-                        {location?.latitude != null && location?.longitude != null && (
-                          <Marker
-                            coordinate={{
-                              latitude: location.latitude,
-                              longitude: location.longitude,
-                            }}>
-                            <View style={styles.userDot} />
-                          </Marker>
-                        )}
-
-                        {previewSpas.map(spa => {
-                          // console.log('Spa marker: ', spa.name, spa.lat, spa.lng);
-                          return (
-                            <Marker
-                                key={spa.id}
-                                coordinate={{
-                                    latitude: Number(spa.latitude),
-                                    longitude: Number(spa.longitude),
-                                }}>
-                                <View style={styles.marker} />
-                            </Marker>
-                        )})}
-                    </MapView>
-
-                </View>
-
-                <View style={styles.rightContainer}>
-
-                    <Ionicons
-                        name="flower-outline"
-                        size={20}
-                        color="#F6A623"
-                    />
-
-                    <Text style={styles.rightTitle}>
-                        Many top-rated spas around you
-                    </Text>
-
-                    <View style={styles.button}>
-
-                        <Text style={styles.buttonText}>
-                            Explore Nearby
-                        </Text>
-
-                    </View>
-
-                </View>
-
+              onPress={() =>
+                navigation.navigate('Explore')
+              }>
+              <Text style={styles.sectionAction}>
+                View Map
+              </Text>
             </Pressable>
+          </View>
+
+          <Pressable
+            // activeOpacity={0.9}
+            style={styles.mapCard}
+            onPress={() =>
+              navigation.navigate('Explore')
+            }>
+
+            <View style={styles.mapContainer}>
+
+              <MapView
+                ref={mapRef}
+                style={styles.map}
+                pointerEvents="none"
+                scrollEnabled={false}
+                zoomEnabled={false}
+                rotateEnabled={false}
+                pitchEnabled={false}
+                toolbarEnabled={false}
+                loadingEnabled
+                onMapReady={handleMapReady}
+                initialRegion={{
+                  latitude:
+                    location?.latitude ??
+                    17.41217,
+                  longitude:
+                    location?.longitude ??
+                    78.42293,
+                  latitudeDelta: 0.04,
+                  longitudeDelta: 0.04,
+                }}>
+
+                {location?.latitude != null && location?.longitude != null && (
+                  <Marker
+                    coordinate={{
+                      latitude: location.latitude,
+                      longitude: location.longitude,
+                    }}>
+                    <View style={styles.userDot} />
+                  </Marker>
+                )}
+
+                {previewSpas.map(spa => {
+                  // console.log('Spa marker: ', spa.name, spa.lat, spa.lng);
+                  return (
+                    <Marker
+                      key={spa.id}
+                      coordinate={{
+                        latitude: spa.latitude,
+                        longitude: spa.longitude,
+                      }}>
+                      <View style={styles.marker} />
+                    </Marker>
+                  );
+                })}
+              </MapView>
+
+            </View>
+
+            <View style={styles.rightContainer}>
+
+              <Ionicons
+                name="flower-outline"
+                size={20}
+                color="#F6A623"
+              />
+
+              <Text style={styles.rightTitle}>
+                Many top-rated spas around you
+              </Text>
+
+              <View style={styles.button}>
+
+                <Text style={styles.buttonText}>
+                  Explore Nearby
+                </Text>
+
+              </View>
+
+            </View>
+
+          </Pressable>
 
         </View>
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Nearby Retreats</Text>
-          <Pressable onPress={() => {}}>
+          <Pressable onPress={() => { }}>
             {/* <Text style={styles.sectionAction}>See all</Text> */}
           </Pressable>
         </View>
@@ -647,14 +711,14 @@ const HomeScreen: React.FC = () => {
             />
           ) : (
             <Pressable
-                disabled={loadingMore}
-                style={[
-                    styles.loadMoreButton,
-                    loadingMore && {
-                        opacity: 0.6,
-                    },
-                ]}
-                onPress={loadNextPage}
+              disabled={loadingMore}
+              style={[
+                styles.loadMoreButton,
+                loadingMore && {
+                  opacity: 0.6,
+                },
+              ]}
+              onPress={loadNextPage}
             >
               <Text style={styles.loadMoreText}>
                 Load More Spas
@@ -683,26 +747,26 @@ const HomeScreen: React.FC = () => {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Your wellness moment</Text>
-          <Pressable onPress={() => {}}>
+          <Pressable onPress={() => { }}>
             {/* <Text style={styles.sectionAction}>Explore</Text> */}
           </Pressable>
         </View>
 
         <View style={styles.wellnessRow}>
-            <ScrollView horizontal style={{flexDirection:'row',gap:10}}>
-                {wellnessMoments.map((item) => (
-                    <WellnessCard key={item.id} item={item} onPress={() => {}} />
-                ))}
+          <ScrollView horizontal style={{ flexDirection: 'row', gap: 10 }}>
+            {wellnessMoments.map((item) => (
+              <WellnessCard key={item.id} item={item} onPress={() => { }} />
+            ))}
           </ScrollView>
         </View>
 
-        <Pressable style={styles.insightCard} onPress={() => {navigation.navigate('wellnessArticle')}}>
+        <Pressable style={styles.insightCard} onPress={() => { navigation.navigate('wellnessArticle') }}>
           <Image source={{ uri: wellnessInsight.image }} style={styles.insightImage} />
           <View style={styles.insightContent}>
             <Text style={styles.insightLabel}>WELLNESS INSIGHT</Text>
             <Text style={styles.insightTitle}>{wellnessInsight.title}</Text>
             <Text style={styles.insightDescription}>{wellnessInsight.description}</Text>
-            <Text style={{fontFamily:'Sora-SemiBold',fontSize:12,color:'#ffb02e',textDecorationLine:'underline',marginTop:10}}>Read</Text>
+            <Text style={{ fontFamily: 'Sora-SemiBold', fontSize: 12, color: '#ffb02e', textDecorationLine: 'underline', marginTop: 10 }}>Read</Text>
           </View>
         </Pressable>
       </ScrollView>
@@ -723,13 +787,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   greeting: {
-    fontFamily:"WorkSans-Medium",
+    fontFamily: "WorkSans-Medium",
     fontSize: 12,
     color: '#8f8f8f',
     marginBottom: 0,
   },
   title: {
-    fontFamily:"Sora-SemiBold",
+    fontFamily: "Sora-SemiBold",
     fontSize: 16,
     color: '#1F1F1F',
     // lineHeight: 36,
@@ -740,10 +804,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 15,
-    marginTop:-5
+    marginTop: -5
   },
   sectionTitle: {
-    fontFamily:'Sora-SemiBold',
+    fontFamily: 'Sora-SemiBold',
     fontSize: 16,
     color: '#1F1F1F',
   },
@@ -802,92 +866,92 @@ const styles = StyleSheet.create({
 
   nearbySection: {
     marginBottom: 20,
-},
+  },
 
-// sectionHeader: {
-//     flexDirection: 'row',
-//     justifyContent: 'space-between',
-//     alignItems: 'center',
-//     marginBottom: 14,
-// },
+  // sectionHeader: {
+  //     flexDirection: 'row',
+  //     justifyContent: 'space-between',
+  //     alignItems: 'center',
+  //     marginBottom: 14,
+  // },
 
-// sectionTitle: {
-//     fontFamily: 'Sora-SemiBold',
-//     fontSize: 22,
-//     color: '#1F1F1F',
-// },
+  // sectionTitle: {
+  //     fontFamily: 'Sora-SemiBold',
+  //     fontSize: 22,
+  //     color: '#1F1F1F',
+  // },
 
-// sectionAction: {
-//     fontFamily: 'WorkSans-Medium',
-//     fontSize: 15,
-//     color: '#F6A623',
-// },
+  // sectionAction: {
+  //     fontFamily: 'WorkSans-Medium',
+  //     fontSize: 15,
+  //     color: '#F6A623',
+  // },
 
-mapCard: {
+  mapCard: {
     overflow: 'hidden',
     borderRadius: 15,
     backgroundColor: '#fff',
     flexDirection: 'row',
     elevation: 3,
-},
+  },
 
-mapContainer: {
+  mapContainer: {
     flex: 3,
     height: 180,
-},
+  },
 
-map: {
+  map: {
     flex: 1,
-},
+  },
 
-rightContainer: {
+  rightContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
-},
+  },
 
-rightTitle: {
+  rightTitle: {
     marginTop: 12,
     textAlign: 'center',
     fontFamily: 'WorkSans-Medium',
     fontSize: 12,
     // lineHeight: 28,
     color: '#1F1F1F',
-},
+  },
 
-button: {
+  button: {
     marginTop: 15,
     backgroundColor: '#1F1F1F',
     borderRadius: 10,
     paddingHorizontal: 15,
     paddingVertical: 10,
-},
+  },
 
-buttonText: {
+  buttonText: {
     color: '#fff',
     fontFamily: 'Sora-SemiBold',
     fontSize: 10,
-    textAlign:'center'
-},
+    textAlign: 'center'
+  },
 
- marker: {
+  marker: {
     width: 18,
     height: 18,
     borderRadius: 9,
     backgroundColor: '#FFB02E',
     borderWidth: 3,
     borderColor: '#fff',
-},
+  },
 
-userDot: {
+  userDot: {
     width: 20,
     height: 20,
     borderRadius: 10,
     backgroundColor: '#fff',
     borderWidth: 5,
     borderColor: '#FFB02E',
-},
+  },
 
   // mapCard: {
   //   width: '100%',
@@ -950,9 +1014,9 @@ userDot: {
     alignItems: 'center',
     marginTop: 18,
     marginBottom: 12,
-},
+  },
 
-loadMoreButton: {
+  loadMoreButton: {
     backgroundColor: '#FFB02E',
     borderRadius: 28,
     paddingHorizontal: 28,
@@ -960,13 +1024,13 @@ loadMoreButton: {
     minWidth: 180,
     alignItems: 'center',
     justifyContent: 'center',
-},
+  },
 
-loadMoreText: {
+  loadMoreText: {
     fontFamily: 'WorkSans-SemiBold',
     fontSize: 15,
     color: '#FFFFFF',
-},
+  },
   wellnessRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -975,26 +1039,26 @@ loadMoreText: {
   insightCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 10,
-    padding:12,
-    marginHorizontal:20,
+    padding: 12,
+    marginHorizontal: 20,
     overflow: 'hidden',
-    alignItems:'center',
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
     elevation: 4,
-    marginBottom:60
+    marginBottom: 60
   },
   insightImage: {
     width: '100%',
     height: 180,
-    borderRadius:10
+    borderRadius: 10
   },
   insightContent: {
     paddingHorizontal: 20,
-    paddingVertical:10,
-    alignItems:'center'
+    paddingVertical: 10,
+    alignItems: 'center'
   },
   insightLabel: {
     color: '#FFB02E',
@@ -1002,22 +1066,22 @@ loadMoreText: {
     fontWeight: '700',
     marginBottom: 10,
     letterSpacing: 0.7,
-    textAlign:'center'
+    textAlign: 'center'
   },
   insightTitle: {
-    fontFamily:'Sora-SemiBold',
+    fontFamily: 'Sora-SemiBold',
     fontSize: 16,
     fontWeight: '800',
     color: '#1F1F1F',
     marginBottom: 10,
     lineHeight: 30,
-    textAlign:'center'
+    textAlign: 'center'
   },
   insightDescription: {
     fontSize: 13,
     color: '#8f8f8f',
     lineHeight: 20,
-    textAlign:'center'
+    textAlign: 'center'
   },
 });
 

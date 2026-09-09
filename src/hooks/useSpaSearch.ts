@@ -32,7 +32,7 @@ export interface UseSpaSearchResult {
 
 const DEBOUNCE_MS = 400;
 const MIN_SEARCH_LENGTH = 2;
-const PLACEHOLDER_IMAGE = 'https://via.placeholder.com/300';
+const PLACEHOLDER_IMAGE = 'https://d2f15ematxpwp4.cloudfront.net/appImages/Spacover.jpg';
 
 export const normalizeSearchQuery = (value: string): string =>
   value.trim().replace(/\s+/g, ' ');
@@ -52,7 +52,7 @@ const mapSpaToSearchItem = (spa: Spa): SearchSpaItem => {
     typeA: 'Massage',
     typeB: 'Spa',
     rating: safeRating,
-    image: spa.cover_photo_url ?? PLACEHOLDER_IMAGE,
+    image: spa.cover_photo_url === "" ? PLACEHOLDER_IMAGE : spa.cover_photo_url ?? PLACEHOLDER_IMAGE,
     starting_price: spa.starting_price ?? null,
     latitude: Number.parseFloat(spa.lat) || 0,
     longitude: Number.parseFloat(spa.lng) || 0,

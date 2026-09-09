@@ -301,7 +301,7 @@ const AllBookingScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFB02E',
+    // backgroundColor: '#FFB02E',
   },
   contentWrapper: {
     flex: 1,
