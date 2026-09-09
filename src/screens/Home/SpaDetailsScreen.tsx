@@ -23,12 +23,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
 import { usePaymentContext } from '../../context/PaymentContext';
 import BookingApi from '../../api/BookingApi';
-import EnquiryModal from '../../components/EnquiryModal';
-import EnquirySuccessModal from '../../components/EnquirySuccessModal';
-import { useEnquiry } from '../../hooks/useEnquiry';
-import type { EnquiryFormValues } from '../../types/Enquiry';
 import type { BookingScheduleDate, BookingSlot } from '../../types/booking';
-import type { BookingDate, TimeSlot } from '../Booking/types';
+import type { TimeSlot } from '../Booking/types';
 import { bookingOption } from '../Booking/bookingData';
 import { buildBookingDateAndTime } from '../../utils/bookingDateTime';
 import { Analytics, AnalyticsEvents, AnalyticsParams } from '../../services/firebase/analytics';
@@ -99,8 +95,6 @@ function SpaDetailsScreen(): React.ReactElement {
     spaId,
     serviceId,
     serviceName,
-    openEnquiry,
-    openBooking,
     selectedDateId: paramDateId,
     selectedSlotId: paramSlotId,
     fromLogin,
@@ -109,11 +103,10 @@ function SpaDetailsScreen(): React.ReactElement {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
 
-  const { spa, refreshing, error, refetch, onRefresh } = useSpaDetails(spaId);
+  const { spa, loading, refreshing, error, refetch, onRefresh } = useSpaDetails(spaId);
   const { isAuthenticated, user } = useAuth();
   const { profile } = useProfile();
   const { initiatePayment, setBookingSummary } = usePaymentContext();
-  const [enquiryVisible, setEnquiryVisible] = useState(false);
 
   // Availability & Booking State
   const scheduleDates = useMemo(() => buildScheduleDates(), []);
@@ -164,16 +157,6 @@ function SpaDetailsScreen(): React.ReactElement {
     [scheduleDates, selectedDateId],
   );
 
-  const bookingDates = useMemo<BookingDate[]>(
-    () =>
-      scheduleDates.map((date) => ({
-        id: date.id,
-        label: date.label,
-        date: date.date,
-      })),
-    [scheduleDates],
-  );
-
   const timeSlots = useMemo<TimeSlot[]>(
     () =>
       slots.map((slot) => ({
@@ -203,12 +186,6 @@ function SpaDetailsScreen(): React.ReactElement {
   useEffect(() => {
     setSelectedService({ id: serviceId, name: serviceName });
   }, [serviceId, serviceName]);
-
-  useEffect(() => {
-    if (openEnquiry) {
-      navigation.setParams({ openEnquiry: false });
-    }
-  }, [navigation, openEnquiry]);
 
   // Load Availability
   const loadAvailability = useCallback(
@@ -434,56 +411,6 @@ function SpaDetailsScreen(): React.ReactElement {
     Crashlytics.setCustomKey(CrashlyticsKeys.SPA_NAME, spa.name);
   }
 
-  const enquiryDefaults = useMemo(
-    () => ({
-      name: user?.userName ?? '',
-      email: user?.email ?? '',
-      message: '',
-    }),
-    [user?.userName, user?.email],
-  );
-
-  const enquiryContext = useMemo(
-    () => ({
-      spaId,
-      spaName: spa?.name ?? 'Spa',
-      spaImage: spa?.cover_photo_url ?? '',
-      location: spa?.locality_name ?? spa?.city_name ?? 'Hyderabad',
-      serviceId: selectedService.id,
-      serviceName: selectedService.name,
-    }),
-    [spa?.city_name, spa?.cover_photo_url, spa?.locality_name, spa?.name, selectedService.id, selectedService.name, spaId],
-  );
-
-  const {
-    loading: enquiryLoading,
-    success,
-    submitEnquiry,
-    reset,
-    closeSuccess,
-  } = useEnquiry({
-    spa: enquiryContext,
-    onSuccess: () => setEnquiryVisible(false),
-  });
-
-  const handleSubmitEnquiry = useCallback(
-    async (values: EnquiryFormValues) => {
-      await submitEnquiry(values);
-    },
-    [submitEnquiry],
-  );
-
-  const handleCloseEnquiry = useCallback(() => {
-    if (enquiryLoading) return;
-    setEnquiryVisible(false);
-    reset();
-  }, [enquiryLoading, reset]);
-
-  const handleSuccessDone = useCallback(() => {
-    closeSuccess();
-    reset();
-  }, [closeSuccess, reset]);
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -502,32 +429,11 @@ function SpaDetailsScreen(): React.ReactElement {
       >
         <SpaDetailsContent
           spa={spa}
-          loading={enquiryLoading}
+          loading={loading}
           error={error}
           onRetry={refetch}
-          spaId={spaId}
-          serviceId={serviceId}
-          serviceName={serviceName}
-          openEnquiry={openEnquiry}
-          onBookSpa={(currentSpaId, currentServiceId, currentServiceName) => {
-            const targetServiceId = currentServiceId ?? serviceId;
-            const targetServiceName = currentServiceName ?? serviceName;
-            setSelectedService({ id: targetServiceId, name: targetServiceName });
-
-            if (!isAuthenticated) {
-              navigation.navigate('Login', {
-                spaId: currentSpaId,
-                serviceId: targetServiceId,
-                serviceName: targetServiceName,
-                openBooking: true,
-                selectedDateId,
-                selectedSlotId,
-                fromScreen: fromScreen ?? 'Home',
-              });
-            }
-          }}
           onBack={handleBack}
-          dates={bookingDates}
+          dates={scheduleDates}
           selectedDateId={selectedDateId}
           onSelectDate={handleSelectDate}
           slots={timeSlots}
@@ -541,14 +447,6 @@ function SpaDetailsScreen(): React.ReactElement {
           proceedDisabled={!selectedSlot}
         />
       </ScrollView>
-      <EnquiryModal
-        visible={enquiryVisible}
-        onClose={handleCloseEnquiry}
-        onSubmit={handleSubmitEnquiry}
-        defaultValues={enquiryDefaults}
-        loading={enquiryLoading}
-      />
-      <EnquirySuccessModal visible={success} onDone={handleSuccessDone} />
     </SafeAreaView>
   );
 }

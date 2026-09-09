@@ -51,14 +51,12 @@ const AMENITY_ICON_MAP: Record<string, string> = {
 
 export type SpaDetailsContentProps = {
   spa: SpaDetails | null;
-  loading: boolean;
-  error: string | null;
+  loading?: boolean;
+  error?: string | null;
   onRetry?: () => void;
-  spaId: string;
+  spaId?: string;
   serviceId?: string;
   serviceName?: string;
-  openEnquiry?: boolean;
-  onBookSpa?: (spaId: string, serviceId?: string, serviceName?: string) => void;
   onBack?: () => void;
   showBackButton?: boolean;
   showBookBar?: boolean;
@@ -73,7 +71,6 @@ export type SpaDetailsContentProps = {
   loadingSlots?: boolean;
   availabilityError?: string | null;
   bookingOption?: BookingOption;
-  optionSelected?: boolean;
   onProceedBooking?: () => void;
   proceedLoading?: boolean;
   proceedDisabled?: boolean;
@@ -140,10 +137,7 @@ const formatTimeStr = (rawTime: string | null | undefined): string => {
 
 const SpaDetailsContent = memo(function SpaDetailsContentInner({
   spa,
-  loading,
-  spaId,
-  serviceId,
-  serviceName,
+  loading = false,
   onBack,
   showBackButton = true,
   showBookBar = true,
@@ -461,9 +455,6 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
               <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
             </Pressable>
           )}
-          {/* <Pressable style={styles.favoriteButton} hitSlop={10}>
-            <Ionicons name="heart-outline" size={22} color="#FFFFFF" />
-          </Pressable> */}
         </View>
 
         {/* Bottom Gallery Thumbnail Overlay */}
@@ -913,14 +904,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  favoriteButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(45, 43, 40, 0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   galleryStrip: {
     position: 'absolute',
     bottom: 14,
@@ -1160,15 +1143,13 @@ const styles = StyleSheet.create({
   dateTabsRow: {
     flexDirection: 'row',
     gap: 8,
-    // marginTop: 12,
     backgroundColor: '#FFB02E1a',
-    borderRadius: 10
+    borderRadius: 10,
   },
   dateTab: {
     flex: 1,
     height: 48,
     borderRadius: 12,
-    // backgroundColor: '#F7EFE6',
     borderWidth: 1,
     borderColor: 'transparent',
     alignItems: 'center',
@@ -1375,11 +1356,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    // backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
     paddingTop: 10,
-    // borderTopWidth: 1,
-    // borderTopColor: '#EBE3D7',
   },
   unbookableNotice: {
     flexDirection: 'row',
