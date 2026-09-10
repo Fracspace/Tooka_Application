@@ -206,12 +206,6 @@ class CallService {
       };
 
       this.createPendingSession(session);
-      
-      socketService.emit('call_request', {
-        bookingId: session.bookingId,
-        callType: session.callType
-      });
-      console.log(`[Socket] Emitted call_request. Session: ${session.sessionId}`);
 
       const totalDuration = Date.now() - startTime;
       callLogger.info('REST', `EXIT: initiateCall - SUCCESS. Duration: ${totalDuration}ms`, ctx);
