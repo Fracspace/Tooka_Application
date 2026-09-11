@@ -20,6 +20,13 @@ export interface CallContextActions {
   setErrorMessage: (message: string | null) => void;
 }
 
+/**
+ * PR-8: names the backend sends that identify a ROLE rather than a spa. When the
+ * caller name is one of these we still have to look the spa up ourselves.
+ */
+const isPlaceholderCallerName = (name?: string): boolean =>
+  !name || name === 'Unknown Caller' || name === 'Spa Owner';
+
 const getLogContext = (): any => {
   try {
     const { callLogger } = require('./callLogger');
@@ -97,7 +104,7 @@ class CallManager {
         const restStart = Date.now();
         await authAxiosClient.post(
           `/chat/calls/${payload.callSessionId}/reject`,
-          callActionBody({ sessionId: payload.callSessionId, spaId: payload.spaId }),
+          callActionBody({ sessionId: payload.callSessionId, spaId: payload.spaId }, 'busy'),
         );
         callLogger.info('REST', `Auto-rejected conflicting call session: ${payload.callSessionId}. Duration: ${Date.now() - restStart}ms`, ctx);
       } catch (e) {
@@ -126,7 +133,22 @@ class CallManager {
       agoraUidSpa: 0,
       caller: {
         id: '',
-        name: payload.callerName || 'Unknown Caller',
+        // PR-8: the backend is adding spa_name + cover_photo_url to the call_ringing
+        // payload. Read them now so the extra GET /spas/{id} round-trip below stops
+        // firing the moment that ships, with no further client change. Until then
+        // callerName is the literal role string "Spa Owner".
+        name:
+          payload.spa_name ||
+          payload.spaName ||
+          payload.callerName ||
+          'Unknown Caller',
+        // PR-9: the live key is `spaPhotoUrl`. PR-8 guessed at cover_photo_url from
+        // the DB column name; the events-guide confirms the wire format.
+        avatarUrl:
+          payload.spaPhotoUrl ||
+          payload.cover_photo_url ||
+          payload.coverPhotoUrl ||
+          '',
         role: 'caller',
       },
       receiver: {
@@ -207,7 +229,7 @@ class CallManager {
     // PR-5: `call_ringing` sends callerName: "Spa Owner" - a ROLE, not the spa. The
     // user needs to know WHICH spa is calling, and neither call_ringing nor
     // GET /chat/calls/{id} carries the spa's name, so resolve it from spa_id.
-    if (details.spa_id) {
+    if (details.spa_id && isPlaceholderCallerName(pending.caller.name)) {
       await this.resolveSpaIdentity(sessionId, details.spa_id);
     }
   }
@@ -442,7 +464,7 @@ class CallManager {
       console.log(`[REST] POST /chat/calls/${pending.sessionId}/reject`);
       await authAxiosClient.post(
         `/chat/calls/${pending.sessionId}/reject`,
-        callActionBody(pending),
+        callActionBody(pending, 'declined'),
       );
       callLogger.info('REST', `rejectCall API response. Duration: ${Date.now() - restStart}ms`, ctx);
     } catch (error) {

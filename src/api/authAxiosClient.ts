@@ -2,13 +2,15 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DeviceEventEmitter } from 'react-native';
 
+import { API_CONFIG } from '../config/api';
+
 const authAxiosClient = axios.create({
-  baseURL: 'https://api.tooka.app/api',
+  baseURL: API_CONFIG.baseUrl,
   timeout: 15000,
   headers: {
     Accept: 'application/json',
     'Content-Type': 'application/json',
-    'x-api-key': 'Tooka@2026',
+    'x-api-key': API_CONFIG.apiKey,
   },
 });
 

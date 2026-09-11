@@ -2,12 +2,14 @@
 
 import axios from 'axios';
 
+import { API_CONFIG } from '../config/api';
+
 const tookaAxiosClient = axios.create({
-  baseURL: 'https://api.tooka.app/api',
+  baseURL: API_CONFIG.baseUrl,
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
-    'x-api-key': 'Tooka@2026',
+    'x-api-key': API_CONFIG.apiKey,
   },
 });
 

@@ -8,9 +8,19 @@ import authAxiosClient from '../../api/authAxiosClient';
 // all, the duplicate (now deleted) path sent { spa_id }, and the auto-reject sent
 // nothing - three request shapes for the same family of endpoints. spa_id is omitted
 // rather than sent as an empty string when we do not know it yet.
-export const callActionBody = (session: { sessionId: string; spaId?: string }) => {
+export type CallRejectReason = 'declined' | 'missed' | 'busy';
+
+export const callActionBody = (
+  session: { sessionId: string; spaId?: string },
+  // PR-9: confirmed live in GET /api/chat/events-guide - reject accepts a reason,
+  // persisted to call_sessions.failure_reason. Until now every ended-while-ringing call
+  // was stored identically, so a missed call and a deliberate decline were
+  // indistinguishable in the data.
+  reason?: CallRejectReason,
+) => {
   const body: Record<string, string> = { call_session_id: session.sessionId };
   if (session.spaId) body.spa_id = session.spaId;
+  if (reason) body.reason = reason;
   return body;
 };
 
@@ -424,7 +434,7 @@ class CallService {
       console.log(`[REST] POST /chat/calls/${session.sessionId}/reject (missed)`);
       await authAxiosClient.post(
         `/chat/calls/${session.sessionId}/reject`,
-        callActionBody(session),
+        callActionBody(session, 'missed'),
       );
       callLogger.info('REST', `EXIT: reportMissedCall - SUCCESS. Duration: ${Date.now() - startTime}ms`, ctx);
     } catch (error: any) {
@@ -514,49 +524,22 @@ class CallService {
   /**
    * PR-7: obtain a fresh Agora token for a live call.
    *
-   * The socket event `call:get-token` is the documented route, but the backend guide
-   * contradicts itself on its payload shape (its table says `{ callSessionId }`, its
-   * code sample says a bare string) and GET /chat/calls/events-guide - the stated
-   * tie-breaker - returns 401. So: try the socket with an ack and a short timeout,
-   * then fall back to REST, which is known to work. If both fail we are no worse off
-   * than before, and PR-6 means the failure now shows up in Crashlytics.
+   * PR-9: `call:get-token` DOES NOT EXIST. The live events-guide lists every
+   * client -> server emit the server handles, and it is not among them - so PR-7's
+   * socket attempt could only ever sit through its own 5s timeout before falling back.
+   * That attempt has been removed.
+   *
+   * What remains is GET /chat/calls/{id}, which may or may not return a fresh token -
+   * it is documented only as returning the session. If it does not, there is NO way to
+   * renew a token on this backend and any call crossing the hour mark will drop. That
+   * is an open ask; this logs loudly (and lands in Crashlytics via PR-6) so the first
+   * occurrence is visible rather than silent.
    */
   async renewToken(session: CallSession): Promise<string | null> {
     const startTime = Date.now();
     const { callLogger } = require('./callLogger');
     const ctx = getLogContext(session);
     callLogger.info('TOKEN', 'ENTER: renewToken', ctx, { sessionId: session.sessionId });
-
-    const fromSocket = await new Promise<string | null>((resolve) => {
-      let settled = false;
-      const finish = (value: string | null) => {
-        if (settled) return;
-        settled = true;
-        resolve(value);
-      };
-
-      const timeoutId = setTimeout(() => {
-        callLogger.warn('TOKEN', 'call:get-token ack timed out after 5s. Falling back to REST.', ctx);
-        finish(null);
-      }, 5000);
-
-      try {
-        socketService.emit('call:get-token', session.sessionId, (response: any) => {
-          clearTimeout(timeoutId);
-          const token = response?.token?.token || response?.token || response?.data?.token?.token;
-          finish(typeof token === 'string' ? token : null);
-        });
-      } catch (e) {
-        clearTimeout(timeoutId);
-        callLogger.warn('TOKEN', 'call:get-token emit threw. Falling back to REST.', ctx, e);
-        finish(null);
-      }
-    });
-
-    if (fromSocket) {
-      callLogger.info('TOKEN', `EXIT: renewToken - SUCCESS via socket. Duration: ${Date.now() - startTime}ms`, ctx);
-      return fromSocket;
-    }
 
     try {
       const response = await authAxiosClient.get(`/chat/calls/${session.sessionId}`);
@@ -568,7 +551,7 @@ class CallService {
         return token;
       }
 
-      callLogger.error('TOKEN', `EXIT: renewToken - FAILURE. Neither transport returned a token. Duration: ${Date.now() - startTime}ms`, ctx);
+      callLogger.error('TOKEN', `EXIT: renewToken - FAILURE. GET /chat/calls/{id} returned no token - this backend has no token-refresh route. The call will drop at expiry. Duration: ${Date.now() - startTime}ms`, ctx);
       return null;
     } catch (error: any) {
       callLogger.error('TOKEN', `EXIT: renewToken - FAILURE. Status: ${error?.response?.status || 'Unknown'}, Duration: ${Date.now() - startTime}ms`, ctx, error);
