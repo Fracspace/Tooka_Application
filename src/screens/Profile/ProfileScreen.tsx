@@ -9,7 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useCallback, useMemo, useRef } from 'react';
-import { ActivityIndicator, Alert, Linking, Platform, ScrollView, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Linking, Platform, ScrollView, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -46,8 +46,8 @@ const ProfileScreen: React.FC = () => {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
   const navigation = useNavigation<ProfileNavigationProp>();
-  const { user, logout } = useAuth();
-  const { profile, loading: profileLoading } = useProfile();
+  const { user, logout, deleteAccount } = useAuth();
+  const { profile, loading: profileLoading, clearProfile } = useProfile();
 
   const isLoggingOut = useRef<boolean>(false);
   const isDeletingAccount = useRef<boolean>(false);
@@ -122,7 +122,7 @@ const ProfileScreen: React.FC = () => {
 
     Alert.alert(
       'Delete Account',
-      'This action cannot be undone.',
+      'Are you sure you want to delete your account? This action cannot be undone.',
       [
         {
           text: 'Cancel',
@@ -136,19 +136,29 @@ const ProfileScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // TODO: Integrate delete-account API when backend endpoint is ready.
-              // After successful API deletion, call logout() and reset navigation
-              // to BottomNavigation exactly like handleLogout().
-              Toast.show({
-                type: 'info',
-                text1: 'Delete Account',
-                text2: 'This feature will be available soon.',
+              await deleteAccount();
+              clearProfile();
+
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'BottomNavigation' }],
               });
-            } catch (error) {
+
+              Toast.show({
+                type: 'success',
+                text1: 'Account Deleted',
+                text2: 'Your account has been deleted successfully.',
+              });
+            } catch (error: any) {
+              const errorMessage =
+                error?.response?.data?.message ||
+                error?.message ||
+                'Please try again later.';
+
               Toast.show({
                 type: 'error',
                 text1: 'Delete failed',
-                text2: 'Please try again later.',
+                text2: errorMessage,
               });
             } finally {
               isDeletingAccount.current = false;
@@ -163,7 +173,7 @@ const ProfileScreen: React.FC = () => {
         },
       },
     );
-  }, [profile?.id, user?.id]);
+  }, [clearProfile, deleteAccount, navigation]);
 
   const menuItems = useMemo<MenuItemConfig[]>(
     () => [
@@ -173,23 +183,23 @@ const ProfileScreen: React.FC = () => {
         iconName: 'receipt-outline',
         onPress: () => navigation.navigate('NoPayment'),
       },
-      {
-        id: 'saved-spas',
-        title: 'Saved Spas',
-        iconName: 'heart-outline',
-        onPress: () => showUnavailableToast('Saved Spas'),
-      },
+      // {
+      //   id: 'saved-spas',
+      //   title: 'Saved Spas',
+      //   iconName: 'heart-outline',
+      //   onPress: () => showUnavailableToast('Saved Spas'),
+      // },
       {
         id: 'rate-app',
         title: 'Rate our App',
         iconName: 'star-outline',
         // onPress: () => showUnavailableToast('Rate our App'),
         onPress: () => {
-          if(Platform.OS === 'ios') {
+          if (Platform.OS === 'ios') {
             openExternalUrl('https://apps.apple.com/in/app/tooka-near-you/id6784173654', 'Rate our App')
-          }else if(Platform.OS === 'android') {
+          } else if (Platform.OS === 'android') {
             openExternalUrl('https://play.google.com/store/apps/details?id=com.fracspace.tooka', 'Rate our App')
-          }else{
+          } else {
             showUnavailableToast('Rate our App')
           }
         },
@@ -253,15 +263,22 @@ const ProfileScreen: React.FC = () => {
             />
           )}
 
+          <View style={{paddingHorizontal: 16}}>
+            <Image 
+              source={{uri:'https://d2f15ematxpwp4.cloudfront.net/appImages/pr.png'}}
+              style={{width: '100%', height: isTablet ? 90 : 70, resizeMode: 'stretch'}}
+            />
+          </View>
+
           <View style={styles.supportRow}>
             <SupportCard
-              eyebrow="Instant Voice"
+              eyebrow="Need Help?"
               title="Call Support"
               iconName="call-outline"
               onPress={() => openExternalUrl(SUPPORT_PHONE, 'Call Support')}
             />
             <SupportCard
-              eyebrow="Direct Message"
+              eyebrow="Drop a Message"
               title="Email Support"
               iconName="mail-outline"
               onPress={() => openExternalUrl(SUPPORT_EMAIL, 'Email Support')}

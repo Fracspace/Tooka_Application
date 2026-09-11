@@ -32,7 +32,9 @@ import { AUTH_COLORS, AUTH_CONFIG, AUTH_TEXT, getKeyboardBehavior } from '../con
 import { useKeyboard } from '../hooks/useKeyboard';
 import { useOtpTimer } from '../hooks/useOtpTimer';
 import { useAuth } from '../../context/AuthContext';
+import { useProfile } from '../../context/ProfileContext';
 import AuthApi from '../../api/AuthApi';
+import ProfileApi from '../../api/ProfileApi';
 import HeroSection from '../components/HeroSection';
 
 type AuthStep = 'phone' | 'name' | 'otp' | 'success';
@@ -46,6 +48,7 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ isEmbedded 
   const route = useRoute<any>();
 
   const { login, register } = useAuth();
+  const { setProfile } = useProfile();
 
   // Screen state
   const [step, setStep] = useState<AuthStep>('phone');
@@ -68,11 +71,13 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ isEmbedded 
   // OTP Resend timer
   const { timeLeft, reset, isExpired } = useOtpTimer(AUTH_CONFIG.resendSeconds);
 
-  // Parse route parameters for redirect/booking flow
   const spaId = isEmbedded ? undefined : route?.params?.spaId;
   const serviceId = isEmbedded ? undefined : route?.params?.serviceId;
   const serviceName = isEmbedded ? undefined : route?.params?.serviceName;
   const openBooking = isEmbedded ? undefined : route?.params?.openBooking;
+  const selectedDateId = isEmbedded ? undefined : route?.params?.selectedDateId;
+  const selectedSlotId = isEmbedded ? undefined : route?.params?.selectedSlotId;
+  const fromScreen = isEmbedded ? undefined : route?.params?.fromScreen;
 
   // Clean up any pending requests on unmount
   useEffect(() => {
@@ -226,20 +231,51 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ isEmbedded 
         loggedInUser = await register(formattedPhone, otpDigits, name.trim());
       }
 
+      // Fetch user profile immediately after OTP verification so avatar and profile data are available everywhere
+      try {
+        const userProfile = await ProfileApi.getProfile();
+        if (userProfile) {
+          setProfile(userProfile);
+        }
+      } catch (profileErr) {
+        if (__DEV__) {
+          console.warn('[AuthenticationScreen] Profile fetch error:', profileErr);
+        }
+      }
+
       setSuccessMessage('Successfully verified!');
       transitionToStep('success');
 
       // Navigate back or to spa details
       setTimeout(() => {
         if (spaId) {
-          navigation.navigate('SpaDetails', {
-            spaId,
-            serviceId,
-            openBooking: true,
+          navigation.reset({
+            index: 1,
+            routes: [
+              {
+                name: 'BottomNavigation',
+                params: fromScreen === 'Explore' ? { screen: 'Explore' } : { screen: 'Home' },
+              },
+              {
+                name: 'SpaDetails',
+                params: {
+                  spaId,
+                  serviceId,
+                  serviceName,
+                  openBooking: true,
+                  selectedDateId,
+                  selectedSlotId,
+                  fromLogin: true,
+                  fromScreen: fromScreen ?? 'Home',
+                },
+              },
+            ],
           });
         } else if (!isEmbedded) {
           if (navigation.canGoBack()) {
             navigation.goBack();
+          } else if (fromScreen === 'Explore') {
+            navigation.navigate('BottomNavigation', { screen: 'Explore' });
           } else {
             navigation.navigate('BottomNavigation');
           }
@@ -251,7 +287,7 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ isEmbedded 
     } finally {
       setLoading(false);
     }
-  }, [phone, otpDigits, isRegistered, name, loading, spaId, serviceId, serviceName, openBooking, isEmbedded, login, register, navigation]);
+  }, [phone, otpDigits, isRegistered, name, loading, spaId, serviceId, serviceName, openBooking, selectedDateId, selectedSlotId, fromScreen, isEmbedded, login, register, navigation, setProfile]);
 
   const handleGoBackToPhone = useCallback(() => {
     setError('');
@@ -264,6 +300,8 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ isEmbedded 
   // OTP inputs callbacks
   const handleOtpChange = useCallback((index: number, value: string) => {
     const sanitized = value.replace(/[^0-9]/g, '');
+
+    // Case 1: Empty input (user deleted or backspaced)
     if (!sanitized) {
       setOtp((prev) => {
         const nextOtp = [...prev];
@@ -274,47 +312,40 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ isEmbedded 
       return;
     }
 
-    if (sanitized.length > 1) {
-      // Auto-fill or multi-character paste / typing over existing char
-      if (sanitized.length === AUTH_CONFIG.otpLength) {
-        // Full 6-digit OTP string
-        const digits = sanitized.split('');
-        setOtp(digits);
-        setOtpDigits(digits.join(''));
-        otpRefs.current[AUTH_CONFIG.otpLength - 1]?.focus();
-        return;
-      }
-
-      setOtp((prev) => {
-        const nextOtp = [...prev];
-        if (sanitized.length >= AUTH_CONFIG.otpLength) {
-          const digits = sanitized.slice(0, AUTH_CONFIG.otpLength).split('');
-          setOtpDigits(digits.join(''));
-          otpRefs.current[AUTH_CONFIG.otpLength - 1]?.focus();
-          return digits;
-        }
-
-        const charToUse = sanitized.slice(-1);
-        nextOtp[index] = charToUse;
-        setOtpDigits(nextOtp.join(''));
-        if (index < AUTH_CONFIG.otpLength - 1) {
-          otpRefs.current[index + 1]?.focus();
-        }
-        return nextOtp;
-      });
+    // Case 2: Full OTP autofill or paste (>= 6 digits)
+    if (sanitized.length >= AUTH_CONFIG.otpLength) {
+      const digits = sanitized.slice(0, AUTH_CONFIG.otpLength).split('');
+      setOtp(digits);
+      setOtpDigits(digits.join(''));
+      otpRefs.current[AUTH_CONFIG.otpLength - 1]?.focus();
       return;
     }
 
-    // Single digit input
+    // Case 3: Overwriting existing digit or typing over (length > 1)
+    if (sanitized.length > 1) {
+      const charToUse = sanitized.slice(-1);
+      setOtp((prev) => {
+        const nextOtp = [...prev];
+        nextOtp[index] = charToUse;
+        setOtpDigits(nextOtp.join(''));
+        return nextOtp;
+      });
+      if (index < AUTH_CONFIG.otpLength - 1) {
+        otpRefs.current[index + 1]?.focus();
+      }
+      return;
+    }
+
+    // Case 4: Single digit normal typing
     setOtp((prev) => {
       const nextOtp = [...prev];
       nextOtp[index] = sanitized;
       setOtpDigits(nextOtp.join(''));
-      if (index < AUTH_CONFIG.otpLength - 1) {
-        otpRefs.current[index + 1]?.focus();
-      }
       return nextOtp;
     });
+    if (index < AUTH_CONFIG.otpLength - 1) {
+      otpRefs.current[index + 1]?.focus();
+    }
   }, []);
 
   const handleOtpKeyPress = useCallback((index: number, event: NativeSyntheticEvent<TextInputKeyPressEventData>) => {

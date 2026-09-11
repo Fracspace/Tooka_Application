@@ -51,14 +51,12 @@ const AMENITY_ICON_MAP: Record<string, string> = {
 
 export type SpaDetailsContentProps = {
   spa: SpaDetails | null;
-  loading: boolean;
-  error: string | null;
+  loading?: boolean;
+  error?: string | null;
   onRetry?: () => void;
-  spaId: string;
+  spaId?: string;
   serviceId?: string;
   serviceName?: string;
-  openEnquiry?: boolean;
-  onBookSpa?: (spaId: string, serviceId?: string, serviceName?: string) => void;
   onBack?: () => void;
   showBackButton?: boolean;
   showBookBar?: boolean;
@@ -73,7 +71,6 @@ export type SpaDetailsContentProps = {
   loadingSlots?: boolean;
   availabilityError?: string | null;
   bookingOption?: BookingOption;
-  optionSelected?: boolean;
   onProceedBooking?: () => void;
   proceedLoading?: boolean;
   proceedDisabled?: boolean;
@@ -140,10 +137,7 @@ const formatTimeStr = (rawTime: string | null | undefined): string => {
 
 const SpaDetailsContent = memo(function SpaDetailsContentInner({
   spa,
-  loading,
-  spaId,
-  serviceId,
-  serviceName,
+  loading = false,
   onBack,
   showBackButton = true,
   showBookBar = true,
@@ -461,9 +455,6 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
               <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
             </Pressable>
           )}
-          <Pressable style={styles.favoriteButton} hitSlop={10}>
-            <Ionicons name="heart-outline" size={22} color="#FFFFFF" />
-          </Pressable>
         </View>
 
         {/* Bottom Gallery Thumbnail Overlay */}
@@ -523,9 +514,9 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
             <Pressable
               onPress={() => setHoursModalVisible(true)}
               hitSlop={10}
-              style={{flexDirection:'row', alignItems:'center', gap:0}}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 0 }}
             >
-              <Text style={{fontFamily:'WorkSans-Medium', fontSize:12,color:'#FFB02E'}}>View Hours </Text>
+              <Text style={{ fontFamily: 'WorkSans-Medium', fontSize: 12, color: '#FFB02E' }}>View Hours </Text>
               <Ionicons
                 name={"chevron-forward-outline"}
                 size={12}
@@ -634,113 +625,113 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
           <View style={styles.bookingSectionBlock}>
             <Text style={styles.sectionTitle}>When would you like to visit?</Text>
 
-            <View style={{backgroundColor: '#FFF', padding: 15, borderRadius: 8, marginTop: 15}}>
-            {/* Date Selector Tabs */}
-            <View style={styles.dateTabsRow}>
-              {dates.map((d) => {
-                const isSelectedDate = d.id === selectedDateId;
-                const dateFormatted = formatDateSubLabel(d.date);
-                const labelText = dateFormatted ? `${d.label} • ${dateFormatted}` : d.label;
-
-                return (
-                  <Pressable
-                    key={d.id}
-                    onPress={() => onSelectDate?.(d.id)}
-                    style={[styles.dateTab, isSelectedDate && styles.dateTabActive]}
-                  >
-                    <Text style={[styles.dateTabText, isSelectedDate && styles.dateTabTextActive]}>
-                      {labelText}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            {/* Next Available Banner */}
-            {!loadingSlots && !availabilityError && firstAvailableSlot && (
-              <View style={styles.nextAvailableBanner}>
-                <Text style={styles.nextAvailableText}>
-                  Next available:{' '}
-                  <Text style={{ fontFamily: 'Sora-SemiBold', color: '#2D2B28' }}>
-                    {firstAvailableSlot.label}
-                  </Text>
-                </Text>
-                <View style={styles.recommendedPill}>
-                  <Ionicons name="star" size={12} color="#F8C51D" />
-                  <Text style={styles.recommendedText}>Recommended</Text>
-                </View>
-              </View>
-            )}
-
-            {/* Time Slot Grid */}
-            <Text style={styles.otherSlotsTitle}>Other Slots</Text>
-
-            {loadingSlots && (
-              <View style={styles.slotStateBox}>
-                <ActivityIndicator color="#FFAA26" />
-                <Text style={styles.slotStateText}>Checking availability...</Text>
-              </View>
-            )}
-
-            {!loadingSlots && availabilityError && (
-              <View style={styles.slotStateBox}>
-                <Text style={styles.slotStateTitle}>Unable to load slots</Text>
-                <Text style={styles.slotStateText}>{availabilityError}</Text>
-              </View>
-            )}
-
-            {!loadingSlots && !availabilityError && slots.length === 0 && (
-              <View style={styles.slotStateBox}>
-                <Text style={styles.slotStateTitle}>No slots available</Text>
-                <Text style={styles.slotStateText}>Please select another date.</Text>
-              </View>
-            )}
-
-            {!loadingSlots && !availabilityError && slots.length > 0 && (
-              <View style={styles.slotGridRow}>
-                {slots.map((s) => {
-                  const isSelectedSlot = s.id === selectedSlotId;
-                  const isDisabled = s.status !== 'available';
+            <View style={{ backgroundColor: '#FFF', padding: 15, borderRadius: 8, marginTop: 15 }}>
+              {/* Date Selector Tabs */}
+              <View style={styles.dateTabsRow}>
+                {dates.map((d) => {
+                  const isSelectedDate = d.id === selectedDateId;
+                  const dateFormatted = formatDateSubLabel(d.date);
+                  const labelText = dateFormatted ? `${d.label} • ${dateFormatted}` : d.label;
 
                   return (
                     <Pressable
-                      key={s.id}
-                      disabled={isDisabled}
-                      onPress={() => onSelectSlot?.(s.id)}
-                      style={[
-                        styles.slotBtn,
-                        { width: slotWidth },
-                        isSelectedSlot && styles.slotBtnSelected,
-                        isDisabled && styles.slotBtnDisabled,
-                      ]}
+                      key={d.id}
+                      onPress={() => onSelectDate?.(d.id)}
+                      style={[styles.dateTab, isSelectedDate && styles.dateTabActive]}
                     >
-                      <Text
-                        style={[
-                          styles.slotBtnText,
-                          isSelectedSlot && styles.slotBtnTextSelected,
-                          isDisabled && styles.slotBtnTextDisabled,
-                        ]}
-                      >
-                        {s.label}
+                      <Text style={[styles.dateTabText, isSelectedDate && styles.dateTabTextActive]}>
+                        {labelText}
                       </Text>
-                      {isSelectedSlot && (
-                        <View style={styles.selectedSlotBadge}>
-                          <Text style={styles.selectedSlotBadgeText}>SELECTED</Text>
-                        </View>
-                      )}
                     </Pressable>
                   );
                 })}
               </View>
-            )}
 
-            {/* Arrival Tip Banner */}
-            <View style={styles.arrivalTipBanner}>
-              <Text style={{ fontSize: 14 }}>🌿</Text>
-              <Text style={styles.arrivalTipText}>
-                Arrive 5–10 minutes early for a relaxed experience.
-              </Text>
-            </View>
+              {/* Next Available Banner */}
+              {!loadingSlots && !availabilityError && firstAvailableSlot && (
+                <View style={styles.nextAvailableBanner}>
+                  <Text style={styles.nextAvailableText}>
+                    Next available:{' '}
+                    <Text style={{ fontFamily: 'Sora-SemiBold', color: '#2D2B28' }}>
+                      {firstAvailableSlot.label}
+                    </Text>
+                  </Text>
+                  <View style={styles.recommendedPill}>
+                    <Ionicons name="star" size={12} color="#F8C51D" />
+                    <Text style={styles.recommendedText}>Recommended</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Time Slot Grid */}
+              <Text style={styles.otherSlotsTitle}>Other Slots</Text>
+
+              {loadingSlots && (
+                <View style={styles.slotStateBox}>
+                  <ActivityIndicator color="#FFAA26" />
+                  <Text style={styles.slotStateText}>Checking availability...</Text>
+                </View>
+              )}
+
+              {!loadingSlots && availabilityError && (
+                <View style={styles.slotStateBox}>
+                  <Text style={styles.slotStateTitle}>Unable to load slots</Text>
+                  <Text style={styles.slotStateText}>{availabilityError}</Text>
+                </View>
+              )}
+
+              {!loadingSlots && !availabilityError && slots.length === 0 && (
+                <View style={styles.slotStateBox}>
+                  <Text style={styles.slotStateTitle}>No slots available</Text>
+                  <Text style={styles.slotStateText}>Please select another date.</Text>
+                </View>
+              )}
+
+              {!loadingSlots && !availabilityError && slots.length > 0 && (
+                <View style={styles.slotGridRow}>
+                  {slots.map((s) => {
+                    const isSelectedSlot = s.id === selectedSlotId;
+                    const isDisabled = s.status !== 'available';
+
+                    return (
+                      <Pressable
+                        key={s.id}
+                        disabled={isDisabled}
+                        onPress={() => onSelectSlot?.(s.id)}
+                        style={[
+                          styles.slotBtn,
+                          { width: slotWidth },
+                          isSelectedSlot && styles.slotBtnSelected,
+                          isDisabled && styles.slotBtnDisabled,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.slotBtnText,
+                            isSelectedSlot && styles.slotBtnTextSelected,
+                            isDisabled && styles.slotBtnTextDisabled,
+                          ]}
+                        >
+                          {s.label}
+                        </Text>
+                        {isSelectedSlot && (
+                          <View style={styles.selectedSlotBadge}>
+                            <Text style={styles.selectedSlotBadgeText}>SELECTED</Text>
+                          </View>
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+
+              {/* Arrival Tip Banner */}
+              <View style={styles.arrivalTipBanner}>
+                <Text style={{ fontSize: 14 }}>🌿</Text>
+                <Text style={styles.arrivalTipText}>
+                  Arrive 5–10 minutes early for a relaxed experience.
+                </Text>
+              </View>
             </View>
 
             {/* 6. BOOKING OPTION CARD */}
@@ -906,14 +897,6 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   heroBackButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(45, 43, 40, 0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  favoriteButton: {
     width: 38,
     height: 38,
     borderRadius: 19,
@@ -1160,15 +1143,13 @@ const styles = StyleSheet.create({
   dateTabsRow: {
     flexDirection: 'row',
     gap: 8,
-    // marginTop: 12,
-    backgroundColor:'#FFB02E1a',
-    borderRadius:10
+    backgroundColor: '#FFB02E1a',
+    borderRadius: 10,
   },
   dateTab: {
     flex: 1,
     height: 48,
     borderRadius: 12,
-    // backgroundColor: '#F7EFE6',
     borderWidth: 1,
     borderColor: 'transparent',
     alignItems: 'center',
@@ -1176,7 +1157,7 @@ const styles = StyleSheet.create({
   },
   dateTabActive: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal:10,
+    paddingHorizontal: 10,
     alignItems: 'center',
     borderColor: '#FFAA26',
   },
@@ -1375,11 +1356,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    // backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
     paddingTop: 10,
-    // borderTopWidth: 1,
-    // borderTopColor: '#EBE3D7',
   },
   unbookableNotice: {
     flexDirection: 'row',

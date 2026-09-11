@@ -40,9 +40,14 @@ export const formFromProfile = (profile: UserProfile | null): EditProfileForm =>
     email: profile?.email ?? '',
     countryCode: '+91',
     phoneNumber: (profile?.phone ?? '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10),
-    gender: profile?.gender === 'male' || profile?.gender === 'other' ? profile.gender : 'female',
+    gender:
+      profile?.gender?.toLowerCase() === 'female'
+        ? 'female'
+        : profile?.gender?.toLowerCase() === 'other'
+        ? 'other'
+        : 'male',
     dateOfBirth: parseApiDate(profile?.dateOfBirth),
-    addressLine1: profile?.residentialLocation?.formattedAddress ?? '',
+    addressLine1: profile?.residentialLocation?.formattedAddress ?? profile?.city ?? '',
     addressLine2: [
       profile?.residentialLocation?.city,
       profile?.residentialLocation?.state,

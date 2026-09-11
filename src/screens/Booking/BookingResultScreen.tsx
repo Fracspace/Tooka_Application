@@ -469,9 +469,9 @@ function BookingResultScreen(): React.ReactElement {
               </View>
             ) : null}
 
-            <Text style={styles.infoText}>
+            {/* <Text style={styles.infoText}>
               We've sent the booking details to your email & phone.
-            </Text>
+            </Text> */}
 
             <Pressable
               disabled={retrying}
@@ -544,7 +544,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.muted,
     textAlign: 'center',
-    marginBottom:20,
+    marginBottom: 20,
   },
   loader: {
     marginTop: -38,
@@ -677,6 +677,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 30,
     marginBottom: 20,
     ...Platform.select({
       ios: {

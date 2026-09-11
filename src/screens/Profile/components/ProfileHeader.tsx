@@ -22,7 +22,7 @@ function ProfileHeader({ onNotificationPress }: Props): React.ReactElement {
 
   return (
     <View
-          style={[styles.header, { paddingTop: insets.top + 8 }]}
+          style={[styles.header, { paddingTop: insets.top + 20 }]}
           onLayout={handleLayout}
           accessibilityRole="header"
         >
@@ -56,7 +56,10 @@ function ProfileHeader({ onNotificationPress }: Props): React.ReactElement {
 
 
       <View style={styles.headerTopRow}>
-        <Text style={styles.headerTitle}>My Profile</Text>
+        <View>
+          <Text style={styles.headerTitle}>My Profile</Text>
+          <Text style={styles.headerSubtitle}>Manage your account and preferences</Text>
+        </View>
         <NotificationButton onPress={onNotificationPress} />
       </View>
     </View>

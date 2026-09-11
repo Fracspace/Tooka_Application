@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import { DeviceEventEmitter } from 'react-native';
 import AuthApi from '../api/AuthApi';
+import ProfileApi from '../api/ProfileApi';
 import {
   readAuthSession,
   writeAuthSession,
@@ -139,6 +140,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  // Delete account handler
+  const deleteAccount = useCallback(async (): Promise<void> => {
+    try {
+      await ProfileApi.deleteAccount();
+      setUser(null);
+      setToken(null);
+      setIsLoggedIn(false);
+      await clearAuthSession();
+      await Crashlytics.clearUser();
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('[AuthContext] deleteAccount error:', error);
+      }
+      throw error;
+    }
+  }, []);
+
   useEffect(() => {
     const subscription = DeviceEventEmitter.addListener('UNAUTHORIZED', () => {
       void logout();
@@ -159,8 +177,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       login,
       register,
       logout,
+      deleteAccount,
     }),
-    [isLoggedIn, user, token, loading, login, register, logout]
+    [isLoggedIn, user, token, loading, login, register, logout, deleteAccount]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

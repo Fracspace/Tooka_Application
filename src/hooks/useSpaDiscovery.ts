@@ -4,7 +4,7 @@ import type { Spa } from '../types/spa';
 
 const DEFAULT_CITY = 'Hyderabad';
 
-export function useSpaDiscovery(city: string = DEFAULT_CITY, isAuthenticated: boolean = false) {
+export function useSpaDiscovery(city: string = DEFAULT_CITY) {
   const [spas, setSpas] = useState<Spa[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -59,7 +59,7 @@ export function useSpaDiscovery(city: string = DEFAULT_CITY, isAuthenticated: bo
         }
       }
     },
-    [city, isAuthenticated],
+    [city],
   );
 
   useEffect(() => {

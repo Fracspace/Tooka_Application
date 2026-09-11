@@ -46,7 +46,10 @@ export const validateProfileUpdate = (
     return { valid: false, message: 'Select your gender.' };
   }
 
-  if (!residentialLocation || !Number.isFinite(residentialLocation.latitude) || !Number.isFinite(residentialLocation.longitude)) {
+  if (
+    residentialLocation &&
+    (!Number.isFinite(residentialLocation.latitude) || !Number.isFinite(residentialLocation.longitude))
+  ) {
     return { valid: false, message: 'Select a valid residential address.' };
   }
 

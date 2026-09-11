@@ -58,10 +58,11 @@ function ProfileAvatar({ source, compact, onEditPress }: Props): React.ReactElem
           onPressIn={() => animateEdit(0.94)}
           onPressOut={() => animateEdit(1)}
           style={styles.editButton}
+          hitSlop={15}
           accessibilityRole="button"
           accessibilityLabel="Edit profile"
         >
-          <Ionicons name="create-outline" size={18} color={colors.primary} />
+          <Ionicons name="create-outline" size={15} color={colors.white} />
         </Pressable>
       </Animated.View>
     </Animated.View>

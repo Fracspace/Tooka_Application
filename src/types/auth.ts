@@ -16,4 +16,5 @@ export interface AuthContextValue {
   login: (phone: string, otp: string) => Promise<AuthUser>;
   register: (phone: string, otp: string, fullName: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 }

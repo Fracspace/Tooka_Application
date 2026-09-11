@@ -60,6 +60,14 @@ export interface AvatarUploadResponse {
   };
 }
 
+export interface DeleteAccountResponse {
+  success: boolean;
+  data: {
+    deleted: boolean;
+    id: string;
+  };
+}
+
 export interface UpdateProfilePayload {
   username?: string;
   fullName?: string;

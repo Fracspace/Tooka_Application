@@ -4,38 +4,37 @@ import {
   StyleProp,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
   ViewStyle,
 } from 'react-native';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import Icon from 'react-native-vector-icons/Ionicons';
 
 import type { BackendBookingListItem } from '../../../types/booking';
 import {
   extractPaymentDate,
   formatCurrency,
   formatDateTime,
+  formatPaymentMethod,
   getPaymentStatusUI,
 } from '../utils/paymentFormatters';
-import Icon from 'react-native-vector-icons/Ionicons';
 
-// ─── Constants & Types ────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const FALLBACK_IMAGE = {
   uri: 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=400&q=60',
 };
 
-// Colors from Tooka brand matching Figma
-const C = {
+const PALETTE = {
   white: '#FFFFFF',
-  cardBorder: '#EFE9DD',
-  divider: '#EFE9DD',
+  cardBorder: '#F2ECE1',
+  divider: '#F0EBE1',
   heading: '#1E1E1E',
-  muted: '#8A8A8A',
-  primary: '#FFAE2B',
-  primaryBg: '#FFF6E5', // For the slot pill
-  pillText: '#F59B00',
-  methodIcon: '#4A4A4A',
+  muted: '#6E6E6E',
+  iconMuted: '#8A8A8A',
+  slotBg: '#FAF5EC',
+  slotLabel: '#8A8275',
+  orange: '#F59E0B',
+  methodText: '#2A2A2A',
 };
 
 export interface PaymentCardProps {
@@ -43,10 +42,10 @@ export interface PaymentCardProps {
   style?: StyleProp<ViewStyle>;
 }
 
-// ─── Sub-component: PaymentStatusBadge ────────────────────────────────────────
+// ─── Sub-component: PaymentCardStatusBadge ────────────────────────────────────
 
-const PaymentStatusBadge = React.memo<{ status: string | null | undefined }>(
-  function PaymentStatusBadge({ status }) {
+const PaymentCardStatusBadge = React.memo<{ status: string | null | undefined }>(
+  function StatusBadgeComponent({ status }) {
     const ui = useMemo(() => getPaymentStatusUI(status), [status]);
 
     return (
@@ -65,136 +64,181 @@ const PaymentStatusBadge = React.memo<{ status: string | null | undefined }>(
 
 // ─── Main Component: PaymentCard ──────────────────────────────────────────────
 
-const PaymentCard = React.memo<PaymentCardProps>(function PaymentCard({
+export const PaymentCard = React.memo<PaymentCardProps>(function PaymentCardComponent({
   booking,
   style,
 }) {
-  const { width } = useWindowDimensions();
-  // console.log("payment card booking data: ", booking);
+  // Spa Name
+  const spaName =
+    booking.spaName ||
+    booking.raw?.spa_snapshot?.name ||
+    'Unknown Spa';
 
-  // Extract data
-  // const bookingRef = booking.bookingReference || booking.bookingId || 'N/A';
-  const bookingRef = booking?.raw?.payment?.cf_payment_id || 'N/A';
+  // Location
+  const locality = booking.raw?.spa_snapshot?.locality_name;
+  const city = booking.raw?.spa_snapshot?.city_name;
+  const location =
+    locality && city
+      ? `${locality}, ${city}`
+      : locality ||
+        city ||
+        booking.location ||
+        booking.raw?.spa_snapshot?.address ||
+        '';
+
+  // Spa Image
+  const rawCover = booking.raw?.spa_snapshot?.cover_photo_url;
+  const spaImageUri = booking.spaImage || rawCover;
+  const spaImageSource = spaImageUri ? { uri: spaImageUri } : FALLBACK_IMAGE;
+
+  // Amount
+  const bookingPrice =
+    typeof booking.price === 'number' || typeof booking.price === 'string'
+      ? booking.price
+      : null;
+  const rawTotal =
+    typeof booking.raw?.amount_total === 'string' ||
+    typeof booking.raw?.amount_total === 'number'
+      ? booking.raw.amount_total
+      : null;
+  const rawBase =
+    typeof (booking.raw as Record<string, unknown>)?.base_price === 'string' ||
+    typeof (booking.raw as Record<string, unknown>)?.base_price === 'number'
+      ? ((booking.raw as Record<string, unknown>).base_price as string | number)
+      : null;
+  const rawPaid =
+    typeof booking.raw?.amount_paid === 'string' ||
+    typeof booking.raw?.amount_paid === 'number'
+      ? booking.raw.amount_paid
+      : null;
+  const rawAmount = rawTotal ?? rawBase ?? rawPaid ?? bookingPrice;
+  const amountStr = formatCurrency(rawAmount);
+
+  // Status: payment_status === "captured" is Completed, rest is Cancelled
+  const isCaptured =
+    (
+      booking.paymentStatus ||
+      (booking.raw as Record<string, unknown>)?.payment_status ||
+      ''
+    )
+      .toString()
+      .toLowerCase()
+      .trim() === 'captured';
+  const statusToDisplay = isCaptured ? 'captured' : 'cancelled';
+
+  // Transaction Date/Time
+  const appointmentAtStr = booking.appointmentAt ?? undefined;
   const paymentDateIso = extractPaymentDate(booking.raw);
-  const paymentDateTimeStr = formatDateTime(paymentDateIso) || '--';
+  const paymentDateTimeStr =
+    formatDateTime(paymentDateIso) ||
+    formatDateTime(appointmentAtStr) ||
+    '--';
 
-  const spaName = booking.spaName || 'Unknown Spa';
-  const location = `${booking.raw.spa_snapshot?.locality_name}, ${booking.raw.spa_snapshot?.city_name}` || booking.raw.spa_snapshot?.address;
-  const spaImage = booking.spaImage ? { uri: booking.spaImage } : FALLBACK_IMAGE;
-
-  const amountStr = formatCurrency(booking.raw.amount_paid);
-
-  // Slot timing mapping
+  // Booked Slot Timing
   const slotDate = booking.date;
   const slotTime = booking.time;
-  const hasSlotTiming = Boolean(slotDate && slotTime);
+  const slotTimingStr =
+    slotDate && slotTime
+      ? `${slotDate} | ${slotTime}`
+      : formatDateTime(appointmentAtStr) || 'Slot Details Unavailable';
 
-  // Future-proofing payment method (as requested)
-  // Assuming a future interface: { type: 'visa' | 'upi' | 'wallet' | 'netbanking', displayName: string }
-  // Currently defaulting to missing (but extracted from raw to satisfy TS typing).
-  const paymentMethod = booking.raw?.payment as { type?: string; displayName?: string } | undefined;
-  const bookingMethod = booking?.raw?.payment?.payment_method?.upi?.upi_id
+  // Payment Method
+  const paymentMethodInfo = useMemo(
+    () => formatPaymentMethod(booking.raw?.payment),
+    [booking.raw?.payment],
+  );
 
   return (
     <View style={[styles.card, style]} accessibilityRole="none">
-      {/* ── Top Section ── */}
+      {/* ── Top Section: Left Image + Right Details ── */}
       <View style={styles.topSection}>
-        <View style={styles.topLeft}>
-          <Text style={styles.bookingRefText} numberOfLines={1}>
-            Txn_Id: {bookingRef.replace(/^#/, '')}
-          </Text>
-          <Text style={styles.paymentDateText} numberOfLines={1}>
-            {paymentDateTimeStr}
-          </Text>
-        </View>
-        <View style={styles.topRight}>
-          <PaymentStatusBadge status={booking.paymentStatus} />
-        </View>
-      </View>
+        {/* Spa Image on Left */}
+        <Image
+          source={spaImageSource}
+          style={styles.spaImage}
+          resizeMode="cover"
+          accessible
+          accessibilityLabel={`${spaName} image`}
+        />
 
-      <View style={styles.divider} />
-
-      {/* ── Middle Section ── */}
-      <View style={styles.middleSection}>
-        <View style={styles.middleLeft}>
-          {/* <Image
-            source={spaImage}
-            style={styles.spaImage}
-            resizeMode="cover"
-            accessibilityLabel={`${spaName} image`}
-          /> */}
-          <View style={styles.spaIcon}>
-            <Icon name={'flower'} size={20} color={'#FFB02E'}/>
-          </View>
-          <View style={styles.spaInfo}>
+        {/* Right Info Column */}
+        <View style={styles.infoColumn}>
+          {/* Row 1: Spa Name + Status Badge */}
+          <View style={styles.nameBadgeRow}>
             <Text style={styles.spaNameText} numberOfLines={1}>
               {spaName}
             </Text>
-            
-            {location ? (
-              <View style={{flexDirection:'row',alignItems:'center',marginTop:0}}>
-                <Icon name='location-outline' size={13} color={'#8A8A8A'} style={{marginRight: 2}}/>
-                <Text style={styles.locationText} numberOfLines={1}>
-                  {location}
-                </Text>
-              </View>
-            ) : null}
-            
+            <PaymentCardStatusBadge status={statusToDisplay} />
           </View>
-        </View>
-        <View style={styles.middleRight}>
-          <Text style={styles.amountText} numberOfLines={1}>
-            {amountStr}
-          </Text>
+
+          {/* Row 2: Location + Amount */}
+          <View style={styles.locationAmountRow}>
+            <View style={styles.locationContainer}>
+              <Icon
+                name="location-outline"
+                size={13}
+                color={PALETTE.iconMuted}
+                style={styles.metaIcon}
+              />
+              <Text style={styles.locationText} numberOfLines={1}>
+                {location || 'Location details pending'}
+              </Text>
+            </View>
+            <Text style={styles.amountText} numberOfLines={1}>
+              {amountStr}
+            </Text>
+          </View>
+
+          {/* Row 3: Payment/Transaction Date */}
+          <View style={styles.dateRow}>
+            <Icon
+              name="calendar-outline"
+              size={13}
+              color={PALETTE.iconMuted}
+              style={styles.metaIcon}
+            />
+            <Text style={styles.dateText} numberOfLines={1}>
+              {paymentDateTimeStr}
+            </Text>
+          </View>
+
+          {/* Row 4: Booked Slot Section */}
+          <View style={styles.bookedSlotBox}>
+            <Icon
+              name="time-outline"
+              size={15}
+              color={PALETTE.orange}
+              style={styles.slotClockIcon}
+            />
+            <View style={styles.slotTextContainer}>
+              <Text style={styles.slotLabelText}>Booked Slot</Text>
+              <Text style={styles.slotValueText} numberOfLines={1}>
+                {slotTimingStr}
+              </Text>
+            </View>
+            {/* <Icon
+              name="chevron-forward"
+              size={14}
+              color={PALETTE.orange}
+            /> */}
+          </View>
         </View>
       </View>
 
-      {/* ── Slot Timing Pill ── */}
-      {hasSlotTiming && (
-        <View style={styles.slotTimingContainer}>
-          <View style={styles.slotPill}>
-            <Ionicons
-              name="time-outline"
-              size={12}
-              color={C.white}
-              style={styles.slotIcon}
-            />
-            <Text style={styles.slotText} numberOfLines={1}>
-              Slot Timing: {slotDate} | {slotTime}
-            </Text>
-          </View>
-        </View>
-      )}
-
+      {/* ── Divider ── */}
       <View style={styles.divider} />
 
-      {/* ── Bottom Section ── */}
+      {/* ── Bottom Section: Masked Payment Method (Centered) ── */}
       <View style={styles.bottomSection}>
-        {paymentMethod ? (
-          <View style={styles.paymentMethodRow}>
-            <Ionicons
-              name={getIconForPaymentType()}
-              size={18}
-              color={C.methodIcon}
-              style={styles.methodIcon}
-            />
-            <Text style={styles.methodText} numberOfLines={1}>
-              {bookingMethod}
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.paymentMethodRow}>
-            <Ionicons
-              name="card-outline"
-              size={18}
-              color={C.muted}
-              style={styles.methodIcon}
-            />
-            <Text style={styles.methodTextMissing} numberOfLines={1}>
-              Payment Method Unavailable
-            </Text>
-          </View>
-        )}
+        <Icon
+          name={paymentMethodInfo.icon}
+          size={16}
+          color={PALETTE.methodText}
+          style={styles.methodIcon}
+        />
+        <Text style={styles.methodText} numberOfLines={1}>
+          {paymentMethodInfo.label}
+        </Text>
       </View>
     </View>
   );
@@ -202,188 +246,156 @@ const PaymentCard = React.memo<PaymentCardProps>(function PaymentCard({
 
 export default PaymentCard;
 
-// ─── Helpers ───
-
-function getIconForPaymentType(type?: string): string {
-  switch (type?.toLowerCase()) {
-    case 'visa':
-    case 'mastercard':
-    case 'card':
-      return 'card-outline';
-    case 'upi':
-      return 'phone-portrait-outline';
-    case 'wallet':
-      return 'wallet-outline';
-    case 'netbanking':
-      return 'business-outline';
-    default:
-      return 'cash-outline';
-  }
-}
-
-// ─── Styles ───
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: C.white,
-    borderRadius: 16,
+    backgroundColor: PALETTE.white,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: C.cardBorder,
-    shadowColor: '#1A1A1A',
+    borderColor: PALETTE.cardBorder,
+    padding: 14,
+    marginBottom: 10,
+    shadowColor: '#1a1a1a98',
     shadowOpacity: 0.04,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
-    marginBottom: 16,
-    overflow: 'hidden',
   },
-  
+
   // Top Section
   topSection: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    padding: 16,
   },
-  topLeft: {
+  spaImage: {
+    width: 86,
+    height: 112,
+    borderRadius: 14,
+    backgroundColor: '#F5F5F5',
+  },
+  infoColumn: {
     flex: 1,
-    marginRight: 12,
+    marginLeft: 12,
   },
-  bookingRefText: {
+
+  // Row 1: Name & Status
+  nameBadgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  spaNameText: {
     fontFamily: 'Sora-SemiBold',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    color: C.primary,
-    marginBottom: 4,
-  },
-  paymentDateText: {
-    fontFamily: 'WorkSans-Medium',
-    fontSize: 12,
-    color: C.muted,
-  },
-  topRight: {
-    flexShrink: 0,
+    color: PALETTE.heading,
+    flex: 1,
+    marginRight: 6,
   },
   badge: {
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    borderRadius: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
   },
   badgeText: {
     fontFamily: 'WorkSans-Medium',
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600',
+    textTransform: 'capitalize',
   },
-  
-  // Divider
-  divider: {
-    height: 1,
-    backgroundColor: C.divider,
-    marginHorizontal: 16,
-  },
-  
-  // Middle Section
-  middleSection: {
+
+  // Row 2: Location & Amount
+  locationAmountRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    marginTop: 4,
   },
-  middleLeft: {
+  locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginRight: 16,
+    marginRight: 8,
   },
-  spaIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFF7EE',
-    marginRight: 12,
-    alignItems:'center',justifyContent:'center'
-  },
-  spaImage: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F5F5F5',
-    marginRight: 12,
-  },
-  spaInfo: {
-    flex: 1,
-  },
-  spaNameText: {
-    fontFamily: 'Sora-SemiBold',
-    fontSize: 14,
-    fontWeight: '700',
-    color: C.heading,
-    marginBottom: 2,
+  metaIcon: {
+    marginRight: 4,
   },
   locationText: {
-    fontFamily: 'WorkSans-Medium',
+    fontFamily: 'WorkSans-Regular',
     fontSize: 12,
-    color: C.muted,
-  },
-  middleRight: {
-    flexShrink: 0,
-    alignItems: 'flex-end',
+    color: PALETTE.muted,
+    flexShrink: 1,
   },
   amountText: {
-    fontFamily: 'Sora-SemiBold',
+    fontFamily: 'Sora-Bold',
     fontSize: 18,
-    fontWeight: '800',
-    color: C.heading,
+    fontWeight: '700',
+    color: PALETTE.heading,
   },
-  
-  // Slot Timing
-  slotTimingContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  slotPill: {
+
+  // Row 3: Date
+  dateRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: C.primary,
-    borderRadius: 8,
+    marginTop: 4,
+  },
+  dateText: {
+    fontFamily: 'WorkSans-Regular',
+    fontSize: 12,
+    color: PALETTE.muted,
+  },
+
+  // Row 4: Booked Slot Box
+  bookedSlotBox: {
+    backgroundColor: PALETTE.slotBg,
+    borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    alignSelf: 'flex-start',
-  },
-  slotIcon: {
-    marginRight: 6,
-  },
-  slotText: {
-    fontFamily: 'WorkSans-Medium',
-    fontSize: 11,
-    fontWeight: '600',
-    color: C.white,
-  },
-  
-  // Bottom Section
-  bottomSection: {
-    padding: 14,
-    justifyContent: 'center',
+    marginTop: 8,
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  paymentMethodRow: {
+  slotClockIcon: {
+    marginRight: 7,
+  },
+  slotTextContainer: {
+    flex: 1,
+  },
+  slotLabelText: {
+    fontFamily: 'WorkSans-Regular',
+    fontSize: 10,
+    color: PALETTE.slotLabel,
+  },
+  slotValueText: {
+    fontFamily: 'WorkSans-SemiBold',
+    fontSize: 12,
+    fontWeight: '600',
+    color: PALETTE.heading,
+  },
+
+  // Divider
+  divider: {
+    height: 1,
+    backgroundColor: PALETTE.divider,
+    marginTop: 14,
+    marginBottom: 11,
+  },
+
+  // Bottom Section: Centered Payment Method
+  bottomSection: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 1,
   },
   methodIcon: {
-    marginRight: 8,
+    marginRight: 7,
   },
   methodText: {
     fontFamily: 'WorkSans-Medium',
     fontSize: 13,
-    fontWeight: '600',
-    color: C.heading,
-  },
-  methodTextMissing: {
-    fontFamily: 'WorkSans-Medium',
-    fontSize: 13,
     fontWeight: '500',
-    color: C.muted,
+    color: PALETTE.methodText,
   },
 });

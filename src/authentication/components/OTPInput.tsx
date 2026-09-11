@@ -10,6 +10,7 @@ interface OTPInputProps {
   inputRef?: React.Ref<TextInput>;
   autoFocus?: boolean;
   disabled?: boolean;
+  maxLength?: number;
 }
 
 export const OTPInput: React.FC<OTPInputProps> = React.memo((props) => {
@@ -24,11 +25,13 @@ export const OTPInput: React.FC<OTPInputProps> = React.memo((props) => {
       onKeyPress={props.onKeyPress}
       onFocus={props.onFocus}
       keyboardType="number-pad"
-      maxLength={1}
+      maxLength={props.maxLength ?? (AUTH_CONFIG.otpLength * 2)}
+      selectTextOnFocus
       autoFocus={props.autoFocus}
       style={styles.input}
       textContentType="oneTimeCode"
       autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
+      importantForAutofill={Platform.OS === 'android' ? 'yes' : undefined}
       selectionColor={AUTH_COLORS.primary}
       accessibilityLabel="OTP digit"
       editable={!props.disabled}

@@ -56,6 +56,10 @@ export type RootStackParamList = {
     serviceName?: string;
     openEnquiry?: boolean;
     openBooking?: boolean;
+    selectedDateId?: string;
+    selectedSlotId?: string;
+    fromLogin?: boolean;
+    fromScreen?: 'Home' | 'Explore' | string;
   };
   AllBooking: undefined;
   BookingScreen: {
@@ -120,7 +124,15 @@ export type RootStackParamList = {
   RefundPolicy: undefined;
   wellnessArticle?: undefined;
   Login:
-    | { spaId?: string; serviceId?: string; serviceName?: string; openBooking?: boolean }
+    | {
+        spaId?: string;
+        serviceId?: string;
+        serviceName?: string;
+        openBooking?: boolean;
+        selectedDateId?: string;
+        selectedSlotId?: string;
+        fromScreen?: 'Home' | 'Explore' | string;
+      }
     | undefined;
   Otp:
     | {

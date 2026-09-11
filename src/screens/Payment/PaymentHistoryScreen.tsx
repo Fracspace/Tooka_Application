@@ -1,10 +1,9 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
   Image,
-  Platform,
   Pressable,
   RefreshControl,
   StatusBar,
@@ -14,36 +13,45 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Icon from 'react-native-vector-icons/Ionicons';
 
 import { useMyBookings } from '../../hooks/useMyBookings';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import type { BackendBookingListItem } from '../../types/booking';
 import PaymentCard from './components/PaymentCard';
-import LegalHeader from '../Legal/components/LegalHeader';
+import PaymentHeader from './components/PaymentHeader';
+
+type PaymentFilterTab = 'all' | 'completed' | 'cancelled';
+
+const TABS: Array<{ label: string; key: PaymentFilterTab }> = [
+  { label: 'All', key: 'all' },
+  { label: 'Completed', key: 'completed' },
+  { label: 'Cancelled', key: 'cancelled' },
+];
 
 const PALETTE = {
   heroOrange: '#FFAE2B',
-  heroOrangeDark: '#F59B00',
-  bg: '#FDF6EC',
+  bg: '#FAF6EF',
   card: '#FFFFFF',
-  title: '#FFFFFF',
   textMain: '#1A1A1A',
   textMuted: '#8A8A8A',
-  chipBg: '#FFFFFF',
-  chipText: '#FFAE2B',
+  tabActiveBg: '#F89C1D',
+  tabActiveText: '#FFFFFF',
+  tabInactiveBg: '#EDE7DE',
+  tabInactiveText: '#282624',
 };
 
 const DEFAULT_ILLUSTRATION = {
-  uri: 'https://cdn-icons-png.flaticon.com/512/6598/6598519.png',
+  uri: 'https://d2f15ematxpwp4.cloudfront.net/appImages/nopay1.png',
 };
 
 export const PaymentHistoryScreen: React.FC = () => {
   const { width, height } = useWindowDimensions();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [activeTab, setActiveTab] = useState<PaymentFilterTab>('all');
 
   const {
-    completedBookings, // Assume payment history primarily cares about completed/cancelled bookings that have payments, but we will use all bookings for now, or completed as per useMyBookings
+    allBookings,
+    completedBookings,
     cancelledBookings,
     upcomingBookings,
     loading,
@@ -51,11 +59,39 @@ export const PaymentHistoryScreen: React.FC = () => {
     onRefresh,
   } = useMyBookings();
 
-  // Combine all bookings to show history, sorted by creation or appointment date if possible
-  // For simplicity, just combine them
+  // Combine all bookings to show history
   const allPayments = useMemo(() => {
+    if (allBookings && allBookings.length > 0) {
+      return allBookings;
+    }
     return [...completedBookings, ...cancelledBookings, ...upcomingBookings];
-  }, [completedBookings, cancelledBookings, upcomingBookings]);
+  }, [allBookings, completedBookings, cancelledBookings, upcomingBookings]);
+
+  // Helper to check if payment is captured (completed)
+  const isPaymentCaptured = useCallback((item: BackendBookingListItem) => {
+    const rawPaymentStatus = (item.raw as Record<string, unknown>)?.payment_status;
+    const status = (item.paymentStatus || rawPaymentStatus || '')
+      .toString()
+      .toLowerCase()
+      .trim();
+    return status === 'captured';
+  }, []);
+
+  // Filter based on selected tab:
+  // "completed" -> payment_status === "captured"
+  // "cancelled" -> payment_status !== "captured"
+  // "all"       -> all payments
+  const filteredPayments = useMemo(() => {
+    switch (activeTab) {
+      case 'completed':
+        return allPayments.filter(item => isPaymentCaptured(item));
+      case 'cancelled':
+        return allPayments.filter(item => !isPaymentCaptured(item));
+      case 'all':
+      default:
+        return allPayments;
+    }
+  }, [activeTab, allPayments, isPaymentCaptured]);
 
   const isTablet = Math.min(width, height) >= 600;
   const contentMaxWidth = isTablet ? 720 : width;
@@ -73,7 +109,7 @@ export const PaymentHistoryScreen: React.FC = () => {
 
   // Empty State Component
   const EmptyState = useMemo(() => {
-    if (loading && !refreshing && allPayments.length === 0) {
+    if (loading && !refreshing && filteredPayments.length === 0) {
       // Loading State - Shimmer skeleton approximation
       return (
         <View style={styles.emptyContainer}>
@@ -84,80 +120,90 @@ export const PaymentHistoryScreen: React.FC = () => {
       );
     }
 
-    const illustrationSize = isTablet ? 240 : Math.min(width * 0.5, 200);
+    const illustrationSize = isTablet ? 400 : Math.min(width * 0.8, 280);
+
+    const emptyMessages: Record<PaymentFilterTab, { title: string; body: string }> = {
+      all: {
+        title: 'No Payment History Yet!',
+        body: "You haven't made any payments so far. Your booking payments and transaction receipts will appear here.",
+      },
+      completed: {
+        title: 'No Completed Payments',
+        body: 'You do not have any completed payments at this time.',
+      },
+      cancelled: {
+        title: 'No Cancelled Payments',
+        body: 'You do not have any cancelled or refunded payments.',
+      },
+    };
+
+    const currentMsg = emptyMessages[activeTab];
 
     return (
       <View style={styles.emptyContainer}>
         <Image
           source={DEFAULT_ILLUSTRATION}
-          style={{
-            width: illustrationSize,
-            height: illustrationSize,
-            marginBottom: 24,
-            opacity: 0.8,
-          }}
+          style={[styles.emptyImage, { width: illustrationSize, height: illustrationSize }]}
           resizeMode="contain"
           accessible
           accessibilityLabel="No payment history illustration"
         />
-        <Text style={styles.emptyTitle}>No Payment History Yet!</Text>
-        <Text style={styles.emptyBody}>
-          You haven't made any payments so far. Your booking payments and
-          transaction receipts will appear here.
-        </Text>
+        <Text style={styles.emptyTitle}>{currentMsg.title}</Text>
+        <Text style={styles.emptyBody}>{currentMsg.body}</Text>
       </View>
     );
-  }, [loading, refreshing, allPayments.length, isTablet, width]);
+  }, [loading, refreshing, filteredPayments.length, isTablet, width, activeTab]);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <StatusBar
         barStyle="light-content"
         backgroundColor={PALETTE.heroOrange}
         translucent={false}
       />
 
-      {/* ── Header ── */}
-      {/* <View style={styles.header}>
-        <View style={styles.headerTopRow}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            onPress={() => navigation.goBack()}
-            style={({ pressed }) => [
-              styles.backButton,
-              pressed && Platform.OS === 'ios' && { opacity: 0.7 },
-            ]}
-            hitSlop={10}
-          >
-            <Icon name="chevron-back" size={24} color={PALETTE.title} />
-          </Pressable>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            Payment History
-          </Text>
-          <View style={styles.headerRightSpacer} />
-        </View>
-
-        <View style={styles.bubble1} />
-        <View style={styles.bubble2} />
-      </View> */}
-
-      <LegalHeader title={'Payment History'} onBack={() => navigation.goBack()} />
+      {/* ── Top Hero / Header Area ── */}
+      <PaymentHeader title="Payment History" onBack={() => navigation.goBack()} />
 
       {/* ── Content Overlapping Header ── */}
       <View style={styles.contentWrapper}>
         <View style={[styles.contentContainer, { maxWidth: contentMaxWidth }]}>
-          
-          {/* Filter Chip */}
-          <View style={styles.filterContainer}>
-            <View style={styles.filterChip}>
-              <Text style={styles.filterChipText}>All Payments</Text>
-            </View>
+          {/* ── Filter Tabs ── */}
+          <View style={styles.tabContainer}>
+            {TABS.map(tab => {
+              const isActive = activeTab === tab.key;
+              return (
+                <Pressable
+                  key={tab.key}
+                  onPress={() => setActiveTab(tab.key)}
+                  style={[
+                    styles.tabButton,
+                    isActive ? styles.tabButtonActive : styles.tabButtonInactive,
+                  ]}
+                  accessibilityRole="tab"
+                  accessibilityLabel={`${tab.label} payments filter`}
+                  accessibilityState={{ selected: isActive }}
+                  android_ripple={{
+                    color: isActive ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)',
+                    borderless: false,
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.tabText,
+                      isActive ? styles.tabTextActive : styles.tabTextInactive,
+                    ]}
+                  >
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
 
-          {/* List */}
+          {/* ── Payment List ── */}
           <FlatList
-            data={allPayments}
+            data={filteredPayments}
             keyExtractor={keyExtractor}
             renderItem={renderItem}
             contentContainerStyle={styles.listContent}
@@ -167,8 +213,8 @@ export const PaymentHistoryScreen: React.FC = () => {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                tintColor={PALETTE.heroOrange}
-                colors={[PALETTE.heroOrange]}
+                tintColor={PALETTE.tabActiveBg}
+                colors={[PALETTE.tabActiveBg]}
               />
             }
           />
@@ -185,66 +231,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: PALETTE.heroOrange,
   },
-  header: {
-    paddingTop: 10,
-    paddingBottom: 60, // Extra padding so content overlaps
-    paddingHorizontal: 16,
-    backgroundColor: PALETTE.heroOrange,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  headerTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    zIndex: 10,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontFamily: 'Sora-SemiBold',
-    fontSize: 20,
-    fontWeight: '700',
-    color: PALETTE.title,
-    flex: 1,
-    textAlign: 'center',
-  },
-  headerRightSpacer: {
-    width: 40, // Match back button width to center title
-  },
-  
-  // Decorative
-  bubble1: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    top: -30,
-    right: -20,
-  },
-  bubble2: {
-    position: 'absolute',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    bottom: 10,
-    left: 20,
-  },
 
   contentWrapper: {
     flex: 1,
     backgroundColor: PALETTE.bg,
-    marginTop: -30, // Overlap the header
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    marginTop: -32, // Smooth overlap onto the header
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     overflow: 'hidden',
   },
   contentContainer: {
@@ -252,27 +245,40 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
-  
-  // Filter
-  filterContainer: {
+
+  // Filter Tabs
+  tabContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 24,
+    paddingTop: 22,
     paddingBottom: 16,
   },
-  filterChip: {
-    alignSelf: 'flex-start',
-    backgroundColor: PALETTE.chipBg,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#EFE9DD',
+  tabButton: {
+    height: 38,
+    borderRadius: 19,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
   },
-  filterChipText: {
+  tabButtonActive: {
+    backgroundColor: PALETTE.tabActiveBg,
+    paddingHorizontal: 22,
+  },
+  tabButtonInactive: {
+    backgroundColor: PALETTE.tabInactiveBg,
+    paddingHorizontal: 18,
+  },
+  tabText: {
     fontFamily: 'WorkSans-Medium',
     fontSize: 14,
     fontWeight: '600',
-    color: PALETTE.chipText,
+  },
+  tabTextActive: {
+    color: PALETTE.tabActiveText,
+  },
+  tabTextInactive: {
+    color: PALETTE.tabInactiveText,
   },
 
   // List
@@ -289,9 +295,12 @@ const styles = StyleSheet.create({
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 60,
+    paddingTop: 24,
     paddingHorizontal: 32,
+  },
+  emptyImage: {
+    marginBottom: 0,
+    opacity: 0.85,
   },
   emptyTitle: {
     fontFamily: 'Sora-SemiBold',
@@ -308,13 +317,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
-  
+
   // Skeleton
   skeletonCard: {
     width: '100%',
-    height: 200,
-    backgroundColor: '#F0EAE0',
-    borderRadius: 16,
+    height: 180,
+    backgroundColor: '#EDE6DB',
+    borderRadius: 20,
     marginBottom: 16,
     opacity: 0.6,
   },

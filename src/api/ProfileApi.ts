@@ -1,5 +1,11 @@
 import authAxiosClient from './authAxiosClient';
-import type { AvatarUploadResponse, ProfileApiResponse, UpdateProfilePayload, UserProfile } from '../types/profile';
+import type {
+  AvatarUploadResponse,
+  DeleteAccountResponse,
+  ProfileApiResponse,
+  UpdateProfilePayload,
+  UserProfile,
+} from '../types/profile';
 import { normalizeProfileResponse } from '../utils/profileMappers';
 
 const ProfileApi = {
@@ -47,6 +53,11 @@ const ProfileApi = {
       null;
 
     return raw ? normalizeProfileResponse(response.data) : null;
+  },
+
+  deleteAccount: async (signal?: AbortSignal): Promise<DeleteAccountResponse> => {
+    const response = await authAxiosClient.delete<DeleteAccountResponse>('/users/me', { signal });
+    return response.data;
   },
 };
 

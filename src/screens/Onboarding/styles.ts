@@ -28,12 +28,12 @@ export const styles = StyleSheet.create({
   textSection: {
     alignItems: 'center',
     paddingHorizontal: isTablet ? 40 : 24,
-    marginTop: 20,
-    marginBottom: 16,
+    marginTop: 15,
+    marginBottom: 15,
   },
   title: {
     fontFamily: 'Sora-SemiBold',
-    fontSize: 18,
+    fontSize: 16,
     color: COLORS.title,
     textAlign: 'center',
     lineHeight: 24,
@@ -41,7 +41,7 @@ export const styles = StyleSheet.create({
   },
   subtitle: {
     fontFamily: 'WorkSans-Regular',
-    fontSize: 14,
+    fontSize: 12,
     color: COLORS.subtitle,
     textAlign: 'center',
     lineHeight: 20,
@@ -51,20 +51,20 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    paddingHorizontal: isTablet ? 40 : 20,
-    marginBottom: 20,
+    paddingHorizontal: isTablet ? 40 : 15,
+    marginBottom: 15,
   },
   cardWrapper: {
     width: '47.5%', // 2 columns with spacing
-    marginVertical: 8,
+    marginVertical: 5,
   },
   optionCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.cardBorder,
-    paddingVertical: isTablet ? 24 : 20,
-    paddingHorizontal: 12,
+    paddingVertical: isTablet ? 24 : 12,
+    paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'center',
     // Soft Shadow
@@ -79,8 +79,8 @@ export const styles = StyleSheet.create({
     backgroundColor: COLORS.primaryLight,
   },
   optionIcon: {
-    fontSize: isTablet ? 32 : 28,
-    marginBottom: 10,
+    fontSize: isTablet ? 32 : 22,
+    marginBottom: 8,
     textAlign: 'center',
   },
   optionText: {

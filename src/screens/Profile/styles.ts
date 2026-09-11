@@ -10,6 +10,7 @@ export const colors = {
   muted: '#9D9D9D',
   border: '#EFE6DA',
   white: '#FFFFFF',
+  black: '#000000',
   logout: '#FF3B30',
 };
 
@@ -22,8 +23,8 @@ export const fonts = {
 };
 
 export const shadow = {
-  shadowColor: '#000000',
-  shadowOpacity: 0.07,
+  shadowColor: '#00000061',
+  shadowOpacity: 0.05,
   shadowRadius: 13,
   shadowOffset: { width: 0, height: 7 },
   elevation: 3,
@@ -102,7 +103,7 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     overflow: 'hidden',
     paddingHorizontal: 28,
-    paddingBottom: 50,
+    paddingBottom: 100,
     justifyContent: 'center',
   },
   // headerCircleLarge: {
@@ -158,7 +159,12 @@ export const styles = StyleSheet.create({
   headerTitle: {
     fontFamily: fonts.heading,
     fontSize: 16,
-    color: colors.white,
+    color: colors.black,
+  },
+  headerSubtitle: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: '#4E4E4E',
   },
   notificationButton: {
     width: 35,
@@ -173,8 +179,8 @@ export const styles = StyleSheet.create({
     marginHorizontal: 0,
     marginTop: -38,
     paddingTop: 20,
-    paddingHorizontal: 20,
-    paddingBottom: 15,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     backgroundColor: colors.background
@@ -182,6 +188,11 @@ export const styles = StyleSheet.create({
   userCardInner: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop:-60,
+    backgroundColor: '#fdfdfd',
+    padding: 15,
+    borderRadius: 10,
+    ...shadow,
   },
   avatarWrap: {
     width: 100,
@@ -201,61 +212,62 @@ export const styles = StyleSheet.create({
     position: 'absolute',
     right: 0,
     bottom: 0,
-    width: 30,
-    height: 30,
+    width: 25,
+    height: 25,
     borderRadius: 19,
-    backgroundColor: colors.white,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     ...shadow,
   },
   userMeta: {
     flex: 1,
-    marginLeft: 34,
+    marginLeft: 30,
   },
   userName: {
     fontFamily: fonts.heading,
     fontSize: 18,
     color: colors.heading,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   userEmail: {
     fontFamily: fonts.regular,
     fontSize: 14,
     color: colors.body,
-    marginBottom: 10,
+    marginLeft: 10
   },
   userPhone: {
     fontFamily: fonts.regular,
     fontSize: 14,
     color: colors.body,
+    marginLeft: 10 
   },
   compactUserCard: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
   compactAvatar: {
-    width: 100,
-    height: 100,
+    width: 80,
+    height: 80,
     borderRadius: 56,
   },
   compactAvatarImage: {
     borderRadius: 52,
   },
   compactMeta: {
-    marginLeft: 22,
+    marginLeft: 20,
   },
   supportRow: {
     flexDirection: 'row',
-    gap: 14,
+    gap: 8,
     paddingHorizontal: 15,
-    marginTop: 0,
+    marginTop: 10,
   },
   supportCard: {
     flex: 1,
     minHeight: 70,
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#FFD99C',
+    // borderWidth: 1,
+    // borderColor: '#FFD99C',
     backgroundColor: colors.white,
     flexDirection: 'row',
     alignItems: 'center',
@@ -272,18 +284,18 @@ export const styles = StyleSheet.create({
   },
   supportEyebrow: {
     fontFamily: fonts.regular,
-    fontSize: 10,
-    color: colors.primary,
-    marginBottom: 6,
+    fontSize: 11,
+    color: colors.muted,
+    marginBottom: 4,
   },
   supportTitle: {
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: 14,
     color: colors.heading,
   },
   menuCard: {
-    marginTop: 20,
-    marginHorizontal: 20,
+    marginTop: 10,
+    marginHorizontal: 16,
     borderRadius: 10,
     overflow: 'hidden',
     backgroundColor: colors.white,
@@ -302,17 +314,17 @@ export const styles = StyleSheet.create({
   },
   menuLabel: {
     flex: 1,
-    fontFamily: fonts.regular,
+    fontFamily: fonts.body,
     fontSize: 14,
-    color: colors.muted,
+    color: '#808080',
   },
   menuLabelDestructive: {
     color: colors.logout,
   },
   menuDivider: {
     height: 1,
-    backgroundColor: '#F3ECE3',
-    marginLeft: 54,
+    backgroundColor: '#f3ece338',
+    // marginLeft: 54,
   },
   versionWrap: {
     alignItems: 'center',

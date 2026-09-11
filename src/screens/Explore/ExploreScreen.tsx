@@ -8,8 +8,8 @@ import React, {
 } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
-  Dimensions,
   FlatList,
   Image,
   Platform,
@@ -22,9 +22,10 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import axios from 'axios';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import MapView, {
@@ -35,11 +36,19 @@ import MapView, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import SpaApi from '../../api/SpaApi';
+import BookingApi from '../../api/BookingApi';
+import { useAuth } from '../../context/AuthContext';
+import { useProfile } from '../../context/ProfileContext';
+import { usePaymentContext } from '../../context/PaymentContext';
 import { useLocation } from '../../context/LocationContext';
 import { useNearbySpas } from '../../context/NearbySpaContext';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import type { ExploreSpa } from '../../types/explore';
 import type { SpaDetails } from '../../types/spaDetails';
+import type { BookingScheduleDate, BookingSlot } from '../../types/booking';
+import type { TimeSlot } from '../Booking/types';
+import { bookingOption } from '../Booking/bookingData';
+import { buildBookingDateAndTime } from '../../utils/bookingDateTime';
 import SpaDetailsContent from '../Home/SpaDetailsContent';
 
 type ExploreNavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -59,6 +68,58 @@ const CARD_SIDE_PADDING = 24;
 
 const CardSeparator: React.FC = () => <View style={styles.cardSeparator} />;
 
+const pad = (value: number): string => String(value).padStart(2, '0');
+
+const toDateKey = (date: Date): string =>
+  `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+
+const addDays = (date: Date, days: number): Date => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const formatTabLabel = (date: Date, index: number): string => {
+  if (index === 0) return 'Today';
+  if (index === 1) return 'Tomorrow';
+  return 'Day After';
+};
+
+const buildScheduleDates = (): BookingScheduleDate[] => {
+  const today = new Date();
+  return [0, 1, 2].map((offset) => {
+    const date = addDays(today, offset);
+    const dateKey = toDateKey(date);
+    return {
+      id: dateKey,
+      label: formatTabLabel(date, offset),
+      date: dateKey,
+    };
+  });
+};
+
+const formatTimeLabel = (time: string): string => {
+  const [hoursRaw, minutesRaw = '00'] = time.split(':');
+  const hours = Number(hoursRaw);
+  const minutes = Number(minutesRaw);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return time;
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const twelveHour = hours % 12 || 12;
+  return `${pad(twelveHour)}:${pad(minutes)} ${period}`;
+};
+
+const getErrorMessage = (error: unknown): string => {
+  if (axios.isCancel(error)) return '';
+  if (axios.isAxiosError(error)) {
+    const message = error.response?.data?.message;
+    if (typeof message === 'string' && message.trim()) return message;
+    if (error.message.toLowerCase().includes('network')) {
+      return 'You are offline. Please check your internet connection.';
+    }
+  }
+  return 'Something went wrong. Please try again.';
+};
+
 type SpaMarkerProps = {
   spa: ExploreSpa;
   selected: boolean;
@@ -73,102 +134,105 @@ const SpaMarker = memo<SpaMarkerProps>(
     ).current;
 
     const [tracksViewChanges, setTracksViewChanges] = useState(true);
-    const { width} = useWindowDimensions();
+    const { width } = useWindowDimensions();
     const isTablet = width >= 768;
 
     const selectedScaleValue = isTablet
       ? 0.38
       : Platform.OS === 'android'
-      ? 0.12
-      : 0.18;
+        ? 0.12
+        : 0.18;
 
-  useEffect(() => {
-  // Allow Android to redraw marker when selected changes
-  setTracksViewChanges(true);
+    useEffect(() => {
+      // Allow Android to redraw marker when selected changes
+      setTracksViewChanges(true);
 
-  Animated.spring(selectedScale, {
-    toValue: selected ? 1 : 0,
-    useNativeDriver: true,
-    speed: 18,
-    bounciness: 8,
-  }).start();
-
-  const timer = setTimeout(() => {
-    setTracksViewChanges(false);
-  }, 250);
-
-  return () => clearTimeout(timer);
-}, [selected]);
-
-  const handlePress = useCallback(() => {
-    Animated.sequence([
-      Animated.timing(pressScale, {
-        toValue: 0.92,
-        duration: 90,
+      Animated.spring(selectedScale, {
+        toValue: selected ? 1 : 0,
         useNativeDriver: true,
-      }),
-      Animated.spring(pressScale, {
-        toValue: 1,
-        useNativeDriver: true,
-        speed: 22,
-        bounciness: 9,
-      }),
-    ]).start();
+        speed: 18,
+        bounciness: 8,
+      }).start();
 
-    onPress(spa);
-  }, [onPress, pressScale, spa]);
-
-  const animatedScale = Animated.add(
-    pressScale,
-    selectedScale.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, selectedScaleValue],
-    }),
-  );
-
-  return (
-    <Marker
-      coordinate={{ latitude: spa.latitude, longitude: spa.longitude }}
-      onPress={handlePress}
-      tracksViewChanges={tracksViewChanges}
-      zIndex={selected ? 999 : 1}
-      anchor={{ x: 0.5, y: 0.9 }}>
-      <Animated.View
-        style={[
-          styles.markerWrap,
-          selected && styles.markerWrapSelected,
-          { transform: [{ scale: animatedScale }] },
-        ]}>
-        <View style={styles.markerRating}>
-          <Ionicons name="star" size={10} color="#D28A00" />
-          <Text style={styles.markerRatingText}>{spa.rating.toFixed(1)}</Text>
-        </View>
-        <View style={[styles.markerImageRing, selected && styles.markedSelected]}>
-          {/* <Image source={{ uri: spa.image }} style={styles.markerImage} /> */}
-          <Image
-  source={{ uri: spa.image }}
-  style={styles.markerImage}
-  resizeMode="cover"
-  onLoadStart={() => {
-    setTracksViewChanges(true);
-  }}
-  onLoadEnd={() => {
-    requestAnimationFrame(() => {
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         setTracksViewChanges(false);
-      }, 200);
-    });
-  }}
-/>
-        </View>
-        <View style={[styles.markerPointer, selected && styles.markedSelected]} />
-      </Animated.View>
-    </Marker>
-  );
-});
+      }, 250);
+
+      return () => clearTimeout(timer);
+    }, [selected, selectedScale]);
+
+    const handlePress = useCallback(() => {
+      Animated.sequence([
+        Animated.timing(pressScale, {
+          toValue: 0.92,
+          duration: 90,
+          useNativeDriver: true,
+        }),
+        Animated.spring(pressScale, {
+          toValue: 1,
+          useNativeDriver: true,
+          speed: 22,
+          bounciness: 9,
+        }),
+      ]).start();
+
+      onPress(spa);
+    }, [onPress, pressScale, spa]);
+
+    const animatedScale = Animated.add(
+      pressScale,
+      selectedScale.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, selectedScaleValue],
+      }),
+    );
+
+    return (
+      <Marker
+        coordinate={{ latitude: spa.latitude, longitude: spa.longitude }}
+        onPress={handlePress}
+        tracksViewChanges={tracksViewChanges}
+        zIndex={selected ? 999 : 1}
+        anchor={{ x: 0.5, y: 0.9 }}>
+        <Animated.View
+          style={[
+            styles.markerWrap,
+            selected && styles.markerWrapSelected,
+            { transform: [{ scale: animatedScale }] },
+          ]}>
+          <View style={styles.markerRating}>
+            <Ionicons name="star" size={10} color="#D28A00" />
+            <Text style={styles.markerRatingText}>{spa.rating.toFixed(1)}</Text>
+          </View>
+          <View style={[styles.markerImageRing, selected && styles.markedSelected]}>
+            <Image
+              source={{ uri: spa.image }}
+              style={styles.markerImage}
+              resizeMode="cover"
+              onLoadStart={() => {
+                setTracksViewChanges(true);
+              }}
+              onLoadEnd={() => {
+                requestAnimationFrame(() => {
+                  setTimeout(() => {
+                    setTracksViewChanges(false);
+                  }, 200);
+                });
+              }}
+            />
+          </View>
+          <View style={[styles.markerPointer, selected && styles.markedSelected]} />
+        </Animated.View>
+      </Marker>
+    );
+  });
 
 const ExploreScreen: React.FC = () => {
   const navigation = useNavigation<ExploreNavigationProp>();
+  const route = useRoute<any>();
+  const paramDateId = route?.params?.selectedDateId;
+  const paramSlotId = route?.params?.selectedSlotId;
+
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { location, loading } = useLocation();
@@ -177,7 +241,7 @@ const ExploreScreen: React.FC = () => {
   const listRef = useRef<FlatList<ExploreSpa> | null>(null);
   const sheetRef = useRef<BottomSheet | null>(null);
   const [sheetIndex, setSheetIndex] = useState(-1);
-  
+
 
   const origin = useMemo(
     () => ({
@@ -187,7 +251,7 @@ const ExploreScreen: React.FC = () => {
     [location?.latitude, location?.longitude],
   );
 
-  const { spas: contextSpas, loading: contextLoading, loadNextPage, loadingMore } = useNearbySpas();
+  const { spas: contextSpas, loadNextPage, loadingMore } = useNearbySpas();
   const spas = contextSpas as unknown as ExploreSpa[];
   // console.log("Spas in exploreScreen: ", spas);
 
@@ -195,6 +259,69 @@ const ExploreScreen: React.FC = () => {
   const [spaDetails, setSpaDetails] = useState<SpaDetails | null>(null);
   const [spaDetailsLoading, setSpaDetailsLoading] = useState(false);
   const [spaDetailsError, setSpaDetailsError] = useState<string | null>(null);
+
+  const { isAuthenticated, user } = useAuth();
+  const { profile } = useProfile();
+  const { initiatePayment, setBookingSummary } = usePaymentContext();
+
+  // Availability & Booking State
+  const scheduleDates = useMemo(() => buildScheduleDates(), []);
+  const [selectedDateId, setSelectedDateId] = useState(
+    paramDateId && scheduleDates.some((d) => d.id === paramDateId)
+      ? paramDateId
+      : scheduleDates[0]?.id ?? '',
+  );
+  const [selectedSlotId, setSelectedSlotId] = useState(paramSlotId ?? '');
+  const pendingSlotIdRef = useRef<string>(paramSlotId ?? '');
+  const selectedSlotIdRef = useRef<string>(selectedSlotId);
+
+  useEffect(() => {
+    selectedSlotIdRef.current = selectedSlotId;
+  }, [selectedSlotId]);
+
+  useEffect(() => {
+    if (paramDateId && scheduleDates.some((d) => d.id === paramDateId)) {
+      setSelectedDateId(paramDateId);
+    }
+  }, [paramDateId, scheduleDates]);
+
+  useEffect(() => {
+    if (paramSlotId) {
+      pendingSlotIdRef.current = paramSlotId;
+      setSelectedSlotId(paramSlotId);
+    }
+  }, [paramSlotId]);
+
+  const [slots, setSlots] = useState<BookingSlot[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const availabilityRequestIdRef = useRef(0);
+  const availabilityControllerRef = useRef<AbortController | null>(null);
+
+  const selectedDate = useMemo(
+    () => scheduleDates.find((d) => d.id === selectedDateId) ?? scheduleDates[0],
+    [scheduleDates, selectedDateId],
+  );
+
+  const timeSlots = useMemo<TimeSlot[]>(
+    () =>
+      slots.map((slot) => ({
+        id: slot.slotId,
+        label: formatTimeLabel(slot.startTime),
+        status: slot.status,
+        date: slot.date,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+      })),
+    [slots],
+  );
+
+  const selectedSlot = useMemo(
+    () => slots.find((s) => s.slotId === selectedSlotId && s.status === 'available'),
+    [selectedSlotId, slots],
+  );
 
   const detailsCacheRef = useRef<Record<string, SpaDetails>>({});
   const activeRequestIdRef = useRef(0);
@@ -207,9 +334,7 @@ const ExploreScreen: React.FC = () => {
 
   const cardWidth = Math.min(width - CARD_SIDE_PADDING * 2, 430);
   const snapInterval = cardWidth + CARD_SPACING;
-  const cardListBottom = Math.max(insets.bottom , 50);
-
-  // const snapPoints = useMemo(() => ['53%'], []);
+  const cardListBottom = Math.max(insets.bottom, 50);
 
   const snapPoints = useMemo(
     () => ['50%', '75%', '100%'],
@@ -245,7 +370,7 @@ const ExploreScreen: React.FC = () => {
 
       detailsCacheRef.current[spaId] = details;
       setSpaDetails(details);
-    } catch (error) {
+    } catch {
       if (requestId !== activeRequestIdRef.current || controller.signal.aborted) {
         return;
       }
@@ -259,11 +384,186 @@ const ExploreScreen: React.FC = () => {
     }
   }, []);
 
+  const loadAvailability = useCallback(
+    async (targetSpaId?: string, date?: string) => {
+      if (!targetSpaId || !date) return;
+
+      availabilityControllerRef.current?.abort();
+      const controller = new AbortController();
+      availabilityControllerRef.current = controller;
+      const requestId = availabilityRequestIdRef.current + 1;
+      availabilityRequestIdRef.current = requestId;
+
+      setLoadingSlots(true);
+      setAvailabilityError(null);
+      if (!pendingSlotIdRef.current && !selectedSlotIdRef.current) {
+        setSelectedSlotId('');
+      }
+
+      try {
+        const nextSlots = await BookingApi.getAvailability({
+          spaId: targetSpaId,
+          date,
+          signal: controller.signal,
+        });
+
+        if (availabilityRequestIdRef.current === requestId) {
+          setSlots(nextSlots);
+          const targetSlotId = pendingSlotIdRef.current || selectedSlotIdRef.current;
+          if (
+            targetSlotId &&
+            nextSlots.some((s) => s.slotId === targetSlotId && s.status === 'available')
+          ) {
+            setSelectedSlotId(targetSlotId);
+          } else if (!nextSlots.some((s) => s.slotId === selectedSlotIdRef.current)) {
+            setSelectedSlotId('');
+          }
+        }
+      } catch (err) {
+        if (controller.signal.aborted || axios.isCancel(err)) return;
+        if (availabilityRequestIdRef.current === requestId) {
+          setSlots([]);
+          setAvailabilityError(getErrorMessage(err));
+        }
+      } finally {
+        if (availabilityRequestIdRef.current === requestId) {
+          setLoadingSlots(false);
+          availabilityControllerRef.current = null;
+        }
+      }
+    },
+    [],
+  );
+
   const handleRetryDetails = useCallback(() => {
     if (selectedSpa?.id) {
       loadSpaDetails(selectedSpa.id, { force: true });
     }
   }, [loadSpaDetails, selectedSpa?.id]);
+
+  const handleSelectDate = useCallback((dateId: string) => {
+    setSelectedDateId(dateId);
+    setSelectedSlotId('');
+    pendingSlotIdRef.current = '';
+  }, []);
+
+  const handleSelectSlot = useCallback((slotId: string) => {
+    setSelectedSlotId(slotId);
+    pendingSlotIdRef.current = slotId;
+  }, []);
+
+  const handleProceedBooking = useCallback(async () => {
+    if (spaDetails && spaDetails.is_bookable === false) {
+      return;
+    }
+
+    if (!selectedSpa?.id) return;
+
+    if (!isAuthenticated) {
+      navigation.navigate('Login', {
+        spaId: selectedSpa.id,
+        openBooking: true,
+        selectedDateId,
+        selectedSlotId: selectedSlotIdRef.current || selectedSlotId || undefined,
+        fromScreen: 'Explore',
+      });
+      return;
+    }
+
+    if (!selectedSlot) {
+      Alert.alert('Select Time Slot', 'Please select an available time slot to continue.');
+      return;
+    }
+
+    const guestName =
+      profile?.fullName ??
+      profile?.displayName ??
+      user?.fullName ??
+      user?.userName ??
+      'Guest';
+    const guestPhone = profile?.phone ?? user?.phoneNumber ?? user?.phone ?? '';
+
+    setSubmitting(true);
+    let bookingId = '';
+    let bookingReference: string | undefined;
+    const appointmentAt = `${selectedSlot.date}T${selectedSlot.startTime}Z`;
+
+    const bookingSummary = {
+      spaName: spaDetails?.name ?? selectedSpa.name,
+      spaImage: spaDetails?.cover_photo_url ?? selectedSpa.image ?? undefined,
+      location: spaDetails?.locality_name ?? spaDetails?.city_name ?? selectedSpa.address ?? undefined,
+      serviceName: spaDetails?.name ?? selectedSpa.name,
+      serviceDurationMinutes: 60,
+      appointmentDate: selectedSlot.date,
+      appointmentTime: formatTimeLabel(selectedSlot.startTime),
+      bookingDateAndTime: buildBookingDateAndTime({
+        appointmentDate: selectedSlot.date,
+        appointmentTime: formatTimeLabel(selectedSlot.startTime),
+      }),
+    };
+
+    try {
+      const response = await BookingApi.createDirectBooking({
+        spa_id: selectedSpa.id,
+        slot_id: selectedSlot.slotId,
+        appointment_at: appointmentAt,
+        guest_name: guestName,
+        guest_phone: guestPhone,
+        guest_count: 1,
+      });
+
+      bookingId = response.id;
+      if (!bookingId) {
+        throw new Error('Booking response did not include a booking ID.');
+      }
+      bookingReference = response.booking_ref ?? undefined;
+    } catch (err) {
+      Alert.alert('Booking failed', getErrorMessage(err));
+      setSubmitting(false);
+      return;
+    }
+
+    try {
+      setBookingSummary(bookingSummary);
+      const paymentContext = await initiatePayment(
+        bookingId,
+        bookingReference,
+        bookingSummary,
+      );
+
+      navigation.navigate('PaymentScreen', {
+        paymentId: paymentContext.paymentId,
+        bookingId: paymentContext.bookingId,
+        bookingRef: paymentContext.bookingRef,
+        paymentSessionId: paymentContext.paymentSessionId,
+        cashfreeOrderId: paymentContext.cashfreeOrderId,
+        amount: paymentContext.amount,
+        currency: paymentContext.currency,
+        spaName: paymentContext.spaName,
+        spaImage: paymentContext.spaImage,
+        location: paymentContext.location,
+        serviceName: paymentContext.serviceName,
+        serviceDurationMinutes: paymentContext.serviceDurationMinutes,
+        appointmentDate: paymentContext.appointmentDate,
+        appointmentTime: paymentContext.appointmentTime,
+        bookingDateAndTime: paymentContext.bookingDateAndTime,
+      });
+    } catch (err) {
+      Alert.alert('Payment initiation failed', getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  }, [
+    spaDetails,
+    selectedSpa,
+    isAuthenticated,
+    selectedSlot,
+    profile,
+    user,
+    setBookingSummary,
+    initiatePayment,
+    navigation,
+  ]);
 
   const animateToCoordinate = useCallback((spa: ExploreSpa) => {
     mapRef.current?.animateCamera(
@@ -298,6 +598,7 @@ const ExploreScreen: React.FC = () => {
   const selectSpa = useCallback(
     (spa: ExploreSpa, options?: { openSheet?: boolean; syncCard?: boolean }) => {
       setSelectedSpaId(spa.id);
+      setSelectedSlotId('');
       animateToCoordinate(spa);
 
       if (options?.syncCard !== false) {
@@ -344,6 +645,18 @@ const ExploreScreen: React.FC = () => {
 
     loadSpaDetails(selectedSpa.id);
   }, [isSheetOpen, loadSpaDetails, selectedSpa?.id]);
+
+  useEffect(() => {
+    if (!selectedSpa?.id || !isSheetOpen || !selectedDate?.date) {
+      return;
+    }
+
+    loadAvailability(selectedSpa.id, selectedDate.date);
+
+    return () => {
+      availabilityControllerRef.current?.abort();
+    };
+  }, [isSheetOpen, loadAvailability, selectedDate?.date, selectedSpa?.id]);
 
   const handleMapReady: MapViewProps['onMapReady'] = useCallback(() => {
     mapRef.current?.animateCamera(
@@ -393,7 +706,10 @@ const ExploreScreen: React.FC = () => {
 
   const handleBookSpa = useCallback(
     (spa: ExploreSpa) => {
-      navigation.navigate('SpaDetails', { spaId: spa.id });
+      navigation.navigate('SpaDetails', {
+        spaId: spa.id,
+        fromScreen: 'Explore',
+      });
     },
     [navigation],
   );
@@ -522,23 +838,23 @@ const ExploreScreen: React.FC = () => {
       </MapView>
 
       {sheetIndex < 2 && (
-      <View style={[styles.topControls,{top:insets.top+12}]}>
-        <Pressable
-          style={styles.circleButton}
-          onPress={handleBackPress}
-          accessibilityRole="button"
-          accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-        </Pressable>
+        <View style={[styles.topControls, { top: insets.top + 12 }]}>
+          <Pressable
+            style={styles.circleButton}
+            onPress={handleBackPress}
+            accessibilityRole="button"
+            accessibilityLabel="Go back">
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </Pressable>
 
-        <Pressable
-          style={[styles.circleButton, styles.locationButton]}
-          onPress={handleCurrentLocation}
-          accessibilityRole="button"
-          accessibilityLabel="Center on current location">
-          <Ionicons name="locate" size={23} color="#1F1F1F" />
-        </Pressable>
-      </View>
+          <Pressable
+            style={[styles.circleButton, styles.locationButton]}
+            onPress={handleCurrentLocation}
+            accessibilityRole="button"
+            accessibilityLabel="Center on current location">
+            <Ionicons name="locate" size={23} color="#1F1F1F" />
+          </Pressable>
+        </View>
       )}
 
       {loading && (
@@ -588,7 +904,7 @@ const ExploreScreen: React.FC = () => {
         enableContentPanningGesture
         enableHandlePanningGesture
         animationConfigs={{
-            duration: 320,
+          duration: 320,
         }}
         enableDynamicSizing={false}
         backdropComponent={renderBackdrop}
@@ -604,12 +920,20 @@ const ExploreScreen: React.FC = () => {
               loading={spaDetailsLoading}
               error={spaDetailsError}
               onRetry={handleRetryDetails}
-              spaId={selectedSpa.id}
-              onBookSpa={(currentSpaId) => {
-                navigation.navigate('SpaDetails', { spaId: currentSpaId });
-              }}
               onBack={() => sheetRef.current?.close()}
               showBackButton={false}
+              dates={scheduleDates}
+              selectedDateId={selectedDateId}
+              onSelectDate={handleSelectDate}
+              slots={timeSlots}
+              selectedSlotId={selectedSlotId}
+              onSelectSlot={handleSelectSlot}
+              loadingSlots={loadingSlots}
+              availabilityError={availabilityError}
+              bookingOption={bookingOption}
+              onProceedBooking={handleProceedBooking}
+              proceedLoading={submitting}
+              proceedDisabled={!selectedSlot}
             />
           </BottomSheetScrollView>
         )}
@@ -711,7 +1035,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     overflow: 'hidden',
   },
-  
+
   markerImage: {
     width: '100%',
     height: '100%',
@@ -729,7 +1053,7 @@ const styles = StyleSheet.create({
   },
   markedSelected: {
     borderColor: '#FFB02E',
-    borderTopColor:'#FFB02E'
+    borderTopColor: '#FFB02E'
   },
   cardList: {
     position: 'absolute',
@@ -868,94 +1192,10 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: '#858585',
   },
-  sheetContent:{
-    paddingHorizontal:0,
-    paddingTop:14,
-    paddingBottom:50,
-  },
-  sheetImageFrame: {
-    height: 220,
-    borderRadius: 10,
-    overflow: 'hidden',
-    backgroundColor: '#F1ECE4',
-  },
-  sheetImage: {
-    width: '100%',
-    height: '100%',
-  },
-  favoriteButton: {
-    position: 'absolute',
-    right: 13,
-    bottom: 13,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.18)',
-  },
-  sheetHeader: {
-    marginTop: 22,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  sheetTitleBlock: {
-    flex: 1,
-    marginRight: 16,
-  },
-  sheetTitle: {
-    fontFamily: 'Sora-SemiBold',
-    fontSize: 21,
-    color: '#202020',
-  },
-  sheetRatingRow: {
-    marginTop: 11,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  sheetRatingText: {
-    marginLeft: 5,
-    fontFamily: 'WorkSans-SemiBold',
-    fontSize: 14,
-    color: '#7B7B7B',
-  },
-  sheetReviewText: {
-    marginLeft: 4,
-    fontFamily: 'WorkSans-Regular',
-    fontSize: 14,
-    color: '#9A9A9A',
-  },
-  sheetStatusPill: {
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 12,
-    backgroundColor: '#21B84D',
-  },
-  sheetStatusText: {
-    fontFamily: 'WorkSans-Bold',
-    fontSize: 11,
-    color: '#FFFFFF',
-  },
-  sheetDescription: {
-    marginTop: 14,
-    fontFamily: 'WorkSans-Regular',
-    fontSize: 14,
-    lineHeight: 21,
-    color: '#9B9B9B',
-  },
-  sheetBookButton: {
-    height: 46,
-    marginTop: 20,
-    borderRadius: 9,
-    backgroundColor: '#FFB02E',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sheetBookButtonText: {
-    fontFamily: 'Sora-SemiBold',
-    fontSize: 15,
-    color: '#FFFFFF',
+  sheetContent: {
+    paddingHorizontal: 0,
+    paddingTop: 14,
+    paddingBottom: 50,
   },
 });
 
