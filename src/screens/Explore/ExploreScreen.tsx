@@ -31,6 +31,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import MapView, {
   Marker,
   PROVIDER_GOOGLE,
+  type MapMarker,
   type MapViewProps,
 } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -134,6 +135,7 @@ const SpaMarker = memo<SpaMarkerProps>(
     ).current;
 
     const [tracksViewChanges, setTracksViewChanges] = useState(true);
+    const markerRef = useRef<MapMarker | null>(null);
     const { width } = useWindowDimensions();
     const isTablet = width >= 768;
 
@@ -142,6 +144,21 @@ const SpaMarker = memo<SpaMarkerProps>(
       : Platform.OS === 'android'
         ? 0.12
         : 0.18;
+
+    // Android draws the marker as a cached bitmap and stops re-capturing it a few
+    // frames after mount, so an image that finishes loading later never shows up.
+    // redraw() forces a fresh capture of the current marker view.
+    const redrawMarker = useCallback(() => {
+      if (Platform.OS === 'android') {
+        markerRef.current?.redraw();
+      }
+    }, []);
+
+    const handleImageLoad = useCallback(() => {
+      redrawMarker();
+      // Second pass in case the first capture ran before the bitmap was drawn
+      setTimeout(redrawMarker, 150);
+    }, [redrawMarker]);
 
     useEffect(() => {
       // Allow Android to redraw marker when selected changes
@@ -156,10 +173,11 @@ const SpaMarker = memo<SpaMarkerProps>(
 
       const timer = setTimeout(() => {
         setTracksViewChanges(false);
+        redrawMarker();
       }, 250);
 
       return () => clearTimeout(timer);
-    }, [selected, selectedScale]);
+    }, [selected, selectedScale, redrawMarker]);
 
     const handlePress = useCallback(() => {
       Animated.sequence([
@@ -189,6 +207,7 @@ const SpaMarker = memo<SpaMarkerProps>(
 
     return (
       <Marker
+        ref={markerRef}
         coordinate={{ latitude: spa.latitude, longitude: spa.longitude }}
         onPress={handlePress}
         tracksViewChanges={tracksViewChanges}
@@ -209,16 +228,9 @@ const SpaMarker = memo<SpaMarkerProps>(
               source={{ uri: spa.image }}
               style={styles.markerImage}
               resizeMode="cover"
-              onLoadStart={() => {
-                setTracksViewChanges(true);
-              }}
-              onLoadEnd={() => {
-                requestAnimationFrame(() => {
-                  setTimeout(() => {
-                    setTracksViewChanges(false);
-                  }, 200);
-                });
-              }}
+              // No fade-in: a capture taken mid-fade would show a blank image
+              fadeDuration={0}
+              onLoad={handleImageLoad}
             />
           </View>
           <View style={[styles.markerPointer, selected && styles.markedSelected]} />
@@ -238,6 +250,11 @@ const ExploreScreen: React.FC = () => {
   const { location, loading } = useLocation();
 
   const mapRef = useRef<MapView | null>(null);
+  // Android workaround (react-native-maps): on the first mount the MapView loses the
+  // hidden container that keeps marker views attached, so marker <Image>s never load.
+  // Un-flattening the wrapper once the map is ready moves the same MapView into a new
+  // parent; that detach/re-attach makes the library rebuild the container.
+  const [mapReattached, setMapReattached] = useState(false);
   const listRef = useRef<FlatList<ExploreSpa> | null>(null);
   const sheetRef = useRef<BottomSheet | null>(null);
   const [sheetIndex, setSheetIndex] = useState(-1);
@@ -659,6 +676,9 @@ const ExploreScreen: React.FC = () => {
   }, [isSheetOpen, loadAvailability, selectedDate?.date, selectedSpa?.id]);
 
   const handleMapReady: MapViewProps['onMapReady'] = useCallback(() => {
+    if (Platform.OS === 'android') {
+      setMapReattached(true);
+    }
     mapRef.current?.animateCamera(
       {
         center: origin,
@@ -808,34 +828,36 @@ const ExploreScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <MapView
-        ref={mapRef}
-        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-        style={StyleSheet.absoluteFill}
-        initialRegion={{
-          ...origin,
-          ...MAP_DELTA,
-        }}
-        onMapReady={handleMapReady}
-        showsCompass
-        showsMyLocationButton
-        showsUserLocation={location?.permission === 'granted'}
-        zoomEnabled
-        rotateEnabled
-        scrollEnabled
-        pitchEnabled
-      >
-        {spas.map((spa) => (
-          <SpaMarker
-            key={spa.id}
-            spa={spa}
-            selected={spa.id === selectedSpaId}
-            onPress={(nextSpa) =>
-              selectSpa(nextSpa, { openSheet: true, syncCard: true })
-            }
-          />
-        ))}
-      </MapView>
+      <View style={StyleSheet.absoluteFill} collapsable={!mapReattached}>
+        <MapView
+          ref={mapRef}
+          provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+          style={StyleSheet.absoluteFill}
+          initialRegion={{
+            ...origin,
+            ...MAP_DELTA,
+          }}
+          onMapReady={handleMapReady}
+          showsCompass
+          showsMyLocationButton
+          showsUserLocation={location?.permission === 'granted'}
+          zoomEnabled
+          rotateEnabled
+          scrollEnabled
+          pitchEnabled
+        >
+          {spas.map((spa) => (
+            <SpaMarker
+              key={spa.id}
+              spa={spa}
+              selected={spa.id === selectedSpaId}
+              onPress={(nextSpa) =>
+                selectSpa(nextSpa, { openSheet: true, syncCard: true })
+              }
+            />
+          ))}
+        </MapView>
+      </View>
 
       {sheetIndex < 2 && (
         <View style={[styles.topControls, { top: insets.top + 12 }]}>
