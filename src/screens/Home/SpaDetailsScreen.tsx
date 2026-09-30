@@ -25,6 +25,7 @@ import { usePaymentContext } from '../../context/PaymentContext';
 import BookingApi from '../../api/BookingApi';
 import type { BookingScheduleDate, BookingSlot } from '../../types/booking';
 import type { TimeSlot } from '../Booking/types';
+import BookingSummarySheet from '../Booking/components/BookingSummarySheet';
 import { bookingOption } from '../Booking/bookingData';
 import { buildBookingDateAndTime } from '../../utils/bookingDateTime';
 import { Analytics, AnalyticsEvents, AnalyticsParams } from '../../services/firebase/analytics';
@@ -76,6 +77,14 @@ const formatTimeLabel = (time: string): string => {
   return `${pad(twelveHour)}:${pad(minutes)} ${period}`;
 };
 
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const formatShortDate = (dateKey: string): string => {
+  const [, month, day] = dateKey.split('-').map(Number);
+  const monthName = MONTH_NAMES[month - 1];
+  return monthName && Number.isFinite(day) ? `${day} ${monthName}` : dateKey;
+};
+
 const getErrorMessage = (error: unknown): string => {
   if (axios.isCancel(error)) return '';
   if (axios.isAxiosError(error)) {
@@ -118,6 +127,8 @@ function SpaDetailsScreen(): React.ReactElement {
   const [selectedSlotId, setSelectedSlotId] = useState(paramSlotId ?? '');
   const pendingSlotIdRef = useRef<string>(paramSlotId ?? '');
   const selectedSlotIdRef = useRef<string>(selectedSlotId);
+  // On first load, move to the next date when the current one has no open slots
+  const autoAdvanceDateRef = useRef(!paramDateId && !paramSlotId);
 
   useEffect(() => {
     selectedSlotIdRef.current = selectedSlotId;
@@ -204,6 +215,8 @@ function SpaDetailsScreen(): React.ReactElement {
         setSelectedSlotId('');
       }
 
+      let advancingToNextDate = false;
+
       try {
         const nextSlots = await BookingApi.getAvailability({
           spaId,
@@ -213,30 +226,43 @@ function SpaDetailsScreen(): React.ReactElement {
 
         if (requestIdRef.current === requestId) {
           setSlots(nextSlots);
+          const availableSlots = nextSlots.filter((s) => s.status === 'available');
           const targetSlotId = pendingSlotIdRef.current || selectedSlotIdRef.current;
-          if (
-            targetSlotId &&
-            nextSlots.some((s) => s.slotId === targetSlotId && s.status === 'available')
-          ) {
-            setSelectedSlotId(targetSlotId);
-          } else if (!nextSlots.some((s) => s.slotId === selectedSlotIdRef.current)) {
+          // Keep the requested slot if still open, otherwise default to the next available one
+          const slotToSelect =
+            availableSlots.find((s) => s.slotId === targetSlotId) ?? availableSlots[0];
+
+          if (slotToSelect) {
+            autoAdvanceDateRef.current = false;
+            setSelectedSlotId(slotToSelect.slotId);
+          } else {
             setSelectedSlotId('');
+            const dateIndex = scheduleDates.findIndex((d) => d.date === date);
+            const nextDate = dateIndex >= 0 ? scheduleDates[dateIndex + 1] : undefined;
+            if (autoAdvanceDateRef.current && nextDate) {
+              advancingToNextDate = true;
+              setSelectedDateId(nextDate.id);
+            } else {
+              autoAdvanceDateRef.current = false;
+            }
           }
         }
       } catch (err) {
         if (controller.signal.aborted || axios.isCancel(err)) return;
         if (requestIdRef.current === requestId) {
+          autoAdvanceDateRef.current = false;
           setSlots([]);
           setAvailabilityError(getErrorMessage(err));
         }
       } finally {
-        if (requestIdRef.current === requestId) {
+        // When moving to the next date, keep the loader up until its slots arrive
+        if (requestIdRef.current === requestId && !advancingToNextDate) {
           setLoadingSlots(false);
           availabilityControllerRef.current = null;
         }
       }
     },
-    [spaId],
+    [spaId, scheduleDates],
   );
 
   useEffect(() => {
@@ -247,6 +273,7 @@ function SpaDetailsScreen(): React.ReactElement {
   }, [loadAvailability, selectedDate?.date]);
 
   const handleSelectDate = useCallback((dateId: string) => {
+    autoAdvanceDateRef.current = false;
     setSelectedDateId(dateId);
     setSelectedSlotId('');
     pendingSlotIdRef.current = '';
@@ -257,14 +284,26 @@ function SpaDetailsScreen(): React.ReactElement {
     pendingSlotIdRef.current = slotId;
   }, []);
 
-  // Primary Booking Proceed & Cashfree Payment Handler
-  const handleProceedBooking = useCallback(async () => {
+  const activeServiceId = selectedService.id ?? serviceId;
+  const targetService = useMemo(
+    () => spa?.services?.find((s) => s.id === activeServiceId),
+    [spa?.services, activeServiceId],
+  );
+
+  const bookingFeeAmount = useMemo(() => {
+    const numericFee = Number(
+      spa?.booking_fee ?? spa?.minimum_booking_amount ?? bookingOption.price,
+    );
+    return Number.isFinite(numericFee) ? Math.round(numericFee) : bookingOption.price;
+  }, [spa?.booking_fee, spa?.minimum_booking_amount]);
+
+  const [summaryVisible, setSummaryVisible] = useState(false);
+
+  // Primary Booking Proceed: validate, then show the booking summary
+  const handleProceedBooking = useCallback(() => {
     if (spa && spa.is_bookable === false) {
       return;
     }
-
-    const activeServiceId = selectedService.id ?? serviceId;
-    const targetService = spa?.services?.find((s) => s.id === activeServiceId);
 
     if (!isAuthenticated) {
       navigation.navigate('Login', {
@@ -281,6 +320,32 @@ function SpaDetailsScreen(): React.ReactElement {
 
     if (!selectedSlot) {
       Alert.alert('Select Time Slot', 'Please select an available time slot to continue.');
+      return;
+    }
+
+    setSummaryVisible(true);
+  }, [
+    spa,
+    isAuthenticated,
+    navigation,
+    spaId,
+    activeServiceId,
+    targetService,
+    serviceName,
+    selectedDateId,
+    selectedSlotId,
+    fromScreen,
+    selectedSlot,
+  ]);
+
+  const handleCloseSummary = useCallback(() => {
+    setSummaryVisible(false);
+  }, []);
+
+  // Confirmed from summary: create booking & start Cashfree payment
+  const handleConfirmBooking = useCallback(async () => {
+    if (!selectedSlot) {
+      setSummaryVisible(false);
       return;
     }
 
@@ -340,6 +405,7 @@ function SpaDetailsScreen(): React.ReactElement {
         bookingSummary,
       );
 
+      setSummaryVisible(false);
       navigation.navigate('PaymentScreen', {
         paymentId: paymentContext.paymentId,
         bookingId: paymentContext.bookingId,
@@ -363,10 +429,8 @@ function SpaDetailsScreen(): React.ReactElement {
       setSubmitting(false);
     }
   }, [
-    isAuthenticated,
-    selectedService.id,
-    serviceId,
     spa,
+    targetService,
     serviceName,
     selectedSlot,
     profile,
@@ -411,6 +475,16 @@ function SpaDetailsScreen(): React.ReactElement {
     Crashlytics.setCustomKey(CrashlyticsKeys.SPA_NAME, spa.name);
   }
 
+  const summaryDateLabel = selectedSlot
+    ? [
+        scheduleDates.find((d) => d.date === selectedSlot.date)?.label,
+        formatShortDate(selectedSlot.date),
+      ]
+        .filter(Boolean)
+        .join(', ')
+    : '';
+  const summaryLocation = [spa?.locality_name, spa?.city_name].filter(Boolean).join(', ');
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -447,6 +521,22 @@ function SpaDetailsScreen(): React.ReactElement {
           proceedDisabled={!selectedSlot}
         />
       </ScrollView>
+
+      <BookingSummarySheet
+        visible={summaryVisible && Boolean(selectedSlot)}
+        loading={submitting}
+        onClose={handleCloseSummary}
+        onConfirm={handleConfirmBooking}
+        spaName={spa?.name}
+        spaImage={targetService?.cover_image_url ?? spa?.cover_photo_url ?? undefined}
+        location={summaryLocation}
+        dateLabel={summaryDateLabel}
+        timeLabel={selectedSlot ? formatTimeLabel(selectedSlot.startTime) : ''}
+        serviceName={targetService?.name ?? serviceName}
+        serviceDurationMinutes={targetService?.duration_minutes ?? undefined}
+        bookingFee={bookingFeeAmount}
+        bookingFeeNote={bookingOption.description}
+      />
     </SafeAreaView>
   );
 }
