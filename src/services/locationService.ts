@@ -585,6 +585,15 @@ export async function refreshLocation(
     saved?.permission &&
     STARTUP_FINAL_STATUSES.includes(saved.permission)
   ) {
+    // A saved denial used to be final: granting location in Settings and coming
+    // back to the app changed nothing until a reinstall. Re-check without
+    // prompting - this runs on every return to the foreground.
+    if (saved.permission !== 'granted' && (await isPermissionGrantedNow())) {
+      if (__DEV__) {
+        console.log('[LOCATION] refreshLocation: permission granted since last check, fetching.');
+      }
+      return getCurrentLocation();
+    }
     if (__DEV__) {
       console.log('[LOCATION] refreshLocation: Startup final status reached, returning saved.');
     }
@@ -592,6 +601,26 @@ export async function refreshLocation(
   }
 
   return getCurrentLocation();
+}
+
+/**
+ * Whether location access is granted right now, WITHOUT showing a prompt.
+ * Android has a silent check. iOS has none in this library, but after a denial a
+ * position request fails immediately instead of prompting, and succeeds once the
+ * user has allowed access in Settings.
+ */
+async function isPermissionGrantedNow(): Promise<boolean> {
+  try {
+    if (Platform.OS === 'android') {
+      return await PermissionsAndroid.check(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      );
+    }
+    await getPosition();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export const locationService = {

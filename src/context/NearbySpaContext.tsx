@@ -6,7 +6,6 @@ import React, {
   useCallback,
   useRef,
 } from 'react';
-import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import SpaApi from '../api/SpaApi';
@@ -126,7 +125,7 @@ export function mapApiSpaToMappedSpa(
 export const NearbySpaProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { location, refreshLocation } = useLocation();
+  const { location } = useLocation();
 
   const [spas, setSpas] = useState<MappedSpa[]>([]);
   const [loading, setLoading] = useState(true);
@@ -137,6 +136,9 @@ export const NearbySpaProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Store the active cancel token source to prevent race conditions
   const cancelTokenRef = useRef<any>(null);
+  // The page whose request failed, so Retry asks for that page again. Retry used
+  // to request pagination.page + 1, which skipped ahead after a failed refresh.
+  const failedPageRef = useRef<number | null>(null);
 
   // Load cached first page on startup
   useEffect(() => {
@@ -243,6 +245,7 @@ export const NearbySpaProvider: React.FC<{ children: React.ReactNode }> = ({
         //   response?.pagination,
         // );
 
+        failedPageRef.current = null;
         const mappedNewSpas = newSpasRaw.map((spa) =>
           mapApiSpaToMappedSpa(spa, lat, lng),
         );
@@ -315,6 +318,7 @@ export const NearbySpaProvider: React.FC<{ children: React.ReactNode }> = ({
         }
 
         // For pagination failures, keep current data and set error
+        failedPageRef.current = targetPage;
         setError(errMsg);
       } finally {
         // Only turn off loaders if this cancel token is still active
@@ -363,11 +367,11 @@ export const NearbySpaProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [loadingMore, refreshing, pagination, location, fetchSpas]);
 
   const retry = useCallback(() => {
-    const nextPage = pagination ? pagination.page + 1 : 1;
+    const page = failedPageRef.current ?? 1;
     if (location && location.latitude !== null && location.longitude !== null) {
-      fetchSpas(location.latitude, location.longitude, nextPage, nextPage === 1);
+      fetchSpas(location.latitude, location.longitude, page, page === 1);
     }
-  }, [location, pagination, fetchSpas]);
+  }, [location, fetchSpas]);
 
   // Debounced location change listener (500 ms)
   useEffect(() => {
@@ -391,21 +395,9 @@ export const NearbySpaProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, [location?.latitude, location?.longitude, location?.permission, fetchSpas]);
 
-  // AppState foreground listener to refresh location
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', async (nextAppState) => {
-      if (nextAppState === 'active') {
-        if (__DEV__) {
-          console.log('[NearbySpaContext] App came to foreground. Checking location...');
-        }
-        await refreshLocation(false);
-      }
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, [refreshLocation]);
+  // No foreground listener here: LocationContext already refreshes location when
+  // the app becomes active, and the debounced effect above refetches on change.
+  // Doing both ran every location check twice.
 
   // Cleanup active request on unmount
   useEffect(() => {

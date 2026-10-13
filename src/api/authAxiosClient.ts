@@ -45,7 +45,12 @@ authAxiosClient.interceptors.response.use(
   response => response,
   error => {
     if (error?.response?.status === 401) {
-      DeviceEventEmitter.emit('UNAUTHORIZED');
+      // Pass the token this request was sent with, so a late 401 from before a
+      // re-login cannot log the new session out.
+      const authHeader = String(error?.config?.headers?.Authorization ?? '');
+      DeviceEventEmitter.emit('UNAUTHORIZED', {
+        token: authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null,
+      });
     }
 
     if (__DEV__) {

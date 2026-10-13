@@ -3,8 +3,10 @@ import { useEffect } from 'react';
 import {
   FirebaseMessaging,
   NotificationHandler,
+  NotificationNavigation,
   NotificationPermission,
 } from '../services/firebase/messaging';
+import { toNotificationPayload } from '../services/firebase/messaging/notificationNavigation';
 import { saveFcmToken } from '../utils/fcmStorage';
 import { syncProfileMetadata } from '../services/profile/profileSync';
 import { useAuth } from '../context/AuthContext';
@@ -64,6 +66,17 @@ export default function useNotifications() {
   useEffect(() => {
     const unsubscribeForegroundMessages = NotificationHandler.initialize();
 
+    // Taps: from the background, and the one that launched a killed app. Both used
+    // to just open the app on whatever screen it started on.
+    const unsubscribeOpened = FirebaseMessaging.onNotificationOpenedApp((message) => {
+      NotificationNavigation.navigate(toNotificationPayload(message?.data));
+    });
+    FirebaseMessaging.getInitialNotification().then((message) => {
+      if (message) {
+        NotificationNavigation.navigate(toNotificationPayload(message.data));
+      }
+    });
+
     const unsubscribeTokenRefresh =
       FirebaseMessaging.onTokenRefresh(async (token) => {
         if (token) {
@@ -84,6 +97,7 @@ export default function useNotifications() {
 
     return () => {
       unsubscribeForegroundMessages();
+      unsubscribeOpened();
       unsubscribeTokenRefresh();
     };
   }, [setProfile]);

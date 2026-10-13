@@ -4,9 +4,11 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { DeviceEventEmitter } from 'react-native';
+import Toast from 'react-native-toast-message';
 import AuthApi from '../api/AuthApi';
 import ProfileApi from '../api/ProfileApi';
 import {
@@ -161,10 +163,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  // Refs so the 401 listener sees the current session without re-subscribing.
+  const tokenRef = useRef<string | null>(null);
+  tokenRef.current = token;
+  const isHandlingUnauthorizedRef = useRef(false);
+
   useEffect(() => {
-    const subscription = DeviceEventEmitter.addListener('UNAUTHORIZED', () => {
-      void logout();
-    });
+    const subscription = DeviceEventEmitter.addListener(
+      'UNAUTHORIZED',
+      async (event?: { token?: string | null }) => {
+        // Ignore when already logged out, when another 401 is being handled (parallel
+        // requests each fired a logout), or when the failed request carried an older
+        // token than the current session.
+        if (
+          !tokenRef.current ||
+          isHandlingUnauthorizedRef.current ||
+          (event?.token && event.token !== tokenRef.current)
+        ) {
+          return;
+        }
+        isHandlingUnauthorizedRef.current = true;
+        try {
+          await logout();
+          // The user used to be signed out with no explanation.
+          Toast.show({
+            type: 'info',
+            text1: 'Session expired',
+            text2: 'Please log in again to continue.',
+          });
+        } finally {
+          isHandlingUnauthorizedRef.current = false;
+        }
+      },
+    );
 
     return () => {
       subscription.remove();

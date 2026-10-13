@@ -93,9 +93,13 @@ function EditProfileScreen(): React.ReactElement {
     }
   }, [profile]);
 
-  // If profile is missing and not already loading, refresh it once
+  // If profile is missing and not already loading, refresh it once. The ref makes
+  // "once" true: a failed refresh flips profileLoading back to false with profile
+  // still null, which re-ran this effect and retried forever.
+  const hasRequestedProfileRef = React.useRef<boolean>(false);
   useEffect(() => {
-    if (!profile && !profileLoading) {
+    if (!profile && !profileLoading && !hasRequestedProfileRef.current) {
+      hasRequestedProfileRef.current = true;
       void refreshProfile();
     }
   }, [profile, profileLoading, refreshProfile]);

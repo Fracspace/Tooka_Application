@@ -34,6 +34,7 @@ import CallScreen from '../screens/Call/CallScreen';
 import IncomingCallScreen from '../screens/Call/IncomingCallScreen';
 
 import LocationSelectionScreen from '../screens/Home/LocationSelectionScreen';
+import { NotificationNavigation } from '../services/firebase/messaging';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RootStackParamList — single source of navigation type truth.
@@ -185,6 +186,9 @@ const AppNavigator = () => {
         }
       }}
       onStateChange={() => {
+        // A notification tap held during Splash/Login is delivered once past them.
+        NotificationNavigation.flushPending();
+
         const previousRoute = routeNameRef.current;
 
         const currentRoute = navigationRef.getCurrentRoute()?.name;

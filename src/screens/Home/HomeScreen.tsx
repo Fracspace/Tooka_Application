@@ -138,6 +138,7 @@ const HomeScreen: React.FC = () => {
     error: contextError,
     loadNextPage,
     loadingMore,
+    pagination,
     retry,
   } = useNearbySpas();
   const {
@@ -706,6 +707,9 @@ const HomeScreen: React.FC = () => {
           </View>
         )} */}
 
+        {/* Only when the API says there is more; it used to show (and do
+            nothing) after the last page. */}
+        {loadingMore || pagination?.hasMore ? (
         <View style={styles.loadMoreContainer}>
           {loadingMore ? (
             <ActivityIndicator
@@ -729,6 +733,7 @@ const HomeScreen: React.FC = () => {
             </Pressable>
           )}
         </View>
+        ) : null}
 
         {contextError && (
           <View style={{ paddingVertical: 12, alignItems: 'center' }}>

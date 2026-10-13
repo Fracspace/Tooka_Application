@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SpaApi from '../api/SpaApi';
 import type { SpaDetails } from '../types/spaDetails';
 
@@ -7,9 +7,16 @@ export function useSpaDetails(spaId: string) {
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  // The in-flight request. A new fetch (or unmount) aborts the previous one, so a
+  // slow response for an earlier spaId can no longer overwrite the current spa.
+  const controllerRef = useRef<AbortController | null>(null);
 
   const fetchSpaDetails = useCallback(
     async ({ refresh }: { refresh?: boolean } = {}) => {
+      controllerRef.current?.abort();
+      const controller = new AbortController();
+      controllerRef.current = controller;
+
       if (refresh) {
         setRefreshing(true);
       } else {
@@ -19,14 +26,19 @@ export function useSpaDetails(spaId: string) {
       setError(null);
 
       try {
-        const response = await SpaApi.getSpaDetails(spaId);
-        // console.log("SpaDetails: ", response);
+        const response = await SpaApi.getSpaDetails(spaId, controller.signal);
+        if (controller.signal.aborted) {
+          return;
+        }
         setSpa(response ?? null);
 
         if (__DEV__) {
           console.log(`[useSpaDetails] fetched spa details for ${spaId}`, response);
         }
       } catch (fetchError) {
+        if (controller.signal.aborted) {
+          return;
+        }
         if (__DEV__) {
           console.log('[useSpaDetails] error fetching spa details', fetchError);
         }
@@ -34,10 +46,12 @@ export function useSpaDetails(spaId: string) {
         setError('Unable to load spa details.');
         setSpa(null);
       } finally {
-        if (refresh) {
-          setRefreshing(false);
-        } else {
+        // Only the latest request settles the UI; it clears both flags because it
+        // may have replaced a load of the other kind.
+        if (controllerRef.current === controller) {
+          controllerRef.current = null;
           setLoading(false);
+          setRefreshing(false);
         }
       }
     },
@@ -46,6 +60,9 @@ export function useSpaDetails(spaId: string) {
 
   useEffect(() => {
     fetchSpaDetails();
+    return () => {
+      controllerRef.current?.abort();
+    };
   }, [fetchSpaDetails]);
 
   const refetch = useCallback(() => fetchSpaDetails(), [fetchSpaDetails]);

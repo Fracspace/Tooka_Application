@@ -52,12 +52,22 @@ const LocationSelectionScreen: React.FC = () => {
 
   const latestReqIdRef = useRef(0);
 
+  const debouncedQueryRef = useRef('');
+
   // Debounce search query
   useEffect(() => {
     const trimmed = query.trim();
     if (!trimmed) {
       setDebouncedQuery('');
       setAutocompleteResults([]);
+      setSearching(false);
+      return;
+    }
+
+    // Same text as the last search (e.g. a trailing space, or type-then-delete):
+    // setDebouncedQuery would be a no-op, the search effect would not re-run, and
+    // the spinner set here never cleared.
+    if (trimmed === debouncedQueryRef.current) {
       setSearching(false);
       return;
     }
@@ -72,6 +82,7 @@ const LocationSelectionScreen: React.FC = () => {
 
   // Execute autocomplete search when debouncedQuery changes
   useEffect(() => {
+    debouncedQueryRef.current = debouncedQuery;
     const trimmed = debouncedQuery.trim();
     if (!trimmed) {
       setAutocompleteResults([]);

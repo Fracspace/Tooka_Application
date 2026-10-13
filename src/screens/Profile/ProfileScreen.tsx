@@ -25,10 +25,13 @@ import { styles } from './styles';
 import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
+import DeviceInfo from 'react-native-device-info';
 
 type ProfileNavigationProp = NativeStackNavigationProp<RootStackParamList, 'BottomNavigation'>;
 
-const APP_VERSION = '1.0.5';
+// Read from the installed binary. This was the literal '1.0.5', which would have
+// kept saying 1.0.5 after every release.
+const APP_VERSION = `${DeviceInfo.getVersion()} (${DeviceInfo.getBuildNumber()})`;
 const SUPPORT_PHONE = 'tel:+919247952343';
 const SUPPORT_EMAIL = 'mailto:hello@tooka.app';
 
@@ -54,7 +57,7 @@ const ProfileScreen: React.FC = () => {
 
   const displayName =
     profile?.fullName?.trim() ||
-    profile?.fullName?.trim() ||
+    profile?.displayName?.trim() ||
     profile?.username?.trim() ||
     user?.userName?.trim() ||
     user?.fullName?.trim() ||
@@ -72,17 +75,12 @@ const ProfileScreen: React.FC = () => {
   }, []);
 
   const openExternalUrl = useCallback(async (url: string, fallbackTitle: string) => {
+    // Open directly: canOpenURL returns false for tel:/mailto: unless the scheme is
+    // declared in Info.plist / the Android manifest, and openURL rejects when
+    // nothing can handle the link, which lands in the catch.
     try {
-      const supported = await Linking.canOpenURL(url);
-      // console.log(`Attempting to open URL: ${url}, supported: ${supported}`);
-
-      if (true) {
-        await Linking.openURL(url);
-        return;
-      }
-
-      showUnavailableToast(fallbackTitle);
-    } catch (error) {
+      await Linking.openURL(url);
+    } catch {
       showUnavailableToast(fallbackTitle);
     }
   }, [showUnavailableToast]);

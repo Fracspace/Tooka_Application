@@ -39,6 +39,22 @@ class FirebaseMessagingService {
     }
   }
 
+  /** A notification tapped while the app was in the background. */
+  onNotificationOpenedApp(
+    listener: Parameters<ReturnType<typeof messaging>['onNotificationOpenedApp']>[0],
+  ) {
+    return messaging().onNotificationOpenedApp(listener);
+  }
+
+  /** The notification whose tap launched the app from a killed state, if any. */
+  async getInitialNotification() {
+    try {
+      return await messaging().getInitialNotification();
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * Listen for FCM token refresh.
    */
