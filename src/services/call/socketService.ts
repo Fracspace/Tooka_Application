@@ -7,7 +7,7 @@
  * mechanical edits to the live one ambiguous.
  */
 import { io, Socket } from 'socket.io-client';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAuthToken } from '../../utils/authStorage';
 
 import { API_CONFIG } from '../../config/api';
 
@@ -68,7 +68,7 @@ class SocketService {
     this.isConnecting = true;
 
     try {
-      const token = authToken ?? (await AsyncStorage.getItem('authToken'));
+      const token = authToken ?? (await getAuthToken());
       if (!token) {
         const duration = Date.now() - startTime;
         callLogger.warn('SOCKET', `Cannot connect without auth token. Duration: ${duration}ms`, ctx);
