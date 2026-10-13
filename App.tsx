@@ -3,7 +3,7 @@ import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
-import { restart, sync, useStallionUpdate, withStallion } from 'react-native-stallion';
+import { sync, useStallionUpdate, withStallion } from 'react-native-stallion';
 
 import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/context/AuthContext';
@@ -14,6 +14,7 @@ import { PaymentProvider } from './src/context/PaymentContext';
 import { SocketProvider } from './src/context/SocketContext';
 import { CallProvider } from './src/context/CallContext';
 import { ActiveCallBar } from './src/screens/Call/components/ActiveCallBar';
+import { OtaRestartManager } from './src/components/OtaRestartManager';
 
 function App() {
   const { isRestartRequired } = useStallionUpdate();
@@ -25,13 +26,6 @@ function App() {
     }
   }, []);
 
-  // Restart into a newly downloaded OTA bundle.
-  useEffect(() => {
-    if (!__DEV__ && isRestartRequired) {
-      restart();
-    }
-  }, [isRestartRequired]);
-
   return (
     <GestureHandlerRootView style={styles.gestureRoot}>
       <SafeAreaProvider>
@@ -42,6 +36,9 @@ function App() {
                 <NearbySpaProvider>
                   <PaymentProvider>
                     <CallProvider>
+                      {/* Applies a downloaded OTA bundle on the next background,
+                          never during a call or payment. */}
+                      <OtaRestartManager restartRequired={isRestartRequired} />
                       {/* PR-5: a minimised call is always reachable again. The bar
                           sits above the navigator only while a call is live. */}
                       <ActiveCallBar>
