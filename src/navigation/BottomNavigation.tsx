@@ -15,16 +15,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useEffect, useRef } from 'react';
-import {
-  Animated,
-  Platform,
-  View,
-  Text,
-  Pressable,
-  StyleSheet,
-  useWindowDimensions,
-  ActivityIndicator,
-} from 'react-native';
+import { Animated, View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -306,7 +297,7 @@ const styles = StyleSheet.create({
 });
 
 export default function BottomNavigation() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated } = useAuth();
   return (
     <Tab.Navigator
       initialRouteName="Home"

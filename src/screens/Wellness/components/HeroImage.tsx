@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Image, ImageSourcePropType, Animated } from 'react-native';
+import { ImageSourcePropType, Animated } from 'react-native';
 import { styles } from '../styles';
 
 interface HeroImageProps {

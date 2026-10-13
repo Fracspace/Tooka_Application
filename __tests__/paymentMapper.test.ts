@@ -36,7 +36,8 @@ describe('mapInitiatePaymentResponse', () => {
   });
 
   it('rejects a missing or zero amount instead of showing ₹0', () => {
-    const { order_amount: _omit, ...withoutAmount } = complete;
+    const withoutAmount: Record<string, unknown> = { ...complete };
+    delete withoutAmount.order_amount;
     expect(() => mapInitiatePaymentResponse(withoutAmount)).toThrow();
     expect(() => mapInitiatePaymentResponse({ ...complete, order_amount: 0 })).toThrow();
   });

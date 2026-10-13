@@ -173,11 +173,6 @@ function BookingResultScreen(): React.ReactElement {
   const maxWidth = Math.min(width - 40, 430);
   const topPadding = Math.max(insets.top + 20, height < 720 ? 20 : 40);
   const bookingCode = route.params?.bookingReference ?? route.params?.bookingId;
-  const serviceText = route.params?.serviceName
-    ? route.params.serviceDurationMinutes
-      ? `${route.params.serviceName} (${route.params.serviceDurationMinutes} mins)`
-      : route.params.serviceName
-    : '--';
   const dateTime = buildBookingDateAndTime({
     bookingDateAndTime: route.params?.bookingDateAndTime,
     appointmentDate: route.params?.appointmentDate,

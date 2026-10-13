@@ -1,6 +1,5 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { AUTH_COLORS } from '../constants/auth';
 
 interface AuthCardProps {
   children: React.ReactNode;

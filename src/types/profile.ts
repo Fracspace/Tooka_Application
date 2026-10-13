@@ -1,4 +1,3 @@
-import type { ProfileImage } from './profileImage';
 
 export type ProfileGender = 'female' | 'male' | 'other' | string;
 export interface ProfileCurrentLocation {

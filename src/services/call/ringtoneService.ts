@@ -67,7 +67,7 @@ class RingtoneService {
             callConsole.log(`[CALL_AUDIO] Ringtone load callback for '${type}' arrived after state change. Discarding.`);
             try {
               sound.release();
-            } catch (_) {}
+            } catch {}
             resolve();
             return;
           }
@@ -130,7 +130,7 @@ class RingtoneService {
         callConsole.error('[CALL_AUDIO] Error stopping sound:', e);
         try {
           soundToRelease.release();
-        } catch (_) {}
+        } catch {}
       }
     } else {
       this.currentType = null;

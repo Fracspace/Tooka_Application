@@ -1,6 +1,5 @@
 import React from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
-import Ionicons from 'react-native-vector-icons/Ionicons';
 
 import { COLORS } from '../constants';
 import { styles } from '../styles';

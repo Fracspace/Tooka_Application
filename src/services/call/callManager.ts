@@ -37,7 +37,7 @@ const getLogContext = (): any => {
       channelName: session?.channelName || 'N/A',
       uid: session?.uid || 0
     };
-  } catch (e) {
+  } catch {
     return { sessionId: 'NO_SESSION', callState: 'UNKNOWN' };
   }
 };

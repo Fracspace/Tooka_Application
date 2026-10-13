@@ -1,13 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import {
-  LayoutChangeEvent,
-  Platform,
-  Pressable,
-  StatusBar,
-  Text,
-  View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LayoutChangeEvent, Pressable, StatusBar, Text, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import Icon from 'react-native-vector-icons/Ionicons';
 
@@ -19,7 +11,6 @@ type Props = {
 };
 
 function LegalHeader({ title, onBack }: Props): React.ReactElement {
-  const insets = useSafeAreaInsets();
   const [headerSize, setHeaderSize] = useState({ width: 0, height: 0 });
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {

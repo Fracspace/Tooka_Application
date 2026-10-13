@@ -214,7 +214,7 @@ const requestIOSPermission = async (): Promise<LocationPermissionStatus> =>
           }
         },
       );
-    } catch (e) {
+    } catch {
       if (!isSettled) {
         isSettled = true;
         clearTimeout(timerId);

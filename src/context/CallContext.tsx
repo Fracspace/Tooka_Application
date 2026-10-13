@@ -17,7 +17,7 @@ import { agoraService } from '../services/call/agoraService';
 import { callManager } from '../services/call/callManager';
 import { ringtoneService } from '../services/call/ringtoneService';
 import { AGORA_CONFIG } from '../config/agora';
-import { callLogger, callConsole, ENABLE_CALL_DIAGNOSTICS } from '../services/call/callLogger';
+import { callLogger, callConsole } from '../services/call/callLogger';
 import { promptForMicrophoneSettings } from '../utils/microphonePermission';
 
 interface CallContextType {
@@ -515,7 +515,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       onLeaveChannel: () => {
         cleanupAndResetCall('agora_leave_channel');
       },
-      onUserJoined: (connection: any, remoteUid: number) => {
+      onUserJoined: () => {
         if (isCleaningUpRef.current || !sessionRef.current) {
           callConsole.log('[CALL] Ignoring callback for cancelled call');
           return;
@@ -524,7 +524,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setCallState(CallState.CONNECTED);
         }
       },
-      onUserOffline: (connection: any, remoteUid: number, reason: number) => {
+      onUserOffline: () => {
         const currentState = callStateRef.current;
         if (currentState !== CallState.CONNECTED && currentState !== CallState.RECONNECTING) {
           return;
@@ -537,7 +537,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setErrorMessage('Other participant left.');
         cleanupAndResetCall('remote_user_offline');
       },
-      onConnectionStateChanged: (connection: any, state: number, reason: number) => {
+      onConnectionStateChanged: (_connection: unknown, state: number) => {
         if (state === ConnectionStateType.ConnectionStateReconnecting) {
           handleConnectionLostOrReconnecting();
         } else if (state === ConnectionStateType.ConnectionStateConnected) {

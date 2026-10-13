@@ -1,5 +1,5 @@
-import React, { useMemo, useRef } from 'react';
-import { Platform, StyleSheet, TextInput, View } from 'react-native';
+import React, { useRef } from 'react';
+import { Platform, StyleSheet, TextInput } from 'react-native';
 import { AUTH_COLORS, AUTH_CONFIG } from '../constants/auth';
 
 interface OTPInputProps {

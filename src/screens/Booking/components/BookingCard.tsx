@@ -193,18 +193,13 @@ const ReminderToggle = React.memo(function ReminderToggle() {
 // ─── Sub-component: BookingActions ────────────────────────────────────────────
 
 type BookingActionsProps = {
-  section: BookingSection;
   booking: BackendBookingListItem;
 };
 
+// Only rendered for upcoming, confirmed bookings (see BookingCard).
 const BookingActions = React.memo<BookingActionsProps>(function BookingActions({
-  section,
   booking,
 }) {
-  const handleChatWithSpa = useCallback(() => {
-    // Navigation / business logic preserved externally
-  }, []);
-
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const handleFreeCallSpa = useCallback(() => {
@@ -217,108 +212,23 @@ const BookingActions = React.memo<BookingActionsProps>(function BookingActions({
     });
   }, [navigation, booking]);
 
-  const handleBookAgain = useCallback(() => {
-    // Navigation / business logic preserved externally
-  }, []);
-
-  const handleViewReceipt = useCallback(() => {
-    // Navigation / business logic preserved externally
-  }, []);
-
-  if (section === 'upcoming') {
-    return (
-      <View style={styles.actionsRow}>
-        {/* <Pressable
-          onPress={handleChatWithSpa}
-          style={({ pressed }) => [
-            styles.actionBtn,
-            styles.actionBtnOutlined,
-            styles.actionBtnHalf,
-            pressed && styles.actionBtnPressed,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="Chat with spa"
-        >
-          <Text style={[styles.actionBtnText, styles.actionBtnTextOutlined]}>
-            Chat With Spa
-          </Text>
-        </Pressable> */}
-
-        <Pressable
-          onPress={handleFreeCallSpa}
-          style={({ pressed }) => [
-            styles.actionBtn,
-            styles.actionBtnPrimary,
-            styles.actionBtnHalf,
-            pressed && styles.actionBtnPressed,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="Free call spa"
-        >
-          <Text style={[styles.actionBtnText, styles.actionBtnTextPrimary]}>
-            Free Call Spa
-          </Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  // if (section === 'completed') {
-  //   return (
-  //     <View style={styles.actionsRow}>
-  //       <Pressable
-  //         onPress={handleBookAgain}
-  //         style={({ pressed }) => [
-  //           styles.actionBtn,
-  //           styles.actionBtnPrimary,
-  //           styles.actionBtnHalf,
-  //           pressed && styles.actionBtnPressed,
-  //         ]}
-  //         accessibilityRole="button"
-  //         accessibilityLabel="Book again"
-  //       >
-  //         <Text style={[styles.actionBtnText, styles.actionBtnTextPrimary]}>
-  //           Book Again
-  //         </Text>
-  //       </Pressable>
-
-  //       <Pressable
-  //         onPress={handleViewReceipt}
-  //         style={({ pressed }) => [
-  //           styles.actionBtn,
-  //           styles.actionBtnOutlined,
-  //           styles.actionBtnHalf,
-  //           pressed && styles.actionBtnPressed,
-  //         ]}
-  //         accessibilityRole="button"
-  //         accessibilityLabel="View receipt"
-  //       >
-  //         <Text style={[styles.actionBtnText, styles.actionBtnTextOutlined]}>
-  //           View Receipt
-  //         </Text>
-  //       </Pressable>
-  //     </View>
-  //   );
-  // }
-
-  // Cancelled — full-width outlined button
   return (
     <View style={styles.actionsRow}>
-      {/* <Pressable
-        onPress={handleViewReceipt}
+      <Pressable
+        onPress={handleFreeCallSpa}
         style={({ pressed }) => [
           styles.actionBtn,
-          styles.actionBtnOutlined,
-          styles.actionBtnFull,
+          styles.actionBtnPrimary,
+          styles.actionBtnHalf,
           pressed && styles.actionBtnPressed,
         ]}
         accessibilityRole="button"
-        accessibilityLabel="View receipt"
+        accessibilityLabel="Free call spa"
       >
-        <Text style={[styles.actionBtnText, styles.actionBtnTextOutlined]}>
-          View Receipt
+        <Text style={[styles.actionBtnText, styles.actionBtnTextPrimary]}>
+          Free Call Spa
         </Text>
-      </Pressable> */}
+      </Pressable>
     </View>
   );
 });
@@ -463,7 +373,7 @@ const BookingCard = React.memo<BookingCardProps>(function BookingCard({
           We'll confirm this booking as soon as your payment is verified.
         </Text>
       ) : section === 'upcoming' ? (
-        <BookingActions section={section} booking={booking} />
+        <BookingActions booking={booking} />
       ) : null}
     </View>
   );

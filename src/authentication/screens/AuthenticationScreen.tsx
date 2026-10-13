@@ -29,7 +29,6 @@ import { PhoneInput } from '../components/PhoneInput';
 import { ResendOtp } from '../components/ResendOtp';
 import { TermsText } from '../components/TermsText';
 import { AUTH_COLORS, AUTH_CONFIG, AUTH_TEXT, getKeyboardBehavior } from '../constants/auth';
-import { useKeyboard } from '../hooks/useKeyboard';
 import { useOtpTimer } from '../hooks/useOtpTimer';
 import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
@@ -74,7 +73,6 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ isEmbedded 
   const spaId = isEmbedded ? undefined : route?.params?.spaId;
   const serviceId = isEmbedded ? undefined : route?.params?.serviceId;
   const serviceName = isEmbedded ? undefined : route?.params?.serviceName;
-  const openBooking = isEmbedded ? undefined : route?.params?.openBooking;
   const selectedDateId = isEmbedded ? undefined : route?.params?.selectedDateId;
   const selectedSlotId = isEmbedded ? undefined : route?.params?.selectedSlotId;
   const fromScreen = isEmbedded ? undefined : route?.params?.fromScreen;
@@ -219,16 +217,16 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ isEmbedded 
     setSuccessMessage('');
 
     const formattedPhone = `+91${phone}`;
-    const signal = getAbortSignal();
+    // Cancels any in-flight OTP request; login/register do not take a signal.
+    getAbortSignal();
 
     try {
-      let loggedInUser;
       if (isRegistered) {
         // Existing user flow
-        loggedInUser = await login(formattedPhone, otpDigits);
+        await login(formattedPhone, otpDigits);
       } else {
         // New user flow
-        loggedInUser = await register(formattedPhone, otpDigits, name.trim());
+        await register(formattedPhone, otpDigits, name.trim());
       }
 
       // Fetch user profile immediately after OTP verification so avatar and profile data are available everywhere
@@ -287,7 +285,7 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ isEmbedded 
     } finally {
       setLoading(false);
     }
-  }, [phone, otpDigits, isRegistered, name, loading, spaId, serviceId, serviceName, openBooking, selectedDateId, selectedSlotId, fromScreen, isEmbedded, login, register, navigation, setProfile]);
+  }, [phone, otpDigits, isRegistered, name, loading, spaId, serviceId, serviceName, selectedDateId, selectedSlotId, fromScreen, isEmbedded, login, register, navigation, setProfile, transitionToStep]);
 
   const handleGoBackToPhone = useCallback(() => {
     setError('');

@@ -99,7 +99,7 @@ const ProfileScreen: React.FC = () => {
         index: 0,
         routes: [{ name: 'BottomNavigation' }],
       });
-    } catch (error) {
+    } catch {
       Toast.show({
         type: 'error',
         text1: 'Logout failed',
@@ -234,7 +234,7 @@ const ProfileScreen: React.FC = () => {
         onPress: handleDeleteAccount,
       },
     ],
-    [handleDeleteAccount, handleLogout, navigation, showUnavailableToast],
+    [handleDeleteAccount, handleLogout, navigation, openExternalUrl, showUnavailableToast],
   );
 
   return (

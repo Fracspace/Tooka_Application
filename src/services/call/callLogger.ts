@@ -252,7 +252,7 @@ class CallLogger {
       if (typeof sanitizedDetails === 'object') {
         try {
           detailsStr = '\n' + JSON.stringify(sanitizedDetails, null, 2);
-        } catch (e) {
+        } catch {
           detailsStr = '\n[Serialization Error]';
         }
       } else {

@@ -1,11 +1,5 @@
 import React from 'react';
-import {
-  Image,
-  ImageBackground,
-  StyleSheet,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 
 import Svg, {
   Defs,
@@ -16,9 +10,6 @@ import Svg, {
 
 const HERO =
   'https://d2f15ematxpwp4.cloudfront.net/appImages/Rectangle+34625618.png';
-
-const LOGO =
-  'https://d2f15ematxpwp4.cloudfront.net/appImages/Tooka_Logo.png';
 
 export default function HeroSection() {
   const { width, height } = useWindowDimensions();

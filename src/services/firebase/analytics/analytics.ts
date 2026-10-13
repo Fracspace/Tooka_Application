@@ -1,7 +1,6 @@
 import analytics from '@react-native-firebase/analytics';
 
 import { AnalyticsEvent } from './analyticsEvents';
-import { AnalyticsScreen } from './analyticsScreens';
 
 class AnalyticsService {
   async logEvent(

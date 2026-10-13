@@ -165,7 +165,7 @@ function EditProfileScreen(): React.ReactElement {
             text1: 'Avatar updated successfully',
           });
         }
-      } catch (error) {
+      } catch {
         updateField('profilePhotoUri', profile?.avatarUrl ?? null);
         Toast.show({
           type: 'error',
@@ -239,7 +239,7 @@ function EditProfileScreen(): React.ReactElement {
     [],
   );
 
-  const handlePlacesFail = useCallback((error: unknown) => {
+  const handlePlacesFail = useCallback(() => {
     Toast.show({
       type: 'error',
       text1: 'Address search failed',

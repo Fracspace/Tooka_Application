@@ -614,6 +614,10 @@ const ExploreScreen: React.FC = () => {
     selectedSpa,
     isAuthenticated,
     selectedSlot,
+    // Passed to Login so the user returns to the same slot; without these the
+    // handler kept the date/slot from whenever it was last re-created.
+    selectedDateId,
+    selectedSlotId,
     profile,
     user,
     setBookingSummary,

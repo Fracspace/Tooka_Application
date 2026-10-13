@@ -373,27 +373,24 @@ export const NearbySpaProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [location, fetchSpas]);
 
-  // Debounced location change listener (500 ms)
+  // Debounced location change listener (500 ms). Depends on the primitives, not
+  // the location object, so unrelated location updates do not refetch.
+  const latitude = location?.latitude ?? null;
+  const longitude = location?.longitude ?? null;
+  const permission = location?.permission;
   useEffect(() => {
-    if (
-      !location ||
-      location.permission !== 'granted' ||
-      location.latitude === null ||
-      location.longitude === null
-    ) {
+    if (permission !== 'granted' || latitude === null || longitude === null) {
       return;
     }
 
     const handler = setTimeout(() => {
-      if (location.latitude !== null && location.longitude !== null) {
-        fetchSpas(location.latitude, location.longitude, 1, false);
-      }
+      fetchSpas(latitude, longitude, 1, false);
     }, 500);
 
     return () => {
       clearTimeout(handler);
     };
-  }, [location?.latitude, location?.longitude, location?.permission, fetchSpas]);
+  }, [latitude, longitude, permission, fetchSpas]);
 
   // No foreground listener here: LocationContext already refreshes location when
   // the app becomes active, and the debounced effect above refetches on change.

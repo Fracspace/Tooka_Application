@@ -19,7 +19,6 @@ import type {
 } from '../types/profile';
 import { getProfileErrorMessage } from '../utils/profileValidation';
 import { mergeProfile } from '../utils/profileMappers';
-import { resolveImageUri } from '../types/profileImage';
 import { syncProfileMetadata } from '../services/profile/profileSync';
 import { readAuthSession } from '../utils/authStorage';
 

@@ -3,7 +3,7 @@ import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
-import { ACTIVE_RELEASE_HASH, addEventListener, removeEventListener, restart, sync, useStallionUpdate, withStallion } from 'react-native-stallion';
+import { restart, sync, useStallionUpdate, withStallion } from 'react-native-stallion';
 
 import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/context/AuthContext';
@@ -16,7 +16,7 @@ import { CallProvider } from './src/context/CallContext';
 import { ActiveCallBar } from './src/screens/Call/components/ActiveCallBar';
 
 function App() {
-  const { isRestartRequired, currentlyRunningBundle, newReleaseBundle } = useStallionUpdate();
+  const { isRestartRequired } = useStallionUpdate();
 
   // Check for OTA updates when the app starts
   useEffect(() => {
@@ -25,27 +25,12 @@ function App() {
     }
   }, []);
 
+  // Restart into a newly downloaded OTA bundle.
   useEffect(() => {
-    console.log('=== Stallion Debug ===');
-    console.log('isRestartRequired:', isRestartRequired);
     if (!__DEV__ && isRestartRequired) {
-      // console.log('newReleaseBundle:', newReleaseBundle);
-      console.log('currentlyRunningBundle:', currentlyRunningBundle); 
       restart();
     }
   }, [isRestartRequired]);
-
-  // Restart automatically once a new bundle has been downloaded
-  // useEffect(() => {
-  //   console.log('=== Stallion Debug ===');
-  //   console.log('isRestartRequired:', isRestartRequired);
-  //   // console.log('newReleaseBundle:', newReleaseBundle);
-  //   console.log('currentlyRunningBundle:', currentlyRunningBundle); 
-
-  //   if (isRestartRequired) {
-  //     restart();
-  //   }
-  // }, [isRestartRequired]);
 
   return (
     <GestureHandlerRootView style={styles.gestureRoot}>

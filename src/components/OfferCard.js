@@ -1,6 +1,5 @@
 import React from 'react';
 import { Pressable, View, Text, StyleSheet } from 'react-native';
-import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const OfferCard = ({ item, onPress }) => {
   return (

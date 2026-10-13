@@ -1,6 +1,5 @@
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
-import Ionicons from 'react-native-vector-icons/Ionicons';
 import { AUTH_COLORS } from '../constants/auth';
 
 interface AuthHeaderProps {

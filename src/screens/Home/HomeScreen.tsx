@@ -1,5 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Linking, Platform } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   FlatList,
   Image,
@@ -27,12 +26,10 @@ import MapView, { Marker } from 'react-native-maps';
 
 import Header from '../../components/Header';
 import SearchBar from '../../components/SearchBar';
-import CategoryCard from '../../components/CategoryCard';
 import FeaturedSpaCard from '../../components/FeaturedSpaCard';
 import NearbySpaCard from '../../components/NearbySpaCard';
-import OfferCard from '../../components/OfferCard';
 import WellnessCard from '../../components/WellnessCard';
-import { categories as categoriesData, wellnessMoments as wellnessMomentsData, offer as offerData, wellnessInsight as wellnessInsightData, } from '../../data/homeData';
+import { wellnessMoments as wellnessMomentsData, wellnessInsight as wellnessInsightData } from '../../data/homeData';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSpaDiscovery } from '../../hooks/useSpaDiscovery';
 import { useLocation } from '../../context/LocationContext';
@@ -41,7 +38,6 @@ import { useSpaSearch } from '../../hooks/useSpaSearch';
 import FullScreenLoader from '../../components/loaders/FullScreenLoader';
 import StateMessage from '../../components/common/StateMessage';
 
-import type { Spa } from '../../types/spa';
 import { getSpaDistance } from '../../utils/distance';
 import {
   formatPrice,
@@ -52,18 +48,11 @@ import {
 } from '../../utils/number';
 import { getLocationDisplayParts } from '../../services/locationAddress';
 import { useProfile } from '../../context/ProfileContext';
-import { Analytics, AnalyticsEvents, AnalyticsScreens } from '../../services/firebase/analytics';
+import { Analytics, AnalyticsEvents } from '../../services/firebase/analytics';
 import { Crashlytics } from '../../services/firebase/crashlytics';
-import { restart } from 'react-native-stallion';
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 
-interface CategoryItem {
-  id: string;
-  label: string;
-  icon: string;
-  selected?: boolean;
-}
 
 interface FeaturedSpaItem {
   id: string;
@@ -92,13 +81,6 @@ interface NearbySpaItem {
   price: string | null;
 }
 
-interface OfferItem {
-  id: string;
-  label: string;
-  title: string;
-  subtitle: string;
-  cta: string;
-}
 
 interface WellnessMomentItem {
   id: string;
@@ -123,12 +105,10 @@ const FEATURED_CARD_MARGIN = 16;
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const { width } = useWindowDimensions();
-  const [selectedCategory, setSelectedCategory] = useState<string>('spa');
   const isTablet = width >= 768;
-  const { profile, loading: profileLoading } = useProfile();
+  const { profile } = useProfile();
 
-  const categories = categoriesData as CategoryItem[];
-  const { location, loading: locationLoading, refreshLocation } = useLocation();
+  const { location, loading: locationLoading } = useLocation();
   // console.log("User locartionL ", location);
   const {
     spas: contextSpas,
@@ -187,7 +167,6 @@ const HomeScreen: React.FC = () => {
 
 
   const wellnessMoments = wellnessMomentsData as WellnessMomentItem[];
-  const offer = offerData as OfferItem;
   const wellnessInsight = wellnessInsightData as WellnessInsightItem;
 
   const resolvedCity = useMemo(() => {
@@ -344,7 +323,6 @@ const HomeScreen: React.FC = () => {
   const shouldShowSearchLoading = isSearchActive && searchLoading;
   const shouldShowSearchEmptyState = isSearchActive && !searchLoading && !searchError && curatedList.length === 0;
   const shouldShowSearchError = isSearchActive && Boolean(searchError) && curatedList.length === 0;
-  const shouldShowSearchResults = isSearchActive && !searchLoading && curatedList.length > 0;
   // console.log("Preview Spa: ", previewSpas);
 
   const handlePressSpaCard = useCallback(
@@ -354,21 +332,7 @@ const HomeScreen: React.FC = () => {
     [navigation],
   );
 
-  const handlePressCategory = useCallback((id: string) => setSelectedCategory(id), []);
-
   const handleFavoritePress = useCallback(() => undefined, []);
-
-  const renderCategoryItem = useCallback(
-    ({ item }: ListRenderItemInfo<CategoryItem>) => (
-      <CategoryCard
-        icon={item.icon}
-        label={item.label}
-        selected={item.id === selectedCategory}
-        onPress={() => handlePressCategory(item.id)}
-      />
-    ),
-    [handlePressCategory, selectedCategory],
-  );
 
   const renderFeaturedSpaItem = useCallback(
     ({ item }: ListRenderItemInfo<FeaturedSpaItem>) => (
@@ -485,19 +449,6 @@ const HomeScreen: React.FC = () => {
             setSearchQuery('');
           }}
         />
-
-        {/* <FlatList<CategoryItem>
-          data={categories}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.categoriesList}
-          initialNumToRender={4}
-          maxToRenderPerBatch={4}
-          windowSize={3}
-          removeClippedSubviews
-          renderItem={renderCategoryItem}
-        /> */}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Curated for you</Text>

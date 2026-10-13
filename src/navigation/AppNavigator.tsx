@@ -6,7 +6,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from '../screens/Home/HomeScreen';
 import SpaDetailsScreen from '../screens/Home/SpaDetailsScreen';
 import AllBookingScreen from '../screens/Booking/AllBooking';
-import BookingScreen from '../screens/Booking/BookingScreen';
 import BookingResultScreen from '../screens/Booking/BookingResultScreen';
 import PaymentScreen from '../screens/Payment/PaymentScreen';
 import BottomNavigation from './BottomNavigation';
@@ -21,10 +20,7 @@ import TermsScreen from '../screens/Legal/TermsScreen';
 import PrivacyPolicyScreen from '../screens/Legal/PrivacyPolicyScreen';
 import RefundPolicyScreen from '../screens/Legal/RefundPolicyScreen';
 
-import {
-  navigationRef,
-  getActiveRouteName,
-} from './NavigationService';
+import { navigationRef } from './NavigationService';
 
 import { Analytics } from '../services/firebase/analytics';
 import { Crashlytics, CrashlyticsKeys } from '../services/firebase/crashlytics';
@@ -55,7 +51,6 @@ export type RootStackParamList = {
     spaId: string;
     serviceId?: string;
     serviceName?: string;
-    openEnquiry?: boolean;
     openBooking?: boolean;
     selectedDateId?: string;
     selectedSlotId?: string;
@@ -63,16 +58,6 @@ export type RootStackParamList = {
     fromScreen?: 'Home' | 'Explore' | string;
   };
   AllBooking: undefined;
-  BookingScreen: {
-    spaId: string;
-    spaName?: string;
-    spaImage?: string;
-    location?: string;
-    serviceId?: string;
-    serviceName?: string;
-    serviceDurationMinutes?: number | null;
-    servicePrice?: number | string | null;
-  };
   NoPayment:
     | {
         bookingId?: string;
@@ -231,7 +216,6 @@ const AppNavigator = () => {
 
         <Stack.Screen name="AllBooking" component={AllBookingScreen} />
 
-        <Stack.Screen name="BookingScreen" component={BookingScreen} />
 
         <Stack.Screen name="NoPayment" component={PaymentHistoryScreen} />
 

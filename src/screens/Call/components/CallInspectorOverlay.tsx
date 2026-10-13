@@ -10,19 +10,22 @@ import {
 } from 'react-native';
 import { callLogger, ENABLE_CALL_DIAGNOSTICS, AudioStateSnapshot } from '../../../services/call/callLogger';
 
-const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
+const { height: screenHeight } = Dimensions.get('window');
 
 interface CallInspectorOverlayProps {
   sessionId?: string;
   callState: string;
 }
 
-export const CallInspectorOverlay: React.FC<CallInspectorOverlayProps> = ({
+// The flag check lives in a wrapper so the panel's hooks always run in the same
+// order (they used to sit below an early return).
+export const CallInspectorOverlay: React.FC<CallInspectorOverlayProps> = (props) =>
+  ENABLE_CALL_DIAGNOSTICS ? <CallInspectorPanel {...props} /> : null;
+
+const CallInspectorPanel: React.FC<CallInspectorOverlayProps> = ({
   sessionId,
   callState,
 }) => {
-  if (!ENABLE_CALL_DIAGNOSTICS) return null;
-
   const [isOpen, setIsOpen] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [audioState, setAudioState] = useState<AudioStateSnapshot>(
