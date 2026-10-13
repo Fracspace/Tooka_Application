@@ -29,6 +29,19 @@ export const toSafeNumber = (value: unknown, fallback = 0): number => {
 export const DEFAULT_PRICE = '₹1,499';
 
 /**
+ * Format a price-like value (e.g. "999.00") for display as "₹999".
+ * Returns null for missing / non-numeric / non-positive values so the
+ * caller can hide the price instead of showing a made-up one.
+ */
+export const formatPrice = (value: unknown): string | null => {
+  const price = toSafeNumber(value, NaN);
+  if (!(price > 0)) {
+    return null;
+  }
+  return `₹${price.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+};
+
+/**
  * Format a rating-like value for display, guaranteed to be a string.
  * Safe against undefined / null / numeric strings / invalid values.
  */

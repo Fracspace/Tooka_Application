@@ -25,9 +25,11 @@ const NearbySpaCard = ({ item, onPress }) => {
         <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginTop:12}}>
             <View>
                 {/* <Text style={{fontFamily:'WorkSans-Regular',fontSize:12,color:'#219C18'}}>Available Now</Text> */}
-                <Text style={{fontFamily:'WorkSans-SemiBold',fontSize:14,color:'#1f1f1f',marginTop:5}}>
-                    ₹{item.price} <Text style={{fontFamily:'WorkSans-SemiBold',fontSize:12,}}>onwards</Text>
-                </Text>
+                {item.price ? (
+                  <Text style={{fontFamily:'WorkSans-SemiBold',fontSize:14,color:'#1f1f1f',marginTop:5}}>
+                      {item.price} <Text style={{fontFamily:'WorkSans-SemiBold',fontSize:12,}}>onwards</Text>
+                  </Text>
+                ) : null}
             </View>
             <Pressable onPress={onPress} style={styles.button}>
                 <Text style={styles.buttonText}>Book</Text>

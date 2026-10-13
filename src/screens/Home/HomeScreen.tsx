@@ -43,6 +43,7 @@ import StateMessage from '../../components/common/StateMessage';
 
 import type { Spa } from '../../types/spa';
 import { getSpaDistance } from '../../utils/distance';
+import { formatPrice } from '../../utils/number';
 import { getLocationDisplayParts } from '../../services/locationAddress';
 import { useProfile } from '../../context/ProfileContext';
 import { Analytics, AnalyticsEvents, AnalyticsScreens } from '../../services/firebase/analytics';
@@ -81,7 +82,8 @@ interface NearbySpaItem {
   rating: string;
   image: string;
   latitude: number;
-  longitude: number
+  longitude: number;
+  price: string | null;
 }
 
 interface OfferItem {
@@ -111,7 +113,6 @@ const PLACEHOLDER_IMAGE = 'https://d2f15ematxpwp4.cloudfront.net/appImages/Spaco
 const DEFAULT_LOCATION = 'Hyderabad';
 const DEFAULT_RATING = 4.5;
 const DEFAULT_BADGE = 'Premium';
-const DEFAULT_PRICE = '1,499';
 const DEFAULT_DISTANCE = '1.2 km';
 
 const FEATURED_CARD_WIDTH = 250;
@@ -161,7 +162,7 @@ const HomeScreen: React.FC = () => {
         image: s.image,
         latitude: s.latitude,
         longitude: s.longitude,
-        price: s.starting_price ?? DEFAULT_PRICE,
+        price: formatPrice(s.starting_price),
       })),
     [contextSpas],
   );
@@ -227,7 +228,7 @@ const HomeScreen: React.FC = () => {
           distance: distanceStr,
           rating: String(spa.rating_google ?? DEFAULT_RATING),
           reviews: `${spa.review_count_google ?? 0} reviews`,
-          price: `₹ ${spa.starting_price ?? DEFAULT_PRICE}`,
+          price: formatPrice(spa.starting_price) ?? '',
           oldPrice: '',
           badge: DEFAULT_BADGE,
           image: spa.cover_photo_url ?? PLACEHOLDER_IMAGE,
@@ -321,7 +322,7 @@ const HomeScreen: React.FC = () => {
         distance: distanceStr,
         rating: spa.rating ?? String(DEFAULT_RATING),
         reviews: '0 reviews',
-        price: `₹ ${spa.starting_price ?? DEFAULT_PRICE}`,
+        price: formatPrice(spa.starting_price) ?? '',
         oldPrice: '',
         badge: DEFAULT_BADGE,
         image: spa.image === "" ? PLACEHOLDER_IMAGE : spa.image ?? PLACEHOLDER_IMAGE,

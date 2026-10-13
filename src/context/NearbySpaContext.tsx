@@ -15,7 +15,9 @@ import type { Spa } from '../types/spa';
 
 import { getSpaDistance } from '../utils/distance';
 
-const CACHE_KEY = 'TOOKA_NEARBY_SPAS_CACHE';
+// Bump the version whenever MappedSpa changes shape so stale caches are dropped.
+const CACHE_KEY = 'TOOKA_NEARBY_SPAS_CACHE_V2';
+const LEGACY_CACHE_KEY = 'TOOKA_NEARBY_SPAS_CACHE';
 const PLACEHOLDER_IMAGE =
   'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=600&q=80';
 
@@ -97,6 +99,7 @@ export function mapApiSpaToMappedSpa(
     subtitle: `${distanceStr} Away from you`,
     typeA: 'Massage',
     typeB: 'Spa',
+    starting_price: spa.starting_price ?? null,
   };
 }
 // console.log("MappedAPi: ", mapApiSpaToMappedSpa);
@@ -120,6 +123,7 @@ export const NearbySpaProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     const loadCache = async () => {
       try {
+        AsyncStorage.removeItem(LEGACY_CACHE_KEY).catch(() => {});
         const cached = await AsyncStorage.getItem(CACHE_KEY);
         if (cached) {
           const parsed = JSON.parse(cached) as MappedSpa[];
@@ -235,10 +239,10 @@ export const NearbySpaProvider: React.FC<{ children: React.ReactNode }> = ({
           let updatedSpas: MappedSpa[];
           if (isRefresh || targetPage === 1) {
             updatedSpas = mappedNewSpas;
-            // Update cache only if data changed
+            // Update cache only if data changed. Compare full items, not just ids,
+            // so price / rating / distance updates for the same spas aren't dropped.
             const isDifferent =
-              prev.length !== mappedNewSpas.length ||
-              prev.some((item, i) => item.id !== mappedNewSpas[i]?.id);
+              JSON.stringify(prev) !== JSON.stringify(mappedNewSpas);
 
             if (isDifferent) {
               AsyncStorage.setItem(CACHE_KEY, JSON.stringify(mappedNewSpas)).catch(
