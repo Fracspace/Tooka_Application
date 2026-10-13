@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, SafeAreaView, BackHandler } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { TERMINAL_CALL_STATES, isPlaceholderPartyName } from '../../types/call';
@@ -55,12 +55,26 @@ const IncomingCallScreen: React.FC = () => {
     }, []),
   );
 
+  // True from the Accept tap until the call connects or fails. Accepting can take
+  // a while (mic prompt, server accept, Agora join), and the buttons used to stay
+  // live with Reject silently doing nothing.
+  const [accepting, setAccepting] = useState(false);
+
   const handleAccept = async () => {
-    await callManager.acceptCall();
+    setAccepting(true);
+    try {
+      await callManager.acceptCall();
+    } finally {
+      setAccepting(false);
+    }
   };
 
   const handleReject = async () => {
     await callManager.rejectCall();
+  };
+
+  const handleCancelAccept = () => {
+    callManager.cancelAccept();
   };
 
   // Until the spa lookup resolves, the backend only sends a role ("Spa Owner").
@@ -81,16 +95,29 @@ const IncomingCallScreen: React.FC = () => {
         </View>
 
         <Text style={styles.callerName}>{callerName}</Text>
+        {accepting ? <Text style={styles.connectingText}>Connecting…</Text> : null}
       </View>
 
       <View style={styles.actionContainer}>
-        <TouchableOpacity style={[styles.button, styles.rejectButton]} onPress={handleReject}>
-          <Text style={styles.buttonText}>Reject</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={[styles.button, styles.acceptButton]} onPress={handleAccept}>
-          <Text style={styles.buttonText}>Accept</Text>
-        </TouchableOpacity>
+        {accepting ? (
+          <TouchableOpacity
+            style={[styles.button, styles.rejectButton]}
+            onPress={handleCancelAccept}
+            accessibilityLabel="Cancel connecting call"
+          >
+            <Text style={styles.buttonText}>Cancel</Text>
+          </TouchableOpacity>
+        ) : (
+          <>
+            <TouchableOpacity style={[styles.button, styles.rejectButton]} onPress={handleReject}>
+              <Text style={styles.buttonText}>Reject</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.button, styles.acceptButton]} onPress={handleAccept}>
+              <Text style={styles.buttonText}>Accept</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
       {ENABLE_CALL_DIAGNOSTICS && (
         <CallInspectorOverlay sessionId={session?.sessionId} callState={callState} />
@@ -139,6 +166,13 @@ const styles = StyleSheet.create({
     fontSize: 40,
     color: '#FFF',
     fontWeight: 'bold',
+  },
+  connectingText: {
+    color: '#FFFFFF',
+    opacity: 0.8,
+    fontSize: 16,
+    marginTop: 12,
+    textAlign: 'center',
   },
   callerName: {
     fontSize: 28,

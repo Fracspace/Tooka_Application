@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { ConnectionStateType } from 'react-native-agora';
-import { CallState, CallSession, TERMINAL_CALL_STATES } from '../types/call';
+import { CallState, CallSession, TERMINAL_CALL_STATES, isPlaceholderPartyName } from '../types/call';
+import { callForegroundService } from '../services/call/callForegroundService';
 
 const AUDIO_ROUTE = {
   HEADSET: 0,
@@ -43,6 +44,15 @@ const CallContext = createContext<CallContextType | undefined>(undefined);
 const INCOMING_TIMEOUT_MS = 45_000;   // ring this long, then MISSED
 const OUTGOING_TIMEOUT_MS = 60_000;   // dial this long, then NO_ANSWER
 const TERMINAL_DISPLAY_MS = 2_000;    // how long a terminal state stays on screen
+
+// GET /chat/calls/{id} `status` values, used only by the reconnect check. The
+// backend contract does not list them, so this covers the common spellings;
+// anything else (e.g. 'ringing') leaves the call as it is.
+const ACCEPTED_SESSION_STATUSES = new Set(['accepted', 'active', 'ongoing', 'connected', 'in_progress']);
+const FINISHED_SESSION_STATUSES = new Set([
+  'ended', 'completed', 'cancelled', 'canceled', 'rejected', 'declined',
+  'missed', 'no_answer', 'busy', 'failed', 'expired', 'timeout',
+]);
 
 // Define allowed transitions for strict state machine
 const ALLOWED_TRANSITIONS: Record<CallState, CallState[]> = {
@@ -233,6 +243,19 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
   }, [callState]);
+
+  // Android: a connected call runs a microphone foreground service so it stays
+  // audible after the user switches apps (Android 14+ cuts background mic access).
+  useEffect(() => {
+    if (callState === CallState.CONNECTED || callState === CallState.RECONNECTING) {
+      const remote = session?.direction === 'inbound' ? session?.caller : session?.receiver;
+      callForegroundService.start(isPlaceholderPartyName(remote?.name) ? undefined : remote?.name);
+    } else if (callState === CallState.IDLE || TERMINAL_CALL_STATES.has(callState)) {
+      callForegroundService.stop();
+    }
+  }, [callState, session]);
+
+  useEffect(() => () => callForegroundService.stop(), []);
 
   // Handle ringtone playback based on callState lifecycle
   useEffect(() => {
@@ -772,9 +795,19 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       callService.handleCallAccepted(payload);
+      await connectAcceptedOutgoingCall();
+    };
 
+    // The spa accepted our outgoing call: join Agora with the pending session's
+    // credentials. Shared by the call_accept event and the reconnect check below.
+    const connectAcceptedOutgoingCall = async () => {
       const pending = callService.getPendingSession();
       if (!pending) return;
+
+      if (outgoingTimeoutRef.current) {
+        clearTimeout(outgoingTimeoutRef.current);
+        outgoingTimeoutRef.current = null;
+      }
 
       callService.movePendingToConnecting();
       setCallState(CallState.CONNECTING);
@@ -800,6 +833,65 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCallState(CallState.FAILED);
         cleanupAndResetCall('agora_join_failed');
       }
+    };
+
+    // Call events (call_accept, call_end, call_cancel, call_reject) sent while the
+    // socket was down are lost for good. Without this, a spa answering during a
+    // brief disconnect left the caller "ringing" for the full 60s while the spa sat
+    // in a silent call. On reconnect, ask the server where a not-yet-connected call
+    // stands and catch up.
+    const reconcileAfterReconnect = async () => {
+      const state = callStateRef.current;
+      if (state !== CallState.OUTGOING && state !== CallState.RINGING && state !== CallState.INCOMING) {
+        return;
+      }
+      const sessionId = currentSessionId();
+      if (!sessionId) return;
+
+      const details = await callService.fetchSessionDetails(sessionId);
+      const status = String(details?.status ?? '').trim().toLowerCase();
+      // Nothing to act on, or the call moved on while we were asking.
+      if (!status || currentSessionId() !== sessionId || callStateRef.current !== state) {
+        return;
+      }
+      callLogger.info('CALL', `Reconnect check: server says session ${sessionId} is '${status}'`, { sessionId, callState: state });
+
+      if (FINISHED_SESSION_STATUSES.has(status)) {
+        if (state === CallState.INCOMING) {
+          callManager.handleRemoteEndOrCancel(sessionId, `reconciled_${status}`);
+          return;
+        }
+        if (outgoingTimeoutRef.current) {
+          clearTimeout(outgoingTimeoutRef.current);
+          outgoingTimeoutRef.current = null;
+        }
+        setCallState(
+          status === 'rejected' || status === 'declined' || status === 'busy'
+            ? CallState.REJECTED
+            : status === 'missed' || status === 'no_answer'
+            ? CallState.NO_ANSWER
+            : CallState.ENDED,
+        );
+        scheduleTerminalCleanup(`reconciled_${status}`);
+        return;
+      }
+
+      if (ACCEPTED_SESSION_STATUSES.has(status)) {
+        if (state === CallState.INCOMING) {
+          // Answered on another device while this one was offline.
+          if (!callManager.isAcceptInProgress()) {
+            callManager.handleRemoteEndOrCancel(sessionId, 'call_accepted_elsewhere');
+          }
+          return;
+        }
+        await connectAcceptedOutgoingCall();
+      }
+    };
+
+    const handleSocketConnected = () => {
+      reconcileAfterReconnect().catch((error) => {
+        callConsole.warn('[CallContext] Reconnect check failed', error);
+      });
     };
 
     const handleDeclined = (payload: any) => {
@@ -859,6 +951,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     socketService.on('call_cancel', handleCanceled);
     socketService.on('call_end', handleEnded);
     socketService.on('call_accepted_elsewhere', handleAcceptedElsewhere);
+    socketService.on('connect', handleSocketConnected);
 
     return () => {
       socketService.off('call_ringing', handleRinging);
@@ -867,6 +960,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       socketService.off('call_cancel', handleCanceled);
       socketService.off('call_end', handleEnded);
       socketService.off('call_accepted_elsewhere', handleAcceptedElsewhere);
+      socketService.off('connect', handleSocketConnected);
       // PR-3: do NOT disconnect here. The socket is shared with other features and
       // is owned by SocketProvider.
     };
@@ -954,6 +1048,10 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const declineIncomingCall = useCallback(async () => {
+    if (callManager.isAcceptInProgress()) {
+      callManager.cancelAccept();
+      return;
+    }
     if (callStateRef.current !== CallState.INCOMING) return;
     await callManager.rejectCall();
   }, []);

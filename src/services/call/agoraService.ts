@@ -39,6 +39,10 @@ class AgoraService {
   private isJoined = false;
   private currentChannel: string | null = null;
   private currentUid: number | null = null;
+  // The in-flight join, so a second caller for the same channel waits for the real
+  // outcome. It used to get an immediately-resolved promise and treat the call as
+  // joined (and CONNECTED) while the join was still pending or about to fail.
+  private joinPromise: Promise<void> | null = null;
 
   private eventHandlers: Set<Partial<IRtcEngineEventHandler>> = new Set();
 
@@ -361,8 +365,13 @@ class AgoraService {
 
     if (this.isJoining) {
       const duration = Date.now() - startTime;
-      callLogger.info('AGORA', `joinChannel ignored. Already currently joining a channel. Duration: ${duration}ms`, ctx);
-      return;
+      if (this.currentChannel === channelName && this.joinPromise) {
+        callLogger.info('AGORA', `joinChannel: already joining ${channelName}; waiting for that join. Duration: ${duration}ms`, ctx);
+        return this.joinPromise;
+      }
+      const err = new Error(`Agora is already joining a different channel (${this.currentChannel}).`);
+      callLogger.error('AGORA', `EXIT: joinChannel - FAILURE. Duration: ${duration}ms`, ctx, err);
+      throw err;
     }
 
     if (this.isJoined) {
@@ -381,7 +390,7 @@ class AgoraService {
     this.currentChannel = channelName;
     this.currentUid = uid;
 
-    return new Promise((resolve, reject) => {
+    const promise = new Promise<void>((resolve, reject) => {
       let timeoutId: ReturnType<typeof setTimeout>;
 
       // PR-1: `settled` makes this attempt's handlers inert once the promise has
@@ -483,6 +492,16 @@ class AgoraService {
         reject(err);
       }
     });
+
+    this.joinPromise = promise;
+    promise
+      .catch(() => undefined)
+      .finally(() => {
+        if (this.joinPromise === promise) {
+          this.joinPromise = null;
+        }
+      });
+    return promise;
   }
 
   async leaveChannel(): Promise<void> {

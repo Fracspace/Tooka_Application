@@ -226,13 +226,10 @@ class CallService {
       throw err;
     }
 
-    // Bug #5: Prevent duplicate joinChannel() calls if already joining or joined
-    if (agoraService.getIsJoining() || agoraService.getIsJoined()) {
-      const duration = Date.now() - startTime;
-      callConsole.log(`[Agora] joinPendingSession ignored. Already joining or joined channel.`);
-      callLogger.info('AGORA', `joinPendingSession ignored. Already joining or joined channel. Duration: ${duration}ms`, ctx);
-      return;
-    }
+    // Duplicate calls are safe: agoraService.joinChannel resolves at once when this
+    // channel is already joined, and returns the in-flight join while it is still
+    // joining. This used to return immediately in the joining case, so callers
+    // promoted the call to CONNECTED before Agora had actually joined.
 
     callConsole.log(`[Agora] Executing joinChannel for session: ${session.sessionId}`);
     

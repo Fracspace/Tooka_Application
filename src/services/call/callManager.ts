@@ -48,6 +48,10 @@ class CallManager {
   // during the accept's REST call mark the call REJECTED while the accept carried on
   // and joined Agora anyway.
   private actionInProgress: 'accept' | 'reject' | null = null;
+  // Set when the user hangs up while an accept is still connecting (mic prompt,
+  // REST accept, Agora join - up to ~15s). Decline used to do nothing in that
+  // window and the accept carried on into the call.
+  private acceptCancelled = false;
 
   setContextActions(actions: CallContextActions) {
     this.contextActions = actions;
@@ -59,6 +63,37 @@ class CallManager {
   // moved off INCOMING.
   isAcceptInProgress(): boolean {
     return this.actionInProgress === 'accept';
+  }
+
+  /**
+   * Hang up while an accept is in flight. acceptCall notices at its next step and
+   * ends the session on the server (or rejects it, if it was not accepted yet).
+   */
+  cancelAccept(): void {
+    if (this.actionInProgress !== 'accept' || !this.contextActions) {
+      return;
+    }
+    const { callLogger } = require('./callLogger');
+    callLogger.info('CALL', 'Accept cancelled by the user while connecting', getLogContext());
+    this.acceptCancelled = true;
+    ringtoneService.stop();
+    this.contextActions.setCallState(CallState.ENDED);
+    this.contextActions.scheduleTerminalCleanup('accept_cancelled_by_user');
+  }
+
+  /** After each await in acceptCall: stop if the user cancelled meanwhile. */
+  private async abortIfAcceptCancelled(
+    sessionOnServer: CallSession | null,
+  ): Promise<boolean> {
+    if (!this.acceptCancelled) {
+      return false;
+    }
+    if (sessionOnServer) {
+      // Accepted on the server already: end it so the spa is not left in a call.
+      await callService.endCall(sessionOnServer, 0);
+    }
+    await this.contextActions?.cleanupAndResetCall('accept_cancelled_by_user');
+    return true;
   }
 
   async handleIncomingCall(payload: any): Promise<boolean> {
@@ -272,6 +307,7 @@ class CallManager {
       return;
     }
     this.actionInProgress = 'accept';
+    this.acceptCancelled = false;
 
     callConsole.log('[IncomingCall] Accept pressed');
     const ringtoneStopStart = Date.now();
@@ -288,12 +324,19 @@ class CallManager {
       return;
     }
 
+    let acceptedOnServer = false;
     try {
       // PR-7: Step 0 - the microphone. Answering used to go straight to joinChannel
       // with no permission check at all (only the OUTGOING path checked, in
       // CallScreen), so a user who had denied it joined fine and was simply
       // inaudible, with nothing on screen explaining why.
       const permission = await ensureMicrophonePermission();
+      if (this.acceptCancelled) {
+        // Cancelled during the permission prompt: nothing was accepted, so decline.
+        this.actionInProgress = null;
+        await this.rejectCall();
+        return;
+      }
       if (permission !== 'granted') {
         callLogger.warn('CALL', `Microphone permission ${permission}. Aborting accept.`, ctx);
         this.contextActions.setErrorMessage(
@@ -318,6 +361,11 @@ class CallManager {
       );
       const data = response.data?.data || response.data;
       callLogger.info('REST', `Accept API Response. Status: ${response.status}, Duration: ${Date.now() - restStart}ms`, ctx, data);
+
+      acceptedOnServer = true;
+      if (await this.abortIfAcceptCancelled(pending)) {
+        return;
+      }
 
       // Bug #8: Validate Agora token credentials object
       if (
@@ -369,6 +417,10 @@ class CallManager {
       const agoraStart = Date.now();
       await callService.joinPendingSession();
       callLogger.info('AGORA', `Join channel completed. Duration: ${Date.now() - agoraStart}ms`, ctx);
+
+      if (await this.abortIfAcceptCancelled(pending)) {
+        return;
+      }
       callConsole.log('[Agora] Join success for channel:', pending.channelName);
 
       // Step 5: Promote connecting → active
@@ -422,6 +474,11 @@ class CallManager {
       const totalDuration = Date.now() - startTime;
       callLogger.info('CALL', `EXIT: acceptCall - SUCCESS. Duration: ${totalDuration}ms`, ctx);
     } catch (error) {
+      if (this.acceptCancelled) {
+        // The user hung up mid-accept; the failure (e.g. an aborted join) is expected.
+        await this.abortIfAcceptCancelled(acceptedOnServer ? pending : null);
+        return;
+      }
       callConsole.error('[IncomingCall] Failed to accept call:', error);
       // PR-2: surface the reason. Every accept failure used to render as "Call Failed".
       this.contextActions.setErrorMessage(extractApiErrorMessage(error, 'Could not answer the call.'));
@@ -438,6 +495,7 @@ class CallManager {
       if (this.actionInProgress === 'accept') {
         this.actionInProgress = null;
       }
+      this.acceptCancelled = false;
     }
   }
 
