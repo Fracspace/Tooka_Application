@@ -71,7 +71,9 @@ const normalizeBackendStatus = (value: unknown): BackendPaymentStatus => {
     case BackendPaymentStatus.Failed:
       return BackendPaymentStatus.Failed;
     default:
-      return BackendPaymentStatus.Initiated;
+      // Was Initiated, which quietly turned statuses like 'expired' or 'cancelled'
+      // into "not started yet" and kept polling them.
+      return BackendPaymentStatus.Unknown;
   }
 };
 
@@ -91,11 +93,18 @@ export const mapInitiatePaymentResponse = (
     asString(record.order_id) ??
     '';
   const orderAmount =
-    asNumber(record.order_amount) ?? asNumber(record.orderAmount) ?? 0;
+    asNumber(record.order_amount) ?? asNumber(record.orderAmount);
   const orderCurrency =
     asString(record.order_currency) ?? asString(record.orderCurrency) ?? 'INR';
 
-  if (!paymentId || !paymentSessionId || !cashfreeOrderId) {
+  // A missing amount used to become 0, so the screen said "Amount Payable ₹0".
+  if (
+    !paymentId ||
+    !paymentSessionId ||
+    !cashfreeOrderId ||
+    orderAmount === undefined ||
+    orderAmount <= 0
+  ) {
     throw new Error('Payment initiation response is incomplete.');
   }
 

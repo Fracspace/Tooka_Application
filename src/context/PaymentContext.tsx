@@ -137,8 +137,10 @@ export const PaymentProvider: React.FC<{ children: ReactNode }> = ({
         setContext(nextContext);
         return nextContext;
       } catch (error) {
+        // Rethrow instead of returning the (stale) context: callers navigated to
+        // PaymentScreen with empty payment ids when an initiation was aborted.
         if (isAbortError(error)) {
-          return context;
+          throw error;
         }
 
         const mapped = mapPaymentError(error);
@@ -157,7 +159,7 @@ export const PaymentProvider: React.FC<{ children: ReactNode }> = ({
         }
       }
     },
-    [cancelInFlight, context],
+    [cancelInFlight],
   );
 
   const markSdkLaunched = useCallback(() => {

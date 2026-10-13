@@ -233,7 +233,13 @@ const AppNavigator = () => {
 
         <Stack.Screen name="BookingResult" component={BookingResultScreen} />
 
-        <Stack.Screen name="PaymentScreen" component={PaymentScreen} />
+        {/* The Android back button is already blocked inside the screen; this stops
+            the iOS swipe-back from leaving a payment that is in progress. */}
+        <Stack.Screen
+          name="PaymentScreen"
+          component={PaymentScreen}
+          options={{ gestureEnabled: false }}
+        />
 
         <Stack.Screen name="EditProfile" component={EditProfileScreen} />
 

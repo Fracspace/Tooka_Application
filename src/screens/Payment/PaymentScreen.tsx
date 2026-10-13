@@ -34,7 +34,6 @@ import {
 import PaymentApi from '../../api/PaymentApi';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { PAYMENT_USER_MESSAGES } from '../../payment/constants';
-import { mapPaymentError } from '../../payment/PaymentMapper';
 import {
   getPaymentPollDelay,
   hasPaymentPollingTimedOut,
@@ -86,10 +85,20 @@ const isPendingBackendStatus = (status: BackendPaymentStatus): boolean =>
   status === BackendPaymentStatus.Pending ||
   status === BackendPaymentStatus.Processing;
 
+/** No payment attempt has completed on the order yet (as opposed to one in flight). */
+const isNotYetPaidStatus = (status: BackendPaymentStatus): boolean =>
+  status === BackendPaymentStatus.Initiated ||
+  status === BackendPaymentStatus.Pending;
+
+/** What the Cashfree SDK told us. A hint only - the backend status is the truth. */
+type SdkOutcome = 'success' | 'failed' | 'cancelled' | 'unknown';
+
+const VERIFICATION_UNAVAILABLE_MESSAGE =
+  "We couldn't confirm your payment yet. If money was deducted, your booking will update shortly - please check My Bookings.";
+
 function PaymentScreen(): React.ReactElement {
   const navigation = useNavigation<PaymentScreenNavigationProp>();
   const route = useRoute<PaymentScreenRouteProp>();
-  console.log('PaymentScreen route params:', route.params);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const maxWidth = Math.min(width - 40, 430);
@@ -153,7 +162,9 @@ function PaymentScreen(): React.ReactElement {
       paymentCompletedAt,
     }: FinalizeParams) => {
       paymentLogger.debug(`Navigate ${resultType}`);
-      navigation.replace('BookingResult', {
+      // Reset rather than replace: replace left SpaDetails (with the slot still
+      // selected) underneath, so Back from "Booking Confirmed" invited a second booking.
+      const resultParams: RootStackParamList['BookingResult'] = {
         type: resultType,
         bookingId: route.params.bookingId,
         bookingReference: route.params.bookingRef,
@@ -172,7 +183,16 @@ function PaymentScreen(): React.ReactElement {
         currency: route.params.currency,
         failureReason: finalMessage,
         paymentCompletedAt,
-      });
+      };
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 1,
+          routes: [
+            { name: 'BottomNavigation' },
+            { name: 'BookingResult', params: resultParams },
+          ],
+        }),
+      );
     },
     [bookingDateAndTime, navigation, route.params],
   );
@@ -241,7 +261,8 @@ function PaymentScreen(): React.ReactElement {
   );
 
   const verifyPayment = useCallback(
-    async (options?: { resetPolling?: boolean; singleCheck?: boolean }) => {
+    async (options?: { resetPolling?: boolean; sdkOutcome?: SdkOutcome }) => {
+      const sdkOutcome = options?.sdkOutcome ?? 'unknown';
       if (
         verifyingRef.current ||
         navigationLockRef.current ||
@@ -302,6 +323,14 @@ function PaymentScreen(): React.ReactElement {
         }
 
         if (response.status === BackendPaymentStatus.Failed) {
+          if (sdkOutcome === 'cancelled') {
+            finalizeAndNavigate({
+              flowState: PaymentFlowState.Cancelled,
+              resultType: 'cancelled',
+              message: PAYMENT_USER_MESSAGES.sdkCancelled,
+            });
+            return;
+          }
           finalizeAndNavigate({
             flowState: PaymentFlowState.Failed,
             resultType: 'failure',
@@ -319,15 +348,37 @@ function PaymentScreen(): React.ReactElement {
           return;
         }
 
-        if (isPendingBackendStatus(response.status) && !options?.singleCheck) {
-          setMessage('Payment is still processing...');
-          scheduleNextPoll(() => {
-            verifyingRef.current = false;
-            verifyPayment();
+        // The SDK says the user backed out (or the attempt failed) and the backend
+        // confirms nothing was paid: that is a real cancel/failure. The cancel used to
+        // be decided from the SDK's error text alone, so a UPI payment completing
+        // after the user pressed back was shown as cancelled and offered Retry.
+        if (isNotYetPaidStatus(response.status) && sdkOutcome === 'cancelled') {
+          finalizeAndNavigate({
+            flowState: PaymentFlowState.Cancelled,
+            resultType: 'cancelled',
+            message: PAYMENT_USER_MESSAGES.sdkCancelled,
+          });
+          return;
+        }
+        if (isNotYetPaidStatus(response.status) && sdkOutcome === 'failed') {
+          finalizeAndNavigate({
+            flowState: PaymentFlowState.Failed,
+            resultType: 'failure',
+            message: response.failure_reason ?? 'Payment failed.',
           });
           return;
         }
 
+        if (isPendingBackendStatus(response.status)) {
+          setMessage('Payment is still processing...');
+          scheduleNextPoll(() => {
+            verifyingRef.current = false;
+            verifyPayment({ sdkOutcome });
+          });
+          return;
+        }
+
+        // Unknown status: never claim success or failure, never offer Retry.
         finalizeAndNavigate({
           flowState: PaymentFlowState.Timeout,
           resultType: 'timeout',
@@ -342,14 +393,14 @@ function PaymentScreen(): React.ReactElement {
           return;
         }
 
-        const mapped = mapPaymentError(error);
+        // We could not READ the status - that says nothing about the payment itself.
+        // This used to show "Payment Failed" with a Retry button for any 5xx/401/404,
+        // and Retry started a new order for a booking that may already be paid.
         paymentLogger.error('Verification Failed', error);
         finalizeAndNavigate({
-          flowState: mapped.isNetworkError
-            ? PaymentFlowState.Timeout
-            : PaymentFlowState.Error,
-          resultType: mapped.isNetworkError ? 'timeout' : 'failure',
-          message: mapped.userMessage,
+          flowState: PaymentFlowState.Timeout,
+          resultType: 'timeout',
+          message: VERIFICATION_UNAVAILABLE_MESSAGE,
         });
       } finally {
         if (abortControllerRef.current === controller) {
@@ -375,28 +426,19 @@ function PaymentScreen(): React.ReactElement {
 
       paymentLogger.debug('SDK Callback', { sdkResult, message: sdkMessage });
 
-      if (sdkResult === SdkPaymentResult.Cancelled) {
-        finalizeAndNavigate({
-          flowState: PaymentFlowState.Cancelled,
-          resultType: 'cancelled',
-          message: PAYMENT_USER_MESSAGES.sdkCancelled,
-        });
-        return;
-      }
+      // Every SDK outcome is confirmed with the backend before a result is shown.
+      const sdkOutcome: SdkOutcome =
+        sdkResult === SdkPaymentResult.Success
+          ? 'success'
+          : sdkResult === SdkPaymentResult.Failed
+          ? 'failed'
+          : sdkResult === SdkPaymentResult.Cancelled
+          ? 'cancelled'
+          : 'unknown';
 
-      if (sdkResult === SdkPaymentResult.Success) {
-        verifyPayment({ resetPolling: true });
-        return;
-      }
-
-      if (sdkResult === SdkPaymentResult.Failed) {
-        verifyPayment({ resetPolling: true });
-        return;
-      }
-
-      verifyPayment({ resetPolling: true, singleCheck: false });
+      verifyPayment({ resetPolling: true, sdkOutcome });
     },
-    [finalizeAndNavigate, verifyPayment],
+    [verifyPayment],
   );
 
   const spinStyle = useMemo(

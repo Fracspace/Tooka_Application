@@ -32,9 +32,11 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
 
+import PaymentApi from '../../api/PaymentApi';
 import { usePaymentContext } from '../../context/PaymentContext';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { mapPaymentError } from '../../payment/PaymentMapper';
+import { BackendPaymentStatus } from '../../payment/PaymentTypes';
 import {
   buildBookingDateAndTime,
   formatPaymentCompletedAt,
@@ -142,7 +144,8 @@ const parseResultType = (value: string | undefined): ResultType => {
     return value;
   }
 
-  return 'success';
+  // Never assume success for a missing or unrecognised result.
+  return 'processing';
 };
 
 function BookingResultScreen(): React.ReactElement {
@@ -292,9 +295,48 @@ function BookingResultScreen(): React.ReactElement {
 
     retryLockRef.current = true;
     setRetrying(true);
-    resetPaymentFlow();
 
     try {
+      // Check the previous attempt before opening a new order. A payment can still
+      // succeed after the app showed it as cancelled or failed (UPI apps confirm
+      // late), and retrying then would charge the customer twice.
+      const previousPaymentId = route.params.paymentId;
+      if (previousPaymentId) {
+        let previousStatus: BackendPaymentStatus;
+        try {
+          const previous = await PaymentApi.verifyPaymentStatus({
+            paymentId: previousPaymentId,
+          });
+          previousStatus = previous.status;
+          if (previousStatus === BackendPaymentStatus.Captured) {
+            setMessage(undefined);
+            navigation.setParams({
+              type: 'success',
+              failureReason: undefined,
+              paymentCompletedAt: previous.paid_at ?? undefined,
+            });
+            return;
+          }
+        } catch {
+          setMessage(
+            "We couldn't check your previous payment. Please try again in a moment.",
+          );
+          return;
+        }
+
+        if (
+          previousStatus === BackendPaymentStatus.Processing ||
+          previousStatus === BackendPaymentStatus.Unknown
+        ) {
+          const stillProcessing =
+            'Your previous payment is still being processed. Please check My Bookings before paying again.';
+          setMessage(stillProcessing);
+          navigation.setParams({ type: 'processing', failureReason: stillProcessing });
+          return;
+        }
+      }
+
+      resetPaymentFlow();
       const paymentContext = await initiatePayment(
         route.params.bookingId,
         route.params.bookingReference,

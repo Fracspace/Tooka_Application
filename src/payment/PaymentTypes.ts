@@ -19,6 +19,8 @@ export enum BackendPaymentStatus {
   Captured = 'captured',
   Refunded = 'refunded',
   Failed = 'failed',
+  // A status this app does not recognise. Never treated as paid or as safe to retry.
+  Unknown = 'unknown',
 }
 
 export enum SdkPaymentResult {

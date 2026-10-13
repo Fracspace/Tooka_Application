@@ -313,6 +313,16 @@ const ExploreScreen: React.FC = () => {
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Double-tap guard: `submitting` is state, so a fast second tap ran before it
+  // updated and created a second booking.
+  const confirmLockRef = useRef(false);
+  // A booking created when starting its payment then failed. Retrying the same slot
+  // reuses it instead of leaving it pending and creating another one.
+  const unpaidBookingRef = useRef<{
+    slotId: string;
+    bookingId: string;
+    bookingReference?: string;
+  } | null>(null);
 
   const availabilityRequestIdRef = useRef(0);
   const availabilityControllerRef = useRef<AbortController | null>(null);
@@ -500,6 +510,10 @@ const ExploreScreen: React.FC = () => {
       'Guest';
     const guestPhone = profile?.phone ?? user?.phoneNumber ?? user?.phone ?? '';
 
+    if (confirmLockRef.current) {
+      return;
+    }
+    confirmLockRef.current = true;
     setSubmitting(true);
     let bookingId = '';
     let bookingReference: string | undefined;
@@ -519,25 +533,41 @@ const ExploreScreen: React.FC = () => {
       }),
     };
 
-    try {
-      const response = await BookingApi.createDirectBooking({
-        spa_id: selectedSpa.id,
-        slot_id: selectedSlot.slotId,
-        appointment_at: appointmentAt,
-        guest_name: guestName,
-        guest_phone: guestPhone,
-        guest_count: 1,
-      });
+    const reusableBooking =
+      unpaidBookingRef.current?.slotId === selectedSlot.slotId
+        ? unpaidBookingRef.current
+        : null;
 
-      bookingId = response.id;
-      if (!bookingId) {
-        throw new Error('Booking response did not include a booking ID.');
+    if (reusableBooking) {
+      bookingId = reusableBooking.bookingId;
+      bookingReference = reusableBooking.bookingReference;
+    } else {
+      try {
+        const response = await BookingApi.createDirectBooking({
+          spa_id: selectedSpa.id,
+          slot_id: selectedSlot.slotId,
+          appointment_at: appointmentAt,
+          guest_name: guestName,
+          guest_phone: guestPhone,
+          guest_count: 1,
+        });
+
+        bookingId = response.id;
+        if (!bookingId) {
+          throw new Error('Booking response did not include a booking ID.');
+        }
+        bookingReference = response.booking_ref ?? undefined;
+        unpaidBookingRef.current = {
+          slotId: selectedSlot.slotId,
+          bookingId,
+          bookingReference,
+        };
+      } catch (err) {
+        Alert.alert('Booking failed', getErrorMessage(err));
+        setSubmitting(false);
+        confirmLockRef.current = false;
+        return;
       }
-      bookingReference = response.booking_ref ?? undefined;
-    } catch (err) {
-      Alert.alert('Booking failed', getErrorMessage(err));
-      setSubmitting(false);
-      return;
     }
 
     try {
@@ -565,10 +595,13 @@ const ExploreScreen: React.FC = () => {
         appointmentTime: paymentContext.appointmentTime,
         bookingDateAndTime: paymentContext.bookingDateAndTime,
       });
+      // The booking now belongs to this payment flow (BookingResult retries it).
+      unpaidBookingRef.current = null;
     } catch (err) {
       Alert.alert('Payment initiation failed', getErrorMessage(err));
     } finally {
       setSubmitting(false);
+      confirmLockRef.current = false;
     }
   }, [
     spaDetails,
