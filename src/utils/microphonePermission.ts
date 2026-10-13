@@ -9,6 +9,7 @@
  */
 
 import { Alert, Linking, PermissionsAndroid, Platform } from 'react-native';
+import { callConsole } from '../services/call/callLogger';
 
 export type MicPermissionResult = 'granted' | 'denied' | 'blocked';
 
@@ -55,7 +56,7 @@ export const ensureMicrophonePermission = async (): Promise<MicPermissionResult>
     }
     return 'denied';
   } catch (error) {
-    console.warn('[MicPermission] request failed', error);
+    callConsole.warn('[MicPermission] request failed', error);
     return 'denied';
   }
 };

@@ -12,6 +12,21 @@ import { Crashlytics, CrashlyticsKeys } from '../firebase/crashlytics';
  */
 export const ENABLE_CALL_DIAGNOSTICS = __DEV__;
 
+const noop = (..._args: unknown[]) => {};
+
+/**
+ * Plain console output for the call feature, development builds only. Release builds
+ * stay silent - there the callLogger timeline (and its Crashlytics trail) is the
+ * record. Use callLogger for anything that should survive into a bug report.
+ */
+export const callConsole = ENABLE_CALL_DIAGNOSTICS
+  ? {
+      log: console.log.bind(console),
+      warn: console.warn.bind(console),
+      error: console.error.bind(console),
+    }
+  : { log: noop, warn: noop, error: noop };
+
 /** Ring-buffer bounds. Timelines are retained in release now, so they must be finite. */
 const MAX_TIMELINE_ENTRIES = 300;
 const MAX_RETAINED_SESSIONS = 5;
@@ -315,13 +330,13 @@ class CallLogger {
 
     try {
       await AsyncStorage.setItem(key, logContent);
-      console.log(`[CallLogger] Persisted logs to ${key}`);
+      callConsole.log(`[CallLogger] Persisted logs to ${key}`);
       if (isFailure) {
         await AsyncStorage.setItem(failKey, logContent);
-        console.log(`[CallLogger] Registered call failure log in ${failKey}`);
+        callConsole.log(`[CallLogger] Registered call failure log in ${failKey}`);
       }
     } catch (e) {
-      console.error('[CallLogger] Failed to write logs to AsyncStorage', e);
+      callConsole.error('[CallLogger] Failed to write logs to AsyncStorage', e);
     }
   }
 

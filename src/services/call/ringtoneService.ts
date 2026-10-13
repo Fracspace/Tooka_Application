@@ -1,9 +1,10 @@
 import Sound from 'react-native-sound';
+import { callConsole } from './callLogger';
 
 try {
   Sound.setCategory('Playback', true);
 } catch (e) {
-  console.warn('[CALL_AUDIO] Failed to set sound category', e);
+  callConsole.warn('[CALL_AUDIO] Failed to set sound category', e);
 }
 
 export type RingtoneType = 'incoming' | 'outgoing';
@@ -46,7 +47,7 @@ class RingtoneService {
   private async startRingtone(type: RingtoneType, filename: string): Promise<void> {
     // Idempotency check: if already playing or loading the requested type, do nothing
     if (this.currentType === type && (this.currentSound || this.isLoading)) {
-      console.log(`[CALL_AUDIO] Ringtone '${type}' already playing or loading.`);
+      callConsole.log(`[CALL_AUDIO] Ringtone '${type}' already playing or loading.`);
       return;
     }
 
@@ -59,11 +60,11 @@ class RingtoneService {
 
     return new Promise<void>((resolve) => {
       try {
-        console.log(`[CALL_AUDIO] Loading ringtone '${filename}'...`);
+        callConsole.log(`[CALL_AUDIO] Loading ringtone '${filename}'...`);
         const sound = new Sound(filename, Sound.MAIN_BUNDLE, (error) => {
           // Race condition check: If playId changed while loading, discard sound
           if (this.playId !== thisPlayId) {
-            console.log(`[CALL_AUDIO] Ringtone load callback for '${type}' arrived after state change. Discarding.`);
+            callConsole.log(`[CALL_AUDIO] Ringtone load callback for '${type}' arrived after state change. Discarding.`);
             try {
               sound.release();
             } catch (_) {}
@@ -74,7 +75,7 @@ class RingtoneService {
           this.isLoading = false;
 
           if (error) {
-            console.error(`[CALL_AUDIO] Failed to play ringtone '${filename}':`, error);
+            callConsole.error(`[CALL_AUDIO] Failed to play ringtone '${filename}':`, error);
             this.currentSound = null;
             this.currentType = null;
             resolve();
@@ -86,18 +87,18 @@ class RingtoneService {
 
           sound.play((success) => {
             if (!success) {
-              console.error(`[CALL_AUDIO] Ringtone '${filename}' playback failed or interrupted.`);
+              callConsole.error(`[CALL_AUDIO] Ringtone '${filename}' playback failed or interrupted.`);
             }
           });
 
-          console.log(`[CALL_AUDIO] Started ringtone '${type}' (${filename}).`);
+          callConsole.log(`[CALL_AUDIO] Started ringtone '${type}' (${filename}).`);
           resolve();
         });
       } catch (err) {
         this.isLoading = false;
         this.currentSound = null;
         this.currentType = null;
-        console.error(`[CALL_AUDIO] Failed to play ringtone '${filename}':`, err);
+        callConsole.error(`[CALL_AUDIO] Failed to play ringtone '${filename}':`, err);
         resolve();
       }
     });
@@ -112,7 +113,7 @@ class RingtoneService {
     this.isLoading = false;
 
     if (this.currentSound) {
-      console.log(`[CALL_AUDIO] Stopping ringtone '${this.currentType}'`);
+      callConsole.log(`[CALL_AUDIO] Stopping ringtone '${this.currentType}'`);
       const soundToRelease = this.currentSound;
       this.currentSound = null;
       this.currentType = null;
@@ -122,11 +123,11 @@ class RingtoneService {
           try {
             soundToRelease.release();
           } catch (e) {
-            console.error('[CALL_AUDIO] Error releasing sound:', e);
+            callConsole.error('[CALL_AUDIO] Error releasing sound:', e);
           }
         });
       } catch (e) {
-        console.error('[CALL_AUDIO] Error stopping sound:', e);
+        callConsole.error('[CALL_AUDIO] Error stopping sound:', e);
         try {
           soundToRelease.release();
         } catch (_) {}

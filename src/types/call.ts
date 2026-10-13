@@ -25,6 +25,21 @@ export const TERMINAL_CALL_STATES: ReadonlySet<CallState> = new Set([
   CallState.ENDED,
 ]);
 
+/**
+ * Names the services and backend fall back to when the real party is unknown:
+ * 'Me' and 'Spa' are local defaults, 'Spa Owner' and 'Unknown Caller' are roles the
+ * backend sends in call_ringing. None of them should ever be shown as a name.
+ */
+const PLACEHOLDER_PARTY_NAMES: ReadonlySet<string> = new Set([
+  'Me',
+  'Spa',
+  'Spa Owner',
+  'Unknown Caller',
+]);
+
+export const isPlaceholderPartyName = (name?: string | null): boolean =>
+  !name || !name.trim() || PLACEHOLDER_PARTY_NAMES.has(name.trim());
+
 export interface CallParticipant {
   id: string;
   name: string;

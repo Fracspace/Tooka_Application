@@ -57,10 +57,11 @@ function App() {
                 <NearbySpaProvider>
                   <PaymentProvider>
                     <CallProvider>
-                      <AppNavigator />
-                      {/* PR-5: overlays every screen, so a minimised call is always
-                          reachable again. Renders nothing unless a call is live. */}
-                      <ActiveCallBar />
+                      {/* PR-5: a minimised call is always reachable again. The bar
+                          sits above the navigator only while a call is live. */}
+                      <ActiveCallBar>
+                        <AppNavigator />
+                      </ActiveCallBar>
                     </CallProvider>
                   </PaymentProvider>
                 </NearbySpaProvider>

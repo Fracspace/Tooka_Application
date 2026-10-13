@@ -8,6 +8,7 @@ import {
   AudioScenarioType,
 } from 'react-native-agora';
 import { Platform } from 'react-native';
+import { callConsole } from './callLogger';
 
 const getLogContext = (): any => {
   try {
@@ -65,7 +66,7 @@ class AgoraService {
       return;
     }
 
-    console.log(`[AgoraService] Initializing engine with appId: ${appId}`);
+    callConsole.log(`[AgoraService] Initializing engine with appId: ${appId}`);
     try {
       const createStart = Date.now();
       callLogger.info('AGORA', 'Calling createAgoraRtcEngine()', ctx);
@@ -90,7 +91,7 @@ class AgoraService {
         3,     // smooth
         true,  // report local user
       );
-      console.log("[Agora] Audio module enabled");
+      callConsole.log("[Agora] Audio module enabled");
 
       // Configure Audio Session for background, bluetooth, speaker
       if (Platform.OS === 'ios') {
@@ -131,7 +132,15 @@ class AgoraService {
         const ctx = getLogContext();
         const { callLogger } = require('./callLogger');
         callLogger.info('AGORA', `Callback: onLeaveChannel - duration=${stats.duration}s`, ctx, { connection, stats });
-        
+
+        // A late leave for the PREVIOUS channel can arrive after a new join has started.
+        // Resetting state (and emitting, which makes CallContext clean up) would tear
+        // down the new call, so ignore leaves for a channel we are no longer on.
+        if (connection?.channelId && this.currentChannel && connection.channelId !== this.currentChannel) {
+          callLogger.info('AGORA', `Ignoring stale onLeaveChannel for ${connection.channelId}; current channel is ${this.currentChannel}`, ctx);
+          return;
+        }
+
         callLogger.resetAudioSnapshot(ctx?.sessionId || 'global');
         
         this.resetInternalState();
@@ -253,7 +262,7 @@ class AgoraService {
           remoteAudioState: `state:${state}_reason:${reason}`,
         });
 
-        console.log(
+        callConsole.log(
             "[AUDIO] RemoteAudio",
             remoteUid,
             state,
@@ -271,7 +280,7 @@ class AgoraService {
           localAudioState: `state:${state}_error:${error}`,
           micMuted: state === 0,
         });
-        console.log(
+        callConsole.log(
           "[AUDIO] LocalAudioState",
           state,
           error
@@ -284,7 +293,7 @@ class AgoraService {
         const { callLogger } = require('./callLogger');
         callLogger.info('AGORA', `Callback: onAudioPublishStateChanged - channel=${channel}, oldState=${oldState}, newState=${newState}, elapsed=${elapseSinceLastState}ms`, ctx, { channel, oldState, newState, elapseSinceLastState });
 
-        console.log(
+        callConsole.log(
           "[AUDIO] onAudioPublishStateChanged",
           channel,
           oldState,
@@ -362,11 +371,11 @@ class AgoraService {
         callLogger.info('AGORA', `joinChannel ignored. Already joined channel: ${channelName}. Duration: ${duration}ms`, ctx);
         return;
       }
-      console.log(`[AgoraService] Leaving previous channel ${this.currentChannel} before joining new channel.`);
+      callConsole.log(`[AgoraService] Leaving previous channel ${this.currentChannel} before joining new channel.`);
       await this.leaveChannel();
     }
 
-    console.log(`[AgoraService] Joining channel: ${channelName} with uid: ${uid}`);
+    callConsole.log(`[AgoraService] Joining channel: ${channelName} with uid: ${uid}`);
     
     this.isJoining = true;
     this.currentChannel = channelName;
@@ -398,18 +407,18 @@ class AgoraService {
           if (connection.channelId !== channelName) return;
           settled = true;
 
-          console.log("[Agora] Join success - enabling local audio");
+          callConsole.log("[Agora] Join success - enabling local audio");
 
-          console.log("[AUDIO] enableAudio()");
+          callConsole.log("[AUDIO] enableAudio()");
           this.engine?.enableAudio();
 
-          console.log("[AUDIO] enableLocalAudio(true)");
+          callConsole.log("[AUDIO] enableLocalAudio(true)");
           this.engine?.enableLocalAudio(true);
 
-          console.log("[AUDIO] muteLocalAudioStream(false)");
+          callConsole.log("[AUDIO] muteLocalAudioStream(false)");
           this.engine?.muteLocalAudioStream(false);
 
-          console.log("[Agora] Forced microphone ON after join");
+          callConsole.log("[Agora] Forced microphone ON after join");
 
           // PR-7: pin the route on every join. The engine keeps the last
           // setEnableSpeakerphone() value for the life of the process, while the UI
@@ -494,7 +503,7 @@ class AgoraService {
       return;
     }
 
-    console.log(`[AgoraService] Leaving channel: ${this.currentChannel || 'unknown'}`);
+    callConsole.log(`[AgoraService] Leaving channel: ${this.currentChannel || 'unknown'}`);
     try {
       const callStart = Date.now();
       const result = this.engine.leaveChannel();
@@ -593,7 +602,7 @@ class AgoraService {
     callLogger.info('AGORA', 'ENTER: release', ctx);
 
     if (this.engine) {
-      console.log('[AgoraService] Releasing engine resources');
+      callConsole.log('[AgoraService] Releasing engine resources');
       await this.leaveChannel();
       const callStart = Date.now();
       this.engine.release();

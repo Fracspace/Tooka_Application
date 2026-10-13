@@ -1,4 +1,4 @@
-import { CallSession, CallState, TERMINAL_CALL_STATES } from '../../types/call';
+import { CallSession, CallState, TERMINAL_CALL_STATES, isPlaceholderPartyName } from '../../types/call';
 import { callService, callActionBody, extractApiErrorMessage } from './callService';
 import SpaApi from '../../api/SpaApi';
 import {
@@ -9,6 +9,7 @@ import { ringtoneService } from './ringtoneService';
 import authAxiosClient from '../../api/authAxiosClient';
 import { navigationRef } from '../../navigation/NavigationService';
 import { StackActions } from '@react-navigation/native';
+import { callConsole } from './callLogger';
 
 export interface CallContextActions {
   setCallState: (state: CallState) => void;
@@ -22,13 +23,6 @@ export interface CallContextActions {
   // leaving the screen on a bare "Call Failed".
   setErrorMessage: (message: string | null) => void;
 }
-
-/**
- * PR-8: names the backend sends that identify a ROLE rather than a spa. When the
- * caller name is one of these we still have to look the spa up ourselves.
- */
-const isPlaceholderCallerName = (name?: string): boolean =>
-  !name || name === 'Unknown Caller' || name === 'Spa Owner';
 
 const getLogContext = (): any => {
   try {
@@ -83,7 +77,7 @@ class CallManager {
     // build a session with `sessionId: undefined` - breaking every later id match - and
     // on the busy path below it POSTed to /chat/calls/undefined/reject.
     if (!payload?.callSessionId) {
-      console.error('[IncomingCall] Ignoring call_ringing with no callSessionId', payload);
+      callConsole.error('[IncomingCall] Ignoring call_ringing with no callSessionId', payload);
       callLogger.error('CALL', 'EXIT: handleIncomingCall - invalid payload (no callSessionId)', ctx, { payload });
       return false;
     }
@@ -108,7 +102,7 @@ class CallManager {
 
     const currentState = this.contextActions.getCallState();
     if (currentState !== CallState.IDLE) {
-      console.log(`[IncomingCall] Duplicate or conflicting call received while in state: ${currentState}. Ignoring/Rejecting.`);
+      callConsole.log(`[IncomingCall] Duplicate or conflicting call received while in state: ${currentState}. Ignoring/Rejecting.`);
       callLogger.warn('CALL', `Duplicate or conflicting call received while in state: ${currentState}. Auto-rejecting.`, ctx, { payload });
       
       // Auto-reject incoming call if we are already in another call
@@ -120,7 +114,7 @@ class CallManager {
         );
         callLogger.info('REST', `Auto-rejected conflicting call session: ${payload.callSessionId}. Duration: ${Date.now() - restStart}ms`, ctx);
       } catch (e) {
-        console.error('[IncomingCall] Failed to auto-reject conflicting call', e);
+        callConsole.error('[IncomingCall] Failed to auto-reject conflicting call', e);
         callLogger.error('REST', `Failed to auto-reject conflicting call session: ${payload.callSessionId}`, ctx, e);
       }
       const duration = Date.now() - startTime;
@@ -171,7 +165,7 @@ class CallManager {
       createdAt: new Date().toISOString(),
     };
 
-    console.log(`[IncomingCall] Received ringing, starting ringtone`);
+    callConsole.log(`[IncomingCall] Received ringing, starting ringtone`);
     
     callService.createPendingSession(session);
     this.contextActions.setSession(session);
@@ -187,7 +181,7 @@ class CallManager {
       callLogger.error('AUDIO', 'Ringtone playback failed', ctx, e);
     });
 
-    console.log(`[Navigation] Showing IncomingCallScreen globally`);
+    callConsole.log(`[Navigation] Showing IncomingCallScreen globally`);
     const navStart = Date.now();
     if (navigationRef.isReady()) {
       // @ts-ignore
@@ -241,7 +235,7 @@ class CallManager {
     // PR-5: `call_ringing` sends callerName: "Spa Owner" - a ROLE, not the spa. The
     // user needs to know WHICH spa is calling, and neither call_ringing nor
     // GET /chat/calls/{id} carries the spa's name, so resolve it from spa_id.
-    if (details.spa_id && isPlaceholderCallerName(pending.caller.name)) {
+    if (details.spa_id && isPlaceholderPartyName(pending.caller.name)) {
       await this.resolveSpaIdentity(sessionId, details.spa_id);
     }
   }
@@ -279,14 +273,14 @@ class CallManager {
     }
     this.actionInProgress = 'accept';
 
-    console.log('[IncomingCall] Accept pressed');
+    callConsole.log('[IncomingCall] Accept pressed');
     const ringtoneStopStart = Date.now();
     ringtoneService.stop();
     callLogger.info('AUDIO', `Ringtone stopped. Duration: ${Date.now() - ringtoneStopStart}ms`, ctx);
 
     const pending = callService.getPendingSession();
     if (!pending) {
-      console.error('[IncomingCall] No pending session to accept');
+      callConsole.error('[IncomingCall] No pending session to accept');
       callLogger.error('CALL', 'No pending session found to accept', ctx);
       this.actionInProgress = null;
       const duration = Date.now() - startTime;
@@ -317,7 +311,7 @@ class CallManager {
 
       // Step 1: REST accept
       const restStart = Date.now();
-      console.log(`[REST] POST /chat/calls/${pending.sessionId}/accept`);
+      callConsole.log(`[REST] POST /chat/calls/${pending.sessionId}/accept`);
       const response = await authAxiosClient.post(
         `/chat/calls/${pending.sessionId}/accept`,
         callActionBody(pending),
@@ -363,7 +357,7 @@ class CallManager {
       callLogger.info('SESSION', `Pending Session updated in acceptCall (Diff):\n${diffStr}`, ctx);
 
       // Step 3: Move pending → connecting
-      console.log('[CallFlow] Moving Pending → Connecting');
+      callConsole.log('[CallFlow] Moving Pending → Connecting');
       callService.movePendingToConnecting();
       
       const stateStart1 = Date.now();
@@ -371,18 +365,18 @@ class CallManager {
       callLogger.info('STATE', `Transition state set to CONNECTING. Duration: ${Date.now() - stateStart1}ms`, ctx);
 
       // Step 4: Join Agora
-      console.log('[Agora] Joining Agora channel:', pending.channelName);
+      callConsole.log('[Agora] Joining Agora channel:', pending.channelName);
       const agoraStart = Date.now();
       await callService.joinPendingSession();
       callLogger.info('AGORA', `Join channel completed. Duration: ${Date.now() - agoraStart}ms`, ctx);
-      console.log('[Agora] Join success for channel:', pending.channelName);
+      callConsole.log('[Agora] Join success for channel:', pending.channelName);
 
       // Step 5: Promote connecting → active
-      console.log('[CallFlow] Promoting Connecting → Active');
+      callConsole.log('[CallFlow] Promoting Connecting → Active');
       callService.promoteConnectingToActive();
 
       // Step 6: Navigate CallScreen
-      console.log('[IncomingCall] Navigating to CallScreen');
+      callConsole.log('[IncomingCall] Navigating to CallScreen');
       const navStart = Date.now();
       if (navigationRef.isReady()) {
         const currentRoute = navigationRef.getCurrentRoute()?.name;
@@ -418,7 +412,7 @@ class CallManager {
       }
 
       // Step 7: CONNECTED
-      console.log('[IncomingCall] Connected');
+      callConsole.log('[IncomingCall] Connected');
       const stateStart2 = Date.now();
       this.contextActions.setCallState(CallState.CONNECTED);
       callLogger.info('STATE', `Transition state set to CONNECTED. Duration: ${Date.now() - stateStart2}ms`, ctx);
@@ -428,7 +422,7 @@ class CallManager {
       const totalDuration = Date.now() - startTime;
       callLogger.info('CALL', `EXIT: acceptCall - SUCCESS. Duration: ${totalDuration}ms`, ctx);
     } catch (error) {
-      console.error('[IncomingCall] Failed to accept call:', error);
+      callConsole.error('[IncomingCall] Failed to accept call:', error);
       // PR-2: surface the reason. Every accept failure used to render as "Call Failed".
       this.contextActions.setErrorMessage(extractApiErrorMessage(error, 'Could not answer the call.'));
       // Bug #3: Only cleanup after a real failure
@@ -460,7 +454,7 @@ class CallManager {
     }
     this.actionInProgress = 'reject';
     
-    console.log('[IncomingCall] Reject pressed');
+    callConsole.log('[IncomingCall] Reject pressed');
     const stopRingStart = Date.now();
     ringtoneService.stop();
     callLogger.info('AUDIO', `Ringtone stopped. Duration: ${Date.now() - stopRingStart}ms`, ctx);
@@ -475,14 +469,14 @@ class CallManager {
 
     try {
       const restStart = Date.now();
-      console.log(`[REST] POST /chat/calls/${pending.sessionId}/reject`);
+      callConsole.log(`[REST] POST /chat/calls/${pending.sessionId}/reject`);
       await authAxiosClient.post(
         `/chat/calls/${pending.sessionId}/reject`,
         callActionBody(pending, 'declined'),
       );
       callLogger.info('REST', `rejectCall API response. Duration: ${Date.now() - restStart}ms`, ctx);
     } catch (error) {
-      console.error('[IncomingCall] Error rejecting call', error);
+      callConsole.error('[IncomingCall] Error rejecting call', error);
       callLogger.error('REST', 'Error rejecting call via REST', ctx, error);
     } finally {
       const navStart = Date.now();
@@ -517,13 +511,13 @@ class CallManager {
     const currentId = pending?.sessionId || active?.sessionId || connecting?.sessionId;
     
     if (currentId !== sessionId) {
-      console.log(`[IncomingCall] Remote cancelled event for different session ${sessionId}. Ignoring.`);
+      callConsole.log(`[IncomingCall] Remote cancelled event for different session ${sessionId}. Ignoring.`);
       const duration = Date.now() - startTime;
       callLogger.info('CALL', `Remote end/cancel event ignored - mismatched session ID ${sessionId}. Duration: ${duration}ms`, ctx);
       return;
     }
 
-    console.log(`[IncomingCall] Remote cancelled/ended call. Reason: ${reason}`);
+    callConsole.log(`[IncomingCall] Remote cancelled/ended call. Reason: ${reason}`);
     
     const ringStopStart = Date.now();
     ringtoneService.stop();

@@ -3,6 +3,7 @@ import { socketService } from './socketService';
 import { ringtoneService } from './ringtoneService';
 import { CallSession, CallRequest } from '../../types/call';
 import authAxiosClient from '../../api/authAxiosClient';
+import { callConsole } from './callLogger';
 
 // PR-2: one body shape for every call action. The live accept path POSTed no body at
 // all, the duplicate (now deleted) path sent { spa_id }, and the auto-reject sent
@@ -145,7 +146,7 @@ class CallService {
     const ctx = getLogContext(session);
     callLogger.info('SESSION', 'Pending Session BEFORE: null', ctx);
     this.pendingSession = session;
-    console.log(`[CallFlow] Created pendingSession: ${session.sessionId}`);
+    callConsole.log(`[CallFlow] Created pendingSession: ${session.sessionId}`);
     callLogger.info('SESSION', 'Pending Session AFTER:', ctx, session);
   }
 
@@ -158,7 +159,7 @@ class CallService {
       const diffStr = callLogger.diffObjects(this.connectingSession, this.pendingSession);
       this.connectingSession = this.pendingSession;
       this.pendingSession = null;
-      console.log(`[CallFlow] Moved pendingSession to connectingSession: ${this.connectingSession.sessionId}`);
+      callConsole.log(`[CallFlow] Moved pendingSession to connectingSession: ${this.connectingSession.sessionId}`);
       callLogger.info('SESSION', `Connecting Session AFTER move (Diff):\n${diffStr}`, ctx, this.connectingSession);
     }
   }
@@ -172,7 +173,7 @@ class CallService {
       const diffStr = callLogger.diffObjects(this.activeSession, this.connectingSession);
       this.activeSession = this.connectingSession;
       this.connectingSession = null;
-      console.log(`[CallFlow] Promoted connectingSession to activeSession: ${this.activeSession.sessionId}`);
+      callConsole.log(`[CallFlow] Promoted connectingSession to activeSession: ${this.activeSession.sessionId}`);
       callLogger.info('SESSION', `Active Session AFTER promote (Diff):\n${diffStr}`, ctx, this.activeSession);
     }
   }
@@ -197,7 +198,7 @@ class CallService {
     const ctx = getLogContext();
     callLogger.info('CALL', `ENTER: cleanup - reason=${reason}`, ctx);
     
-    console.log(`[CallFlow] Cleaning up CallService. Reason: ${reason}`);
+    callConsole.log(`[CallFlow] Cleaning up CallService. Reason: ${reason}`);
     ringtoneService.stop();
     this.clearSessions();
     await agoraService.leaveChannel();
@@ -228,12 +229,12 @@ class CallService {
     // Bug #5: Prevent duplicate joinChannel() calls if already joining or joined
     if (agoraService.getIsJoining() || agoraService.getIsJoined()) {
       const duration = Date.now() - startTime;
-      console.log(`[Agora] joinPendingSession ignored. Already joining or joined channel.`);
+      callConsole.log(`[Agora] joinPendingSession ignored. Already joining or joined channel.`);
       callLogger.info('AGORA', `joinPendingSession ignored. Already joining or joined channel. Duration: ${duration}ms`, ctx);
       return;
     }
 
-    console.log(`[Agora] Executing joinChannel for session: ${session.sessionId}`);
+    callConsole.log(`[Agora] Executing joinChannel for session: ${session.sessionId}`);
     
     try {
       await agoraService.joinChannel(session.token, session.channelName, session.uid);
@@ -261,7 +262,7 @@ class CallService {
         throw new Error(CALL_OFFLINE_MESSAGE);
       }
 
-      console.log(`[REST] POST /chat/calls/request - Booking: ${request.bookingId}, Spa: ${request.spaId}`);
+      callConsole.log(`[REST] POST /chat/calls/request - Booking: ${request.bookingId}, Spa: ${request.spaId}`);
       const response = await authAxiosClient.post('/chat/calls/request', {
         booking_id: request.bookingId,
         spa_id: request.spaId,
@@ -346,7 +347,7 @@ class CallService {
         await this.cancelCall(session);
         throw new Error(CALL_OFFLINE_MESSAGE);
       }
-      console.log(`[Socket] Emitted call_request. Session: ${session.sessionId}`);
+      callConsole.log(`[Socket] Emitted call_request. Session: ${session.sessionId}`);
 
       const totalDuration = Date.now() - startTime;
       callLogger.info('REST', `EXIT: initiateCall - SUCCESS. Duration: ${totalDuration}ms`, ctx);
@@ -367,7 +368,7 @@ class CallService {
 
     // Bug #4: Ignore duplicate call_accept socket events if connecting or active session already exists
     if (!this.pendingSession || this.connectingSession || this.activeSession) {
-      console.log(`[CallFlow] Ignoring call_accept: no pending session or connecting/active session already exists`);
+      callConsole.log(`[CallFlow] Ignoring call_accept: no pending session or connecting/active session already exists`);
       const duration = Date.now() - startTime;
       callLogger.info('SOCKET', `Ignoring call_accept - session already connecting or active. Duration: ${duration}ms`, ctx);
       return;
@@ -385,7 +386,7 @@ class CallService {
       callSession?.id || data?.callSessionId || payload?.callSessionId;
 
     if (incomingSessionId && incomingSessionId !== this.pendingSession.sessionId) {
-      console.log(`[CallFlow] Ignoring call_accept for unmatched session: ${incomingSessionId}`);
+      callConsole.log(`[CallFlow] Ignoring call_accept for unmatched session: ${incomingSessionId}`);
       const duration = Date.now() - startTime;
       callLogger.info('SOCKET', `Ignoring call_accept - unmatched session ID. Duration: ${duration}ms`, ctx);
       return;
@@ -393,7 +394,7 @@ class CallService {
 
     // Bug #1: Parse token.token, token.channel, token.uid
     if (!tokenObj || !tokenObj.token || !tokenObj.channel || tokenObj.uid === undefined) {
-      console.error(`[CallFlow] call_accept payload missing valid credentials`);
+      callConsole.error(`[CallFlow] call_accept payload missing valid credentials`);
       const duration = Date.now() - startTime;
       callLogger.error('SOCKET', `EXIT: handleCallAccepted - FAILURE (invalid credentials). Duration: ${duration}ms`, ctx);
       return;
@@ -406,7 +407,7 @@ class CallService {
 
     const oldSessionCopy = { ...this.pendingSession };
 
-    console.log(`[Session] Updating pendingSession credentials - Session: ${this.pendingSession.sessionId}, UID: ${tokenObj.uid}, Channel: ${tokenObj.channel}`);
+    callConsole.log(`[Session] Updating pendingSession credentials - Session: ${this.pendingSession.sessionId}, UID: ${tokenObj.uid}, Channel: ${tokenObj.channel}`);
     
     this.pendingSession.token = tokenObj.token;
     this.pendingSession.channelName = tokenObj.channel;
@@ -450,7 +451,7 @@ class CallService {
     callLogger.info('REST', 'ENTER: reportMissedCall', ctx, { sessionId: session.sessionId });
 
     try {
-      console.log(`[REST] POST /chat/calls/${session.sessionId}/reject (missed)`);
+      callConsole.log(`[REST] POST /chat/calls/${session.sessionId}/reject (missed)`);
       await authAxiosClient.post(
         `/chat/calls/${session.sessionId}/reject`,
         callActionBody(session, 'missed'),
@@ -469,7 +470,7 @@ class CallService {
     callLogger.info('REST', 'ENTER: cancelCall', ctx, { sessionId: session.sessionId });
 
     try {
-      console.log(`[REST] POST /chat/calls/${session.sessionId}/cancel`);
+      callConsole.log(`[REST] POST /chat/calls/${session.sessionId}/cancel`);
       const response = await authAxiosClient.post(
         `/chat/calls/${session.sessionId}/cancel`,
         callActionBody(session),
@@ -477,7 +478,7 @@ class CallService {
       
       const duration = Date.now() - startTime;
       callLogger.info('REST', `cancelCall API Response. Status: ${response.status}, Duration: ${duration}ms`, ctx, response.data);
-      console.log(`[CallFlow] Call canceled correctly via REST.`);
+      callConsole.log(`[CallFlow] Call canceled correctly via REST.`);
       
       const totalDuration = Date.now() - startTime;
       callLogger.info('REST', `EXIT: cancelCall - SUCCESS. Duration: ${totalDuration}ms`, ctx);
@@ -495,7 +496,7 @@ class CallService {
     callLogger.info('REST', 'ENTER: endCall', ctx, { sessionId: session.sessionId, durationSeconds });
 
     try {
-      console.log(`[REST] POST /chat/calls/${session.sessionId}/end`);
+      callConsole.log(`[REST] POST /chat/calls/${session.sessionId}/end`);
       const response = await authAxiosClient.post(`/chat/calls/${session.sessionId}/end`, {
         ...callActionBody(session),
         duration_seconds: durationSeconds,
@@ -517,7 +518,7 @@ class CallService {
     // app hangs up. Costs one redundant server call; a stuck call costs more.
     // Sent even when REST /end failed: that is exactly when the portal most needs it.
     if (socketService.emit('call_end', session.sessionId)) {
-      console.log(`[Socket] Emitted call_end. Session: ${session.sessionId}`);
+      callConsole.log(`[Socket] Emitted call_end. Session: ${session.sessionId}`);
     }
   }
 
@@ -588,7 +589,7 @@ class CallService {
 
     try {
       await agoraService.muteLocalAudioStream(isMuted);
-      console.log("[Agora] Local audio unmuted");
+      callConsole.log(`[Agora] Local audio ${isMuted ? 'muted' : 'unmuted'}`);
       
       callLogger.updateAudioSnapshot(ctx?.sessionId, { micMuted: isMuted });
 

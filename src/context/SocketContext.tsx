@@ -25,6 +25,7 @@ import { AppState, AppStateStatus } from 'react-native';
 
 import { useAuth } from './AuthContext';
 import { socketService } from '../services/call/socketService';
+import { callConsole } from '../services/call/callLogger';
 
 export interface SocketContextValue {
   /** True once the underlying socket has fired 'connect'. */
@@ -75,7 +76,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       // Token rotated (re-login, possibly as a different user): the old socket is
       // authenticated with the previous JWT and has to go.
       if (activeTokenRef.current && activeTokenRef.current !== token) {
-        console.log('[SocketProvider] Auth token changed. Reconnecting socket.');
+        callConsole.log('[SocketProvider] Auth token changed. Reconnecting socket.');
         socketService.disconnect();
         setIsConnected(false);
       }
@@ -86,11 +87,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
       // AsyncStorage write resolves, so letting socketService read storage here
       // races and can pick up the previous (or a null) value right after login.
       socketService.connect(token).catch(error => {
-        console.warn('[SocketProvider] Socket connect failed:', error);
+        callConsole.warn('[SocketProvider] Socket connect failed:', error);
       });
     } else {
       if (activeTokenRef.current !== null || socketService.isConnected()) {
-        console.log('[SocketProvider] Logged out. Disconnecting socket.');
+        callConsole.log('[SocketProvider] Logged out. Disconnecting socket.');
         socketService.disconnect();
       }
       activeTokenRef.current = null;
@@ -119,9 +120,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
           return;
         }
 
-        console.log('[SocketProvider] Foreground with a dead socket. Reconnecting.');
+        callConsole.log('[SocketProvider] Foreground with a dead socket. Reconnecting.');
         socketService.ensureConnected(currentToken).catch(error => {
-          console.warn('[SocketProvider] Foreground reconnect failed:', error);
+          callConsole.warn('[SocketProvider] Foreground reconnect failed:', error);
         });
       },
     );

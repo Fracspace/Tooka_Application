@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, SafeAreaView, BackHandler } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { CallState } from '../../types/call';
+import { TERMINAL_CALL_STATES, isPlaceholderPartyName } from '../../types/call';
 import { useCallContext } from '../../context/CallContext';
 import { callManager } from '../../services/call/callManager';
 import { CallInspectorOverlay } from './components/CallInspectorOverlay';
@@ -15,8 +15,8 @@ const IncomingCallScreen: React.FC = () => {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // Start pulsing animation
-    Animated.loop(
+    // Start pulsing animation; stopped on unmount so the loop does not outlive the screen.
+    const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
           toValue: 1.2,
@@ -29,20 +29,16 @@ const IncomingCallScreen: React.FC = () => {
           useNativeDriver: true,
         }),
       ])
-    ).start();
+    );
+    pulse.start();
+    return () => pulse.stop();
   }, [pulseAnim]);
 
   // Only go back if the call reached a terminal state while this screen is active.
   // PR-4: MISSED and NO_ANSWER added - MISSED is now reachable via the ring timeout,
   // and without it this screen would stay up after the ringtone stopped.
   useEffect(() => {
-    if (
-      callState === CallState.ENDED ||
-      callState === CallState.REJECTED ||
-      callState === CallState.FAILED ||
-      callState === CallState.MISSED ||
-      callState === CallState.NO_ANSWER
-    ) {
+    if (TERMINAL_CALL_STATES.has(callState)) {
       if (navigation.isFocused() && navigation.canGoBack()) {
         navigation.goBack();
       }
@@ -67,8 +63,10 @@ const IncomingCallScreen: React.FC = () => {
     await callManager.rejectCall();
   };
 
-  // Safe fallback if session is somehow missing
-  const callerName = session?.caller?.name || 'Unknown Caller';
+  // Until the spa lookup resolves, the backend only sends a role ("Spa Owner").
+  const rawCallerName = session?.caller?.name;
+  const callerName =
+    rawCallerName && !isPlaceholderPartyName(rawCallerName) ? rawCallerName : 'Your spa';
 
   return (
     <SafeAreaView style={styles.container}>

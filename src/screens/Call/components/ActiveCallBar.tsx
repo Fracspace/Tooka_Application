@@ -5,19 +5,25 @@
  * screen, and there was no way back to it — the screen had been popped and nothing
  * else referenced the live call. This is that way back.
  *
- * Rendered globally (App.tsx, inside CallProvider and above the navigator) so it can
- * overlay any screen. It deliberately does NOT use navigation hooks: it sits outside
- * NavigationContainer, so it tracks the active route through navigationRef instead.
+ * Rendered globally (App.tsx, inside CallProvider) WRAPPING the navigator. It used to
+ * be absolutely positioned on top of every screen, which hid each screen's header and
+ * back button for the whole call. It now sits in the layout above the navigator and
+ * pushes the app down, like the iOS in-call bar: native SafeAreaViews below it stop
+ * adding top padding on their own, and useSafeAreaInsets() consumers get top: 0 from
+ * the overridden context.
+ *
+ * It deliberately does NOT use navigation hooks: it sits outside NavigationContainer,
+ * so it tracks the active route through navigationRef instead.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCallContext } from '../../../context/CallContext';
 import { useCallTimer } from '../../../hooks/useCallTimer';
-import { CallState } from '../../../types/call';
+import { CallState, isPlaceholderPartyName } from '../../../types/call';
 import { navigationRef } from '../../../navigation/NavigationService';
 
 /** Routes that already show the call, so the bar would be redundant. */
@@ -31,7 +37,7 @@ const LIVE_CALL_STATES: CallState[] = [
   CallState.RECONNECTING,
 ];
 
-export const ActiveCallBar: React.FC = () => {
+export const ActiveCallBar: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { callState, session, duration } = useCallContext();
   const insets = useSafeAreaInsets();
   const timer = useCallTimer(duration);
@@ -51,20 +57,16 @@ export const ActiveCallBar: React.FC = () => {
     return unsubscribe;
   }, [callState]);
 
-  if (!isLiveCall) {
-    return null;
-  }
-  if (routeName && CALL_ROUTES.includes(routeName)) {
-    return null;
-  }
+  const isVisible = isLiveCall && !(routeName && CALL_ROUTES.includes(routeName));
+  const childInsets = useMemo(
+    () => (isVisible ? { ...insets, top: 0 } : insets),
+    [isVisible, insets],
+  );
 
   const isIncomingCall = session?.direction === 'inbound';
   const remoteParty = isIncomingCall ? session?.caller : session?.receiver;
-  const remoteName = remoteParty?.name;
-  const displayName =
-    !remoteName || remoteName === 'Me' || remoteName === 'Spa'
-      ? 'Ongoing call'
-      : remoteName;
+  const remoteName = isPlaceholderPartyName(remoteParty?.name) ? '' : remoteParty?.name ?? '';
+  const displayName = remoteName || 'Ongoing call';
 
   const status =
     callState === CallState.CONNECTED
@@ -85,41 +87,47 @@ export const ActiveCallBar: React.FC = () => {
       bookingId: session?.bookingId ?? '',
       spaId: session?.spaId ?? '',
       callType: session?.callType || 'voice',
-      spaName: displayName,
+      spaName: remoteName,
       spaAvatar: remoteParty?.avatarUrl || '',
       isIncoming: isIncomingCall,
     });
   };
 
+  // Keep this tree shape fixed whether or not the bar shows, so toggling it never
+  // remounts the navigator underneath.
   return (
-    <Pressable
-      onPress={handleReturn}
-      accessibilityRole="button"
-      accessibilityLabel={`Return to call with ${displayName}`}
-      style={[styles.container, { paddingTop: insets.top + 8 }]}
-    >
-      <View style={styles.row}>
-        <Ionicons name="call" size={16} color="#FFF" />
-        <Text style={styles.label} numberOfLines={1}>
-          {displayName} · {status}
-        </Text>
-        <Text style={styles.action}>Tap to return</Text>
-      </View>
-    </Pressable>
+    <View style={styles.root}>
+      {isVisible ? (
+        <Pressable
+          onPress={handleReturn}
+          accessibilityRole="button"
+          accessibilityLabel={`Return to call with ${displayName}`}
+          style={[styles.container, { paddingTop: insets.top + 8 }]}
+        >
+          <View style={styles.row}>
+            <Ionicons name="call" size={16} color="#FFF" />
+            <Text style={styles.label} numberOfLines={1}>
+              {displayName} · {status}
+            </Text>
+            <Text style={styles.action}>Tap to return</Text>
+          </View>
+        </Pressable>
+      ) : null}
+      <SafeAreaInsetsContext.Provider value={childInsets}>
+        {children}
+      </SafeAreaInsetsContext.Provider>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
   container: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
     backgroundColor: '#34C759',
     paddingBottom: 10,
     paddingHorizontal: 16,
-    zIndex: 999,
-    elevation: 999,
   },
   row: {
     flexDirection: 'row',

@@ -3,7 +3,7 @@
  *
  * PR-8 — why this file exists:
  *
- * `x-api-key` was hardcoded as the string literal 'Tooka@2026' in TWO axios clients
+ * `x-api-key` was hardcoded as a string literal in TWO axios clients
  * (authAxiosClient and tookaAxiosClient), and the socket URL in a third file. That key
  * has been rotated. The old value still works ONLY because the backend keeps it in
  * `.env` as `API_KEY_LEGACY`, where the middleware lets it through with a warning —
@@ -28,10 +28,7 @@ export const API_CONFIG = {
   /** Socket.IO origin — note: NO /api suffix. */
   socketUrl: 'https://api.tooka.app',
 
-  /**
-   * Current key, issued during the security audit that rotated 'Tooka@2026'.
-   * Unrelated to the /api-docs Swagger password, which is still Tooka@2026.
-   */
+  /** Current key, issued during the security audit that rotated the previous one. */
   apiKey: 'iT7pSuUjBKrbvnfsrUQdkxB-FfnyGhjU',
 } as const;
 

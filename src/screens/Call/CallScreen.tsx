@@ -3,7 +3,7 @@ import { View, StyleSheet, Alert, BackHandler } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useCallContext } from '../../context/CallContext';
 import { useMicrophonePermission } from '../../hooks/useMicrophonePermission';
-import { CallState } from '../../types/call';
+import { CallState, isPlaceholderPartyName } from '../../types/call';
 
 import { BackgroundOverlay } from './components/BackgroundOverlay';
 import { CallHeader } from './components/CallHeader';
@@ -137,8 +137,8 @@ export default function CallScreen() {
   const isIncomingCall = session ? session.direction === 'inbound' : !!isIncoming;
   const remoteParty = isIncomingCall ? session?.caller : session?.receiver;
   const remoteName = remoteParty?.name;
-  const isPlaceholderName = !remoteName || remoteName === 'Me' || remoteName === 'Spa';
-  const displayName = (isPlaceholderName ? spaName : remoteName) || spaName || 'Unknown User';
+  const displayName =
+    (isPlaceholderPartyName(remoteName) ? spaName : remoteName) || spaName || 'Your spa';
   const displayAvatar = remoteParty?.avatarUrl || spaAvatar;
 
   return (
