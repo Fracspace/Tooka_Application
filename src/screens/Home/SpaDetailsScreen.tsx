@@ -30,6 +30,7 @@ import { bookingOption } from '../Booking/bookingData';
 import { buildBookingDateAndTime } from '../../utils/bookingDateTime';
 import { Analytics, AnalyticsEvents, AnalyticsParams } from '../../services/firebase/analytics';
 import { Crashlytics, CrashlyticsKeys } from '../../services/firebase/crashlytics';
+import { formatPrice } from '../../utils/number';
 
 type SpaDetailsNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -300,12 +301,11 @@ function SpaDetailsScreen(): React.ReactElement {
     [spa?.services, activeServiceId],
   );
 
-  const bookingFeeAmount = useMemo(() => {
-    const numericFee = Number(
-      spa?.booking_fee ?? spa?.minimum_booking_amount ?? bookingOption.price,
-    );
-    return Number.isFinite(numericFee) ? Math.round(numericFee) : bookingOption.price;
-  }, [spa?.booking_fee, spa?.minimum_booking_amount]);
+  // The spa's own booking fee, or null (shown as "at payment") - never a guess.
+  const bookingFeeText = useMemo(
+    () => formatPrice(spa?.booking_fee ?? spa?.minimum_booking_amount),
+    [spa?.booking_fee, spa?.minimum_booking_amount],
+  );
 
   const [summaryVisible, setSummaryVisible] = useState(false);
 
@@ -567,7 +567,7 @@ function SpaDetailsScreen(): React.ReactElement {
         timeLabel={selectedSlot ? formatTimeLabel(selectedSlot.startTime) : ''}
         serviceName={targetService?.name ?? serviceName}
         serviceDurationMinutes={targetService?.duration_minutes ?? undefined}
-        bookingFee={bookingFeeAmount}
+        bookingFeeText={bookingFeeText}
         bookingFeeNote={bookingOption.description}
       />
     </SafeAreaView>

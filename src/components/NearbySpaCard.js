@@ -18,8 +18,8 @@ const NearbySpaCard = ({ item, onPress }) => {
         <Text style={styles.subtitle}>{item.subtitle}</Text>
         <View style={styles.bottomRow}>
           <View style={styles.tagRow}>
-            <Text style={styles.tag}>{item.typeA}</Text>
-            <Text style={styles.tag}>{item.typeB}</Text>
+            {item.typeA ? <Text style={styles.tag}>{item.typeA}</Text> : null}
+            {item.typeB ? <Text style={styles.tag}>{item.typeB}</Text> : null}
           </View>
         </View>
         <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginTop:12}}>

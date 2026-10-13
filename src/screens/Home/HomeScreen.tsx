@@ -43,7 +43,13 @@ import StateMessage from '../../components/common/StateMessage';
 
 import type { Spa } from '../../types/spa';
 import { getSpaDistance } from '../../utils/distance';
-import { formatPrice } from '../../utils/number';
+import {
+  formatPrice,
+  formatRatingLabel,
+  formatReviewsLabel,
+  getSpaBadge,
+  toRatingOrNull,
+} from '../../utils/number';
 import { getLocationDisplayParts } from '../../services/locationAddress';
 import { useProfile } from '../../context/ProfileContext';
 import { Analytics, AnalyticsEvents, AnalyticsScreens } from '../../services/firebase/analytics';
@@ -81,8 +87,8 @@ interface NearbySpaItem {
   typeB: string;
   rating: string;
   image: string;
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
   price: string | null;
 }
 
@@ -110,10 +116,6 @@ interface WellnessInsightItem {
 }
 
 const PLACEHOLDER_IMAGE = 'https://d2f15ematxpwp4.cloudfront.net/appImages/Spacover.jpg';
-const DEFAULT_LOCATION = 'Hyderabad';
-const DEFAULT_RATING = 4.5;
-const DEFAULT_BADGE = 'Premium';
-const DEFAULT_DISTANCE = '1.2 km';
 
 const FEATURED_CARD_WIDTH = 250;
 const FEATURED_CARD_MARGIN = 16;
@@ -158,7 +160,7 @@ const HomeScreen: React.FC = () => {
         subtitle: s.subtitle,
         typeA: s.typeA,
         typeB: s.typeB,
-        rating: s.rating.toFixed(1),
+        rating: formatRatingLabel(s.rating),
         image: s.image,
         latitude: s.latitude,
         longitude: s.longitude,
@@ -224,13 +226,13 @@ const HomeScreen: React.FC = () => {
         return {
           id: spa.id,
           name: spa.name ?? 'Untitled Spa',
-          location: spa.city_name ?? DEFAULT_LOCATION,
+          location: spa.locality_name ?? spa.city_name ?? '',
           distance: distanceStr,
-          rating: String(spa.rating_google ?? DEFAULT_RATING),
-          reviews: `${spa.review_count_google ?? 0} reviews`,
+          rating: formatRatingLabel(toRatingOrNull(spa.rating_google)),
+          reviews: formatReviewsLabel(spa.review_count_google),
           price: formatPrice(spa.starting_price) ?? '',
           oldPrice: '',
-          badge: DEFAULT_BADGE,
+          badge: getSpaBadge(spa),
           image: spa.cover_photo_url ?? PLACEHOLDER_IMAGE,
           favorite: false,
         };
@@ -318,13 +320,13 @@ const HomeScreen: React.FC = () => {
       return {
         id: spa.id,
         name: spa.name ?? 'Untitled Spa',
-        location: spa.subtitle ?? DEFAULT_LOCATION,
+        location: spa.subtitle ?? '',
         distance: distanceStr,
-        rating: spa.rating ?? String(DEFAULT_RATING),
-        reviews: '0 reviews',
+        rating: spa.rating,
+        reviews: formatReviewsLabel(spa.reviewCount),
         price: formatPrice(spa.starting_price) ?? '',
         oldPrice: '',
-        badge: DEFAULT_BADGE,
+        badge: spa.badge,
         image: spa.image === "" ? PLACEHOLDER_IMAGE : spa.image ?? PLACEHOLDER_IMAGE,
         favorite: false,
       };

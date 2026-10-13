@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios, { type CancelTokenSource } from 'axios';
 import SpaApi from '../api/SpaApi';
 import type { Spa } from '../types/spa';
+import { formatRatingLabel, getSpaBadge, toRatingOrNull } from '../utils/number';
 
 export interface SearchSpaItem {
   id: string;
@@ -9,7 +10,10 @@ export interface SearchSpaItem {
   subtitle: string;
   typeA: string;
   typeB: string;
+  /** Display label: "4.7", or "New" when unrated. */
   rating: string;
+  reviewCount: number;
+  badge: string;
   image: string;
   latitude: number;
   longitude: number;
@@ -42,8 +46,6 @@ export const shouldSearchRequest = (value: string): boolean =>
 
 const mapSpaToSearchItem = (spa: Spa): SearchSpaItem => {
   const locality = spa.locality_name ?? spa.city_name ?? 'Location unavailable';
-  const rating = Number(spa.rating_google ?? 0);
-  const safeRating = Number.isFinite(rating) ? rating.toFixed(1) : '0.0';
 
   return {
     id: spa.id,
@@ -51,7 +53,9 @@ const mapSpaToSearchItem = (spa: Spa): SearchSpaItem => {
     subtitle: locality,
     typeA: 'Massage',
     typeB: 'Spa',
-    rating: safeRating,
+    rating: formatRatingLabel(toRatingOrNull(spa.rating_google)),
+    reviewCount: parseInt(String(spa.review_count_google ?? 0), 10) || 0,
+    badge: getSpaBadge(spa),
     image: spa.cover_photo_url === "" ? PLACEHOLDER_IMAGE : spa.cover_photo_url ?? PLACEHOLDER_IMAGE,
     starting_price: spa.starting_price ?? null,
     latitude: Number.parseFloat(spa.lat) || 0,

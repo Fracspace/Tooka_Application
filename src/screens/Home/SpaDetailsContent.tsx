@@ -26,6 +26,7 @@ import SpaDetailsSkeleton from '../../components/loaders/SpaDetailsSkeleton';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import type { SpaDetails } from '../../types/spaDetails';
 import type { BookingDate, BookingOption, TimeSlot } from '../Booking/types';
+import { formatPrice } from '../../utils/number';
 
 const PLACEHOLDER_IMAGE =
   'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1000&q=80';
@@ -101,9 +102,14 @@ const formatDateSubLabel = (dateStr: string): string => {
   return `${day} ${monthNames[monthIdx]}`;
 };
 
-const formatServicePrice = (price: string | null | number, currency: string | null) => {
-  if (!price) return '₹999';
+// null when the service has no (or a zero) price: the card then shows no price
+// instead of the made-up ₹999 it used to.
+const formatServicePrice = (
+  price: string | null | number,
+  currency: string | null,
+): string | null => {
   const numericPrice = Number(price);
+  if (!price || !(numericPrice > 0)) return null;
   const formattedPrice = Number.isFinite(numericPrice)
     ? numericPrice.toLocaleString('en-IN', { maximumFractionDigits: 0 })
     : price;
@@ -397,15 +403,15 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
       });
   }, [spa?.amenities]);
 
-  // Open/Closed Status
-  const isOpenNow = spa?.is_open_now ?? true;
+  // Open/Closed Status: null when the API does not say (was assumed open).
+  const isOpenNow = spa?.is_open_now ?? null;
 
-  // Booking Fee Amount
-  const bookingFeeAmount = useMemo(() => {
-    const feeStr = spa?.booking_fee ?? spa?.minimum_booking_amount ?? bookingOption.price;
-    const numericFee = Number(feeStr);
-    return Number.isFinite(numericFee) ? Math.round(numericFee) : 199;
-  }, [spa?.booking_fee, spa?.minimum_booking_amount, bookingOption.price]);
+  // Booking fee from the spa; null hides it rather than showing a guessed ₹199.
+  // The amount actually charged always comes from the server at payment time.
+  const bookingFeeText = useMemo(
+    () => formatPrice(spa?.booking_fee ?? spa?.minimum_booking_amount),
+    [spa?.booking_fee, spa?.minimum_booking_amount],
+  );
 
   const slotWidth = useMemo(() => {
     const contentWidth = Math.min(width, 720) - 68;
@@ -505,11 +511,13 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
           </View>
 
           <View style={styles.timingRow}>
-            <View style={[styles.openNowBadge, !isOpenNow && styles.closedBadge]}>
-              <Text style={[styles.openNowText, !isOpenNow && styles.closedText]}>
-                {isOpenNow ? 'Open now' : 'Closed now'}
-              </Text>
-            </View>
+            {isOpenNow !== null ? (
+              <View style={[styles.openNowBadge, !isOpenNow && styles.closedBadge]}>
+                <Text style={[styles.openNowText, !isOpenNow && styles.closedText]}>
+                  {isOpenNow ? 'Open now' : 'Closed now'}
+                </Text>
+              </View>
+            ) : null}
 
             <Pressable
               onPress={() => setHoursModalVisible(true)}
@@ -577,24 +585,28 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
               {visibleServices.map((item) => {
                 const priceText = formatServicePrice(item.base_price, item.currency);
                 const durationText =
-                  item.duration_minutes != null ? `${item.duration_minutes} min` : '60 min';
-                const categoryText = item.category ?? 'Wellness';
+                  item.duration_minutes != null ? `${item.duration_minutes} min` : null;
+                const categoryText = item.category ?? null;
 
                 return (
                   <View key={item.id} style={styles.treatmentCard}>
                     <View style={styles.treatmentTopRow}>
                       <Text style={styles.treatmentTitle}>{item.name}</Text>
-                      <Text style={styles.treatmentPrice}>{priceText}</Text>
+                      {priceText ? <Text style={styles.treatmentPrice}>{priceText}</Text> : null}
                     </View>
                     <View style={styles.treatmentMetaRow}>
-                      <View style={styles.metaItem}>
-                        <Ionicons name="time-outline" size={13} color="#FFB02E" />
-                        <Text style={styles.metaItemText}>{durationText}</Text>
-                      </View>
-                      <View style={styles.metaItem}>
-                        <Ionicons name="sparkles-outline" size={13} color="#FFB02E" />
-                        <Text style={styles.metaItemText}>{categoryText}</Text>
-                      </View>
+                      {durationText ? (
+                        <View style={styles.metaItem}>
+                          <Ionicons name="time-outline" size={13} color="#FFB02E" />
+                          <Text style={styles.metaItemText}>{durationText}</Text>
+                        </View>
+                      ) : null}
+                      {categoryText ? (
+                        <View style={styles.metaItem}>
+                          <Ionicons name="sparkles-outline" size={13} color="#FFB02E" />
+                          <Text style={styles.metaItemText}>{categoryText}</Text>
+                        </View>
+                      ) : null}
                     </View>
                   </View>
                 );
@@ -736,9 +748,11 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
 
             {/* 6. BOOKING OPTION CARD */}
             <View style={styles.optionCard}>
-              <View style={styles.priceBubble}>
-                <Text style={styles.priceBubbleText}>₹{bookingFeeAmount}</Text>
-              </View>
+              {bookingFeeText ? (
+                <View style={styles.priceBubble}>
+                  <Text style={styles.priceBubbleText}>{bookingFeeText}</Text>
+                </View>
+              ) : null}
               <View style={styles.optionTopRow}>
                 <View style={styles.radioOuter}>
                   <View style={styles.radioInner} />

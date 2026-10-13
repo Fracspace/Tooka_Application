@@ -14,21 +14,43 @@ import { useLocation } from './LocationContext';
 import type { Spa } from '../types/spa';
 
 import { getSpaDistance } from '../utils/distance';
+import { toRatingOrNull } from '../utils/number';
 
 // Bump the version whenever MappedSpa changes shape so stale caches are dropped.
-const CACHE_KEY = 'TOOKA_NEARBY_SPAS_CACHE_V2';
-const LEGACY_CACHE_KEY = 'TOOKA_NEARBY_SPAS_CACHE';
-const PLACEHOLDER_IMAGE =
-  'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=600&q=80';
+const CACHE_KEY = 'TOOKA_NEARBY_SPAS_CACHE_V3';
+const LEGACY_CACHE_KEYS = ['TOOKA_NEARBY_SPAS_CACHE', 'TOOKA_NEARBY_SPAS_CACHE_V2'];
+const PLACEHOLDER_IMAGE = 'https://d2f15ematxpwp4.cloudfront.net/appImages/Spacover.jpg';
+
+/** Amenity flags worth a tag on a card, in priority order. */
+const FEATURE_TAGS: [keyof Spa, string][] = [
+  ['has_jacuzzi', 'Jacuzzi'],
+  ['has_sauna', 'Sauna'],
+  ['has_steam_room', 'Steam room'],
+  ['has_couple_room', 'Couple room'],
+];
+
+const toTitleCase = (value: string): string =>
+  value
+    .trim()
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+
+const parseCoordinate = (value: string | null | undefined): number | null => {
+  const parsed = parseFloat(String(value ?? ''));
+  return Number.isFinite(parsed) && parsed !== 0 ? parsed : null;
+};
 
 export interface MappedSpa {
   id: string;
   name: string;
   image: string;
-  rating: number;
+  /** null until the spa has been rated - shown as "New", never as a made-up 4.5. */
+  rating: number | null;
   reviewCount: number;
-  latitude: number;
-  longitude: number;
+  /** null when the spa has no map pin (lat/lng missing), so no marker is drawn. */
+  latitude: number | null;
+  longitude: number | null;
   isOpen: boolean | null;
   distance: string;
   distanceMeters?: number | null;
@@ -67,38 +89,35 @@ export function mapApiSpaToMappedSpa(
   userLat: number,
   userLng: number,
 ): MappedSpa {
-  const lat = parseFloat(spa.lat) || 0;
-  const lng = parseFloat(spa.lng) || 0;
-
-  // Format rating and reviews safely
-  const ratingVal = parseFloat(String(spa.rating_google)) || 4.5;
   const reviewsCount = parseInt(String(spa.review_count_google), 10) || 0;
 
   // Derive distance preferring backend distance_m
   const { distanceStr, distanceMeters } = getSpaDistance(spa, userLat, userLng);
 
-  // Parse open status
-  let isOpenVal: boolean | null = null;
-  if ('isOpen' in spa) {
-    isOpenVal = !!(spa as any).isOpen;
-  }
+  // The API reports "closed today" but not "open right now", so only a known
+  // closure is shown; otherwise the status stays unknown (null).
+  const isOpenVal: boolean | null = spa.is_closed_today === true ? false : null;
+
+  // Card tags come from the spa itself. They were hardcoded 'Massage' / 'Spa'.
+  const categoryTag = spa.category?.trim() ? toTitleCase(spa.category) : '';
+  const featureTag = FEATURE_TAGS.find(([flag]) => spa[flag] === true)?.[1] ?? '';
 
   return {
     id: spa.id,
     name: spa.name ?? 'Untitled Spa',
-    image: spa.cover_photo_url ?? PLACEHOLDER_IMAGE,
-    rating: ratingVal,
+    image: spa.cover_photo_url || spa.images?.find((img) => img?.url)?.url || PLACEHOLDER_IMAGE,
+    rating: toRatingOrNull(spa.rating_google),
     reviewCount: reviewsCount,
-    latitude: lat,
-    longitude: lng,
+    latitude: parseCoordinate(spa.lat),
+    longitude: parseCoordinate(spa.lng),
     isOpen: isOpenVal,
     distance: distanceStr,
     distanceMeters,
-    description: spa.tagline ?? 'A premium relaxation experience offering therapies and massages.',
+    description: spa.tagline ?? '',
     address: spa.locality_name ?? spa.city_name ?? 'Location unavailable',
     subtitle: `${distanceStr} Away from you`,
-    typeA: 'Massage',
-    typeB: 'Spa',
+    typeA: categoryTag,
+    typeB: featureTag,
     starting_price: spa.starting_price ?? null,
   };
 }
@@ -123,7 +142,7 @@ export const NearbySpaProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     const loadCache = async () => {
       try {
-        AsyncStorage.removeItem(LEGACY_CACHE_KEY).catch(() => {});
+        LEGACY_CACHE_KEYS.forEach((key) => AsyncStorage.removeItem(key).catch(() => {}));
         const cached = await AsyncStorage.getItem(CACHE_KEY);
         if (cached) {
           const parsed = JSON.parse(cached) as MappedSpa[];

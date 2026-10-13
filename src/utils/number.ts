@@ -52,6 +52,29 @@ export const formatRating = (
 ): string => toSafeNumber(value, fallback).toFixed(fractionDigits);
 
 /**
+ * A positive rating as a number, or null when the spa has none yet. Spas with no
+ * rating used to be shown as 4.5 stars.
+ */
+export const toRatingOrNull = (value: unknown): number | null => {
+  const rating = toSafeNumber(value, NaN);
+  return rating > 0 ? rating : null;
+};
+
+/** The card badge a spa has earned, or '' - it used to be "Premium" for every spa. */
+export const getSpaBadge = (spa: { is_premium?: boolean; is_featured?: boolean }): string =>
+  spa.is_premium ? 'Premium' : spa.is_featured ? 'Featured' : '';
+
+/** "128 reviews", or '' when there are none to show. */
+export const formatReviewsLabel = (count: unknown): string => {
+  const reviews = Math.floor(toSafeNumber(count, 0));
+  return reviews > 0 ? `${reviews.toLocaleString('en-IN')} review${reviews === 1 ? '' : 's'}` : '';
+};
+
+/** "4.7", or "New" for a spa nobody has rated yet. */
+export const formatRatingLabel = (rating: number | null | undefined): string =>
+  rating != null && rating > 0 ? rating.toFixed(1) : 'New';
+
+/**
  * Calculate the lowest service price from an array of services.
  * Safe against undefined / null / non-numeric / missing prices.
  */

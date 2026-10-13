@@ -19,4 +19,14 @@ export interface Spa {
   minimum_booking_amount?: string | null;
   is_hidden?: boolean;
   starting_price?: string | null;
+  booking_fee?: string | null;
+  category?: string | null;
+  is_featured?: boolean;
+  is_premium?: boolean;
+  is_closed_today?: boolean;
+  has_jacuzzi?: boolean;
+  has_steam_room?: boolean;
+  has_sauna?: boolean;
+  has_couple_room?: boolean;
+  images?: { url?: string | null }[] | null;
 }

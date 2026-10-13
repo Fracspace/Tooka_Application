@@ -24,7 +24,8 @@ type BookingSummarySheetProps = {
   timeLabel: string;
   serviceName?: string;
   serviceDurationMinutes?: number;
-  bookingFee: number;
+  /** Formatted fee ("₹199"), or null when the spa has none on record. */
+  bookingFeeText: string | null;
   bookingFeeNote?: string;
 };
 
@@ -62,7 +63,7 @@ function BookingSummarySheet({
   timeLabel,
   serviceName,
   serviceDurationMinutes,
-  bookingFee,
+  bookingFeeText,
   bookingFeeNote,
 }: BookingSummarySheetProps): React.ReactElement {
   const insets = useSafeAreaInsets();
@@ -142,7 +143,7 @@ function BookingSummarySheet({
 
           <View style={styles.feeRow}>
             <Text style={styles.feeLabel}>Booking fee</Text>
-            <Text style={styles.feeValue}>₹{bookingFee}</Text>
+            <Text style={styles.feeValue}>{bookingFeeText ?? 'Shown at payment'}</Text>
           </View>
           {bookingFeeNote ? <Text style={styles.feeNote}>{bookingFeeNote}</Text> : null}
 

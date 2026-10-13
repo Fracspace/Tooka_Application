@@ -51,6 +51,7 @@ import type { TimeSlot } from '../Booking/types';
 import { bookingOption } from '../Booking/bookingData';
 import { buildBookingDateAndTime } from '../../utils/bookingDateTime';
 import SpaDetailsContent from '../Home/SpaDetailsContent';
+import { formatRatingLabel } from '../../utils/number';
 
 type ExploreNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -205,6 +206,11 @@ const SpaMarker = memo<SpaMarkerProps>(
       }),
     );
 
+    // Spas without a map pin used to be drawn at (0, 0), off the coast of Africa.
+    if (spa.latitude == null || spa.longitude == null) {
+      return null;
+    }
+
     return (
       <Marker
         ref={markerRef}
@@ -221,7 +227,7 @@ const SpaMarker = memo<SpaMarkerProps>(
           ]}>
           <View style={styles.markerRating}>
             <Ionicons name="star" size={10} color="#D28A00" />
-            <Text style={styles.markerRatingText}>{spa.rating.toFixed(1)}</Text>
+            <Text style={styles.markerRatingText}>{formatRatingLabel(spa.rating)}</Text>
           </View>
           <View style={[styles.markerImageRing, selected && styles.markedSelected]}>
             <Image
@@ -269,7 +275,7 @@ const ExploreScreen: React.FC = () => {
   );
 
   const { spas: contextSpas, loadNextPage, loadingMore } = useNearbySpas();
-  const spas = contextSpas as unknown as ExploreSpa[];
+  const spas: ExploreSpa[] = contextSpas;
   // console.log("Spas in exploreScreen: ", spas);
 
   const [selectedSpaId, setSelectedSpaId] = useState<string | undefined>(spas[0]?.id);
@@ -616,6 +622,9 @@ const ExploreScreen: React.FC = () => {
   ]);
 
   const animateToCoordinate = useCallback((spa: ExploreSpa) => {
+    if (spa.latitude == null || spa.longitude == null) {
+      return;
+    }
     mapRef.current?.animateCamera(
       {
         center: {
@@ -802,21 +811,22 @@ const ExploreScreen: React.FC = () => {
               <Text style={styles.cardTitle} numberOfLines={1}>
                 {item.name}
               </Text>
-              <View
-                style={[
-                  styles.statusPill,
-                  item.isOpen === false && styles.statusPillClosed,
-                  item.isOpen === null && { backgroundColor: '#F3EFE8' },
-                ]}>
-                <Text
+              {/* Only a known status is shown; an "Unknown" pill told the user nothing. */}
+              {item.isOpen !== null ? (
+                <View
                   style={[
-                    styles.statusText,
-                    item.isOpen === false && styles.statusTextClosed,
-                    item.isOpen === null && { color: '#8F8F8F' },
+                    styles.statusPill,
+                    item.isOpen === false && styles.statusPillClosed,
                   ]}>
-                  {item.isOpen === null ? 'Unknown' : (item.isOpen ? 'Open now' : 'Closed')}
-                </Text>
-              </View>
+                  <Text
+                    style={[
+                      styles.statusText,
+                      item.isOpen === false && styles.statusTextClosed,
+                    ]}>
+                    {item.isOpen ? 'Open now' : 'Closed today'}
+                  </Text>
+                </View>
+              ) : null}
             </View>
 
             <View style={styles.addressRow}>
@@ -828,8 +838,10 @@ const ExploreScreen: React.FC = () => {
 
             <View style={styles.ratingRow}>
               <Ionicons name="star" size={16} color="#F8C51D" />
-              <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
-              <Text style={styles.reviewText}>({formatReviewCount(item.reviewCount)})</Text>
+              <Text style={styles.ratingText}>{formatRatingLabel(item.rating)}</Text>
+              {item.reviewCount > 0 ? (
+                <Text style={styles.reviewText}>({formatReviewCount(item.reviewCount)})</Text>
+              ) : null}
               <Text style={styles.distanceText}>{item.distance}</Text>
             </View>
 

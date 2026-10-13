@@ -6,9 +6,11 @@ const FeaturedSpaCard = ({ item, onPress, onPressFavorite }) => {
   return (
     <Pressable onPress={onPress} style={styles.card}>
       <ImageBackground resizeMode='cover' source={{ uri: item.image }} style={styles.image} imageStyle={styles.imageStyle}>
-        <View style={styles.badgeContainer}>
-          <Text style={styles.badgeText}>{item.badge}</Text>
-        </View>
+        {item.badge ? (
+          <View style={styles.badgeContainer}>
+            <Text style={styles.badgeText}>{item.badge}</Text>
+          </View>
+        ) : null}
         {/* <Pressable onPress={onPressFavorite} style={styles.favoriteButton}>
           <Ionicons name={item.favorite ? 'heart' : 'heart-outline'} size={18} color={item.favorite ? '#FF4C4C' : '#FFFFFF'} />
         </Pressable> */}
@@ -16,7 +18,9 @@ const FeaturedSpaCard = ({ item, onPress, onPressFavorite }) => {
       <View style={styles.details}> 
         <View>
           <Text style={styles.spaName}>{item.name}</Text>
-          <Text style={styles.spaLocation}>{item.location} · {item.distance}</Text>
+          <Text style={styles.spaLocation}>
+            {[item.location, item.distance].filter(Boolean).join(' · ')}
+          </Text>
         </View>
         <View style={styles.ratingRow}>
           <View style={styles.ratingBadge}>
