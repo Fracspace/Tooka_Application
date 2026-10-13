@@ -40,7 +40,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BackendBookingListItem, BookingSection } from '../../../types/booking';
 import type { RootStackParamList } from '../../../navigation/AppNavigator';
-import { getBookingSection } from '../../../utils/getBookingSection';
+import { getBookingSection, isPaymentPendingStatus } from '../../../utils/getBookingSection';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -64,6 +64,8 @@ const C = {
   completedBg: '#E6F9EF',
   cancelled: '#D94A45',
   cancelledBg: '#FBE9E8',
+  pending: '#B26A00',
+  pendingBg: '#FFF1D6',
   outlinedBorder: '#FFAE2B',
 };
 
@@ -142,6 +144,22 @@ const StatusBadge = React.memo<StatusBadgeProps>(function StatusBadge({
         ]}
       >
         {isCompleted ? 'Completed' : 'Cancelled'}
+      </Text>
+    </View>
+  );
+});
+
+// ─── Sub-component: PaymentPendingBadge ───────────────────────────────────────
+
+const PaymentPendingBadge = React.memo(function PaymentPendingBadge() {
+  return (
+    <View
+      style={[styles.badge, styles.badgePending]}
+      accessibilityRole="text"
+      accessibilityLabel="Payment processing"
+    >
+      <Text style={[styles.badgeText, styles.badgeTextPending]}>
+        Payment processing
       </Text>
     </View>
   );
@@ -315,6 +333,7 @@ const BookingCard = React.memo<BookingCardProps>(function BookingCard({
 
   const section: BookingSection =
     (getBookingSection(booking.status) as BookingSection | null) ?? 'upcoming';
+  const isPaymentPending = isPaymentPendingStatus(booking.status);
 
   const bookingCode = booking.bookingReference ?? booking.bookingId ?? 'Pending';
   const badgeDate = useMemo(() => parseDateBadge(booking.date), [booking.date]);
@@ -384,7 +403,9 @@ const BookingCard = React.memo<BookingCardProps>(function BookingCard({
               <Ionicons name="time-outline" size={14} color={C.primary} style={{ marginRight: 4 }} />
               <Text style={styles.timeText}>{booking.time || '--'}</Text>
             </View>
-            {section === 'upcoming' ? (
+            {isPaymentPending ? (
+              <PaymentPendingBadge />
+            ) : section === 'upcoming' ? (
               <ReminderToggle />
             ) : (
               <StatusBadge section={section} />
@@ -436,9 +457,14 @@ const BookingCard = React.memo<BookingCardProps>(function BookingCard({
       </View>
 
       {/* ── Bottom Actions ── */}
-      {section === 'upcoming' &&
+      {/* Not confirmed until the payment clears, so no call action yet. */}
+      {isPaymentPending ? (
+        <Text style={styles.pendingNote}>
+          We'll confirm this booking as soon as your payment is verified.
+        </Text>
+      ) : section === 'upcoming' ? (
         <BookingActions section={section} booking={booking} />
-      }
+      ) : null}
     </View>
   );
 });
@@ -622,6 +648,19 @@ const styles = StyleSheet.create({
   },
   badgeTextCancelled: {
     color: C.cancelled,
+  },
+  badgePending: {
+    backgroundColor: C.pendingBg,
+  },
+  badgeTextPending: {
+    color: C.pending,
+  },
+  pendingNote: {
+    fontFamily: 'WorkSans-Regular',
+    fontSize: 12,
+    color: C.muted,
+    marginTop: 10,
+    textAlign: 'center',
   },
 
   // Reminder Toggle
