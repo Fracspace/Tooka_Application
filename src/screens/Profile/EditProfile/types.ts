@@ -11,8 +11,9 @@ export interface EditProfileForm {
   email: string;
   countryCode: string;
   phoneNumber: string;
-  gender: Gender;
-  dateOfBirth: Date;
+  /** null until the user picks one - never defaulted, so nothing is invented on save. */
+  gender: Gender | null;
+  dateOfBirth: Date | null;
   addressLine1: string;
   addressLine2: string;
   profilePhotoUri: ProfileImage;

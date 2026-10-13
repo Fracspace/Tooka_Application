@@ -7,7 +7,7 @@ import { styles } from '../styles';
 import type { Gender } from '../types';
 
 type Props = {
-  selectedGender: Gender;
+  selectedGender: Gender | null;
   onSelectGender: (gender: Gender) => void;
 };
 

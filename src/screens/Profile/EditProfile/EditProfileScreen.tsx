@@ -47,6 +47,9 @@ import {
 import { validateProfileUpdate, getProfileErrorMessage } from '../../../utils/profileValidation';
 import { residentialLocationFromGooglePlace } from '../../../utils/googlePlaces';
 
+/** Where the date picker starts when the user has no date of birth yet. */
+const DEFAULT_PICKER_DATE = new Date(2000, 0, 1);
+
 type EditProfileNavigationProp = NativeStackNavigationProp<RootStackParamList, 'EditProfile'>;
 
 const imagePickerOptions: ImageLibraryOptions = {
@@ -299,7 +302,9 @@ function EditProfileScreen(): React.ReactElement {
     updateProfile,
   ]);
 
-  const dateDisplayValue = DATE_FORMATTER.format(form.dateOfBirth);
+  const dateDisplayValue = form.dateOfBirth
+    ? DATE_FORMATTER.format(form.dateOfBirth)
+    : 'Select date of birth';
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
@@ -370,7 +375,8 @@ function EditProfileScreen(): React.ReactElement {
               />
               {showDatePicker ? (
                 <DateTimePicker
-                  value={form.dateOfBirth}
+                  // Only where the picker opens; nothing is saved unless the user picks.
+                  value={form.dateOfBirth ?? DEFAULT_PICKER_DATE}
                   mode="date"
                   display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                   maximumDate={maximumDate}

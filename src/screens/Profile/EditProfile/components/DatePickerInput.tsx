@@ -6,7 +6,7 @@ import { COLORS, DATE_FORMATTER } from '../constants';
 import { styles } from '../styles';
 
 type Props = {
-  value: Date;
+  value: Date | null;
   onPress: () => void;
   displayValue?: string;
 };
@@ -21,7 +21,9 @@ function DatePickerInput({ value, onPress, displayValue }: Props): React.ReactEl
     >
       <Text style={styles.inputLabel}>DATE OF BIRTH</Text>
       <View style={styles.dateContentRow}>
-        <Text style={styles.dateValue}>{displayValue ?? DATE_FORMATTER.format(value)}</Text>
+        <Text style={styles.dateValue}>
+          {displayValue ?? (value ? DATE_FORMATTER.format(value) : 'Select date of birth')}
+        </Text>
         <Ionicons name="calendar-outline" size={25} color={COLORS.heading} />
       </View>
     </Pressable>

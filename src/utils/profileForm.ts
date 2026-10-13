@@ -10,13 +10,22 @@ const pad = (value: number): string => String(value).padStart(2, '0');
 export const formatDateForApi = (date: Date): string =>
   `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 
-export const parseApiDate = (value?: string | null): Date => {
+// null for a missing or invalid date. This used to return 18 Dec 2000, which the
+// next profile save then stored as the user's real date of birth.
+export const parseApiDate = (value?: string | null): Date | null => {
   if (!value) {
-    return new Date(2000, 11, 18);
+    return null;
   }
 
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? new Date(2000, 11, 18) : parsed;
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const parseGender = (value?: string | null): EditProfileForm['gender'] => {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === 'female' || normalized === 'male' || normalized === 'other'
+    ? normalized
+    : null;
 };
 
 export const splitDisplayName = (profile: UserProfile | null): { firstName: string; lastName: string } => {
@@ -40,12 +49,8 @@ export const formFromProfile = (profile: UserProfile | null): EditProfileForm =>
     email: profile?.email ?? '',
     countryCode: '+91',
     phoneNumber: (profile?.phone ?? '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10),
-    gender:
-      profile?.gender?.toLowerCase() === 'female'
-        ? 'female'
-        : profile?.gender?.toLowerCase() === 'other'
-        ? 'other'
-        : 'male',
+    // Was 'male' for anyone who had not set a gender.
+    gender: parseGender(profile?.gender),
     dateOfBirth: parseApiDate(profile?.dateOfBirth),
     addressLine1: profile?.residentialLocation?.formattedAddress ?? profile?.city ?? '',
     addressLine2: [
@@ -73,8 +78,9 @@ export const buildUpdateProfilePayload = async (
     displayName,
     email: form.email.trim(),
     phone: form.phoneNumber.replace(/\D/g, ''),
-    gender: form.gender.toLowerCase(),
-    dateOfBirth: formatDateForApi(form.dateOfBirth),
+    // undefined (not '') so removeEmptyProfilePayloadValues leaves them out entirely.
+    gender: form.gender ?? undefined,
+    dateOfBirth: form.dateOfBirth ? formatDateForApi(form.dateOfBirth) : undefined,
     lat: form.residentialLocation?.latitude,
     lng: form.residentialLocation?.longitude,
     lati: currentLocation?.latitude,
