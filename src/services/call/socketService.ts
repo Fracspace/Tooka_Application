@@ -164,6 +164,35 @@ class SocketService {
     return this.socket?.connected || false;
   }
 
+  /**
+   * Resolve true once the socket is connected, or false after `timeoutMs`.
+   * Resolves false immediately when there is no socket at all (logged out).
+   * Used before placing a call: only the call_request socket event rings the spa,
+   * so dialling on a dead socket gave the user a minute of ringback for nothing.
+   */
+  waitForConnection(timeoutMs: number): Promise<boolean> {
+    const socket = this.socket;
+    if (!socket) return Promise.resolve(false);
+    if (socket.connected) return Promise.resolve(true);
+
+    // Not connected and not retrying on its own (gave up, or was closed): nudge it.
+    if (!socket.active) {
+      socket.connect();
+    }
+
+    return new Promise((resolve) => {
+      const onConnect = () => {
+        clearTimeout(timer);
+        resolve(true);
+      };
+      const timer = setTimeout(() => {
+        socket.off('connect', onConnect);
+        resolve(false);
+      }, timeoutMs);
+      socket.once('connect', onConnect);
+    });
+  }
+
   on(event: string, listener: SocketEventListener) {
     if (!this.listeners[event]) {
       this.listeners[event] = new Set();
@@ -185,8 +214,9 @@ class SocketService {
     }
   }
 
-  // Updated to accept optional acknowledgment callback (ack)
-  emit(event: string, data?: any, ack?: (response: any) => void) {
+  // Updated to accept optional acknowledgment callback (ack).
+  // Returns false when the event could not be sent because the socket is down.
+  emit(event: string, data?: any, ack?: (response: any) => void): boolean {
     const startTime = Date.now();
     const { callLogger } = require('./callLogger');
     const ctx = getLogContext();
@@ -205,7 +235,7 @@ class SocketService {
           message: 'Socket is not connected.',
         });
       }
-      return;
+      return false;
     }
     
     if (ack) {
@@ -220,6 +250,7 @@ class SocketService {
       const duration = Date.now() - startTime;
       callLogger.info('SOCKET', `EXIT Emit: ${event} (No ACK expected). Duration: ${duration}ms`, ctx);
     }
+    return true;
   }
 
   private rebindListeners() {

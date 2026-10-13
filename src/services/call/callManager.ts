@@ -1,4 +1,4 @@
-import { CallSession, CallState } from '../../types/call';
+import { CallSession, CallState, TERMINAL_CALL_STATES } from '../../types/call';
 import { callService, callActionBody, extractApiErrorMessage } from './callService';
 import SpaApi from '../../api/SpaApi';
 import {
@@ -13,7 +13,10 @@ import { StackActions } from '@react-navigation/native';
 export interface CallContextActions {
   setCallState: (state: CallState) => void;
   setSession: (session: CallSession | null) => void;
-  cleanupAndResetCall: (reason?: string) => void;
+  cleanupAndResetCall: (reason?: string) => Promise<void>;
+  // Show the terminal state briefly, then clean up. Tracked by CallContext so a
+  // stale timer can never tear down the NEXT call.
+  scheduleTerminalCleanup: (reason: string, delayMs?: number, onDone?: () => void) => void;
   getCallState: () => CallState;
   // PR-2: lets this flow surface the backend's user-facing rejection copy instead of
   // leaving the screen on a bare "Call Failed".
@@ -47,8 +50,10 @@ const getLogContext = (): any => {
 
 class CallManager {
   private contextActions: CallContextActions | null = null;
-  private isAccepting = false;
-  private isRejecting = false;
+  // One lock for both answers. Separate accept/reject flags let a Decline tapped
+  // during the accept's REST call mark the call REJECTED while the accept carried on
+  // and joined Agora anyway.
+  private actionInProgress: 'accept' | 'reject' | null = null;
 
   setContextActions(actions: CallContextActions) {
     this.contextActions = actions;
@@ -59,7 +64,7 @@ class CallManager {
   // flow into a second joinChannel(). Covers the REST window before the state has
   // moved off INCOMING.
   isAcceptInProgress(): boolean {
-    return this.isAccepting;
+    return this.actionInProgress === 'accept';
   }
 
   async handleIncomingCall(payload: any): Promise<boolean> {
@@ -92,6 +97,13 @@ class CallManager {
     ) {
       callLogger.info('CALL', 'EXIT: handleIncomingCall - IGNORED (ringing echo for our own outgoing call).', ctx, { payload });
       return false;
+    }
+
+    // A finished call still showing its result for ~2s is not "busy": finish tearing
+    // it down now and present the new call instead of auto-rejecting it.
+    if (TERMINAL_CALL_STATES.has(this.contextActions.getCallState())) {
+      callLogger.info('CALL', 'Incoming call supersedes a finished call. Cleaning up first.', ctx);
+      await this.contextActions.cleanupAndResetCall('superseded_by_incoming');
     }
 
     const currentState = this.contextActions.getCallState();
@@ -260,13 +272,12 @@ class CallManager {
     const ctx = getLogContext();
     callLogger.info('CALL', 'ENTER: acceptCall', ctx);
 
-    if (this.isAccepting || !this.contextActions) {
-      console.log('[IncomingCall] Accept already in progress, ignoring duplicate tap.');
+    if (this.actionInProgress || !this.contextActions) {
       const duration = Date.now() - startTime;
-      callLogger.warn('CALL', `Accept already in progress, ignoring duplicate tap. Duration: ${duration}ms`, ctx);
+      callLogger.warn('CALL', `Accept ignored: ${this.actionInProgress ?? 'no context'} already in progress. Duration: ${duration}ms`, ctx);
       return;
     }
-    this.isAccepting = true;
+    this.actionInProgress = 'accept';
 
     console.log('[IncomingCall] Accept pressed');
     const ringtoneStopStart = Date.now();
@@ -277,7 +288,7 @@ class CallManager {
     if (!pending) {
       console.error('[IncomingCall] No pending session to accept');
       callLogger.error('CALL', 'No pending session found to accept', ctx);
-      this.isAccepting = false;
+      this.actionInProgress = null;
       const duration = Date.now() - startTime;
       callLogger.info('CALL', `EXIT: acceptCall - FAILURE (no pending session). Duration: ${duration}ms`, ctx);
       return;
@@ -297,7 +308,8 @@ class CallManager {
         if (permission === 'blocked') {
           promptForMicrophoneSettings();
         }
-        this.isAccepting = false;
+        // Release the lock first so the decline below is allowed to run.
+        this.actionInProgress = null;
         // Decline rather than answering into silence - the caller learns immediately.
         await this.rejectCall();
         return;
@@ -429,7 +441,9 @@ class CallManager {
       // Persist logs as failure virtual file
       callLogger.persistSessionLogs(pending.sessionId, true);
     } finally {
-      this.isAccepting = false;
+      if (this.actionInProgress === 'accept') {
+        this.actionInProgress = null;
+      }
     }
   }
 
@@ -439,12 +453,12 @@ class CallManager {
     const ctx = getLogContext();
     callLogger.info('CALL', 'ENTER: rejectCall', ctx);
 
-    if (this.isRejecting || !this.contextActions) {
+    if (this.actionInProgress || !this.contextActions) {
       const duration = Date.now() - startTime;
-      callLogger.warn('CALL', `Reject already in progress, ignoring. Duration: ${duration}ms`, ctx);
+      callLogger.warn('CALL', `Reject ignored: ${this.actionInProgress ?? 'no context'} already in progress. Duration: ${duration}ms`, ctx);
       return;
     }
-    this.isRejecting = true;
+    this.actionInProgress = 'reject';
     
     console.log('[IncomingCall] Reject pressed');
     const stopRingStart = Date.now();
@@ -453,7 +467,7 @@ class CallManager {
 
     const pending = callService.getPendingSession();
     if (!pending) {
-      this.isRejecting = false;
+      this.actionInProgress = null;
       const duration = Date.now() - startTime;
       callLogger.warn('CALL', `No pending session found to reject. Duration: ${duration}ms`, ctx);
       return;
@@ -481,14 +495,10 @@ class CallManager {
       this.contextActions.setCallState(CallState.REJECTED);
       callLogger.info('STATE', `Transition state set to REJECTED. Duration: ${Date.now() - stateStart}ms`, ctx);
       
-      setTimeout(() => {
-        const cleanupStart = Date.now();
-        this.contextActions?.cleanupAndResetCall('rejected_by_user');
-        callLogger.info('CALL', `cleanupAndResetCall triggered. Duration to execute: ${Date.now() - cleanupStart}ms`, ctx);
-        // Persist session logs
+      this.contextActions.scheduleTerminalCleanup('rejected_by_user', 1000, () => {
         callLogger.persistSessionLogs(pending.sessionId, false);
-      }, 1000);
-      this.isRejecting = false;
+      });
+      this.actionInProgress = null;
       const totalDuration = Date.now() - startTime;
       callLogger.info('CALL', `EXIT: rejectCall - SUCCESS. Duration: ${totalDuration}ms`, ctx);
     }

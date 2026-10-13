@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { CallState, CallSession } from '../types/call';
+import { CallState, CallSession, TERMINAL_CALL_STATES } from '../types/call';
 
 const AUDIO_ROUTE = {
   HEADSET: 0,
@@ -123,6 +123,12 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const previousAudioRouteRef = useRef<number | null>(null);
   const isFocusLostRef = useRef<boolean>(false);
   const isCleaningUpRef = useRef<boolean>(false);
+  // The in-flight cleanup, so concurrent callers (retry, a superseding incoming call)
+  // can wait for it instead of bailing out while the old call is half torn down.
+  const cleanupPromiseRef = useRef<Promise<void> | null>(null);
+  // The ONE pending "show the result, then clean up" timer. These used to be untracked
+  // setTimeouts, so a timer from the previous call could fire into the next one.
+  const terminalCleanupRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const micDeniedRef = useRef<boolean>(false);
   const isRenewingTokenRef = useRef<boolean>(false);
 
@@ -242,8 +248,15 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [callState]);
 
-  const cleanupAndResetCall = useCallback(async (reason: string = 'unknown') => {
-    if (isCleaningUpRef.current) return;
+  const clearTerminalCleanup = useCallback(() => {
+    if (terminalCleanupRef.current) {
+      clearTimeout(terminalCleanupRef.current);
+      terminalCleanupRef.current = null;
+    }
+  }, []);
+
+  const cleanupAndResetCall = useCallback((reason: string = 'unknown'): Promise<void> => {
+    if (cleanupPromiseRef.current) return cleanupPromiseRef.current;
 
     // PR-2a: nothing left to tear down. Now that PR-1 releases the latch, several
     // independent paths each run a full cleanup for the same call (cancelCall's
@@ -255,83 +268,121 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       !!callService.getConnectingSession() ||
       !!callService.getActiveSession();
     if (!hasSession && callStateRef.current === CallState.IDLE) {
-      return;
+      return Promise.resolve();
     }
 
     isCleaningUpRef.current = true;
+    // This cleanup supersedes any scheduled one.
+    clearTerminalCleanup();
 
-    try {
-      console.log('[CALL] Cleaning up call');
-      ringtoneService.stop();
-
-      const sessionToSummarize = sessionRef.current;
-      const durationToSummarize = durationRef.current;
-
-      await callService.cleanup(reason);
-
-      if (durationTimerRef.current) {
-        clearInterval(durationTimerRef.current);
-        durationTimerRef.current = null;
-      }
-      if (outgoingTimeoutRef.current) {
-        clearTimeout(outgoingTimeoutRef.current);
-        outgoingTimeoutRef.current = null;
-      }
-      if (incomingTimeoutRef.current) {
-        clearTimeout(incomingTimeoutRef.current);
-        incomingTimeoutRef.current = null;
-      }
-      connectedAtRef.current = null;
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
-      }
-
-      previousAudioRouteRef.current = null;
-      isFocusLostRef.current = false;
-      micDeniedRef.current = false;
-      isRenewingTokenRef.current = false;
-
+    const run = async () => {
       try {
-        printCallSummary(sessionToSummarize, durationToSummarize, reason);
-      } catch (e) {
-        console.error('[CallContext] Failed to print call summary', e);
+        console.log('[CALL] Cleaning up call');
+        ringtoneService.stop();
+
+        const sessionToSummarize = sessionRef.current;
+        const durationToSummarize = durationRef.current;
+
+        await callService.cleanup(reason);
+
+        if (durationTimerRef.current) {
+          clearInterval(durationTimerRef.current);
+          durationTimerRef.current = null;
+        }
+        if (outgoingTimeoutRef.current) {
+          clearTimeout(outgoingTimeoutRef.current);
+          outgoingTimeoutRef.current = null;
+        }
+        if (incomingTimeoutRef.current) {
+          clearTimeout(incomingTimeoutRef.current);
+          incomingTimeoutRef.current = null;
+        }
+        connectedAtRef.current = null;
+        if (reconnectTimerRef.current) {
+          clearTimeout(reconnectTimerRef.current);
+          reconnectTimerRef.current = null;
+        }
+
+        previousAudioRouteRef.current = null;
+        isFocusLostRef.current = false;
+        micDeniedRef.current = false;
+        isRenewingTokenRef.current = false;
+
+        try {
+          printCallSummary(sessionToSummarize, durationToSummarize, reason);
+        } catch (e) {
+          console.error('[CallContext] Failed to print call summary', e);
+        }
+
+        setSession(null);
+        setIsMuted(false);
+        setIsSpeaker(false);
+        setDuration(0);
+        // PR-2: errorMessage is deliberately NOT cleared here. Cleanup runs ~2s after a
+        // terminal state, so clearing it wiped the explanation off the screen while the
+        // user was still looking at it. Every entry point (initiateCall,
+        // acceptIncomingCall, handleRinging) clears it when a new call begins.
+
+        // PR-1: null the refs synchronously. They are normally synced by a useEffect
+        // that only runs on the NEXT render, so between cleanup and that render the
+        // Agora callbacks below still saw a live session. Nulling here is also what
+        // keeps those callbacks inert now that the isCleaningUp latch is released.
+        sessionRef.current = null;
+        durationRef.current = 0;
+
+        // PR-1: cleanup deliberately bypasses setCallState(), which is the only place
+        // callStateRef is updated synchronously. Without this line the ref stays on the
+        // terminal state (ENDED/REJECTED/FAILED) until the next render, and in that
+        // window initiateCall() silently no-ops ("Try Again" does nothing) and
+        // callManager.handleIncomingCall() auto-rejects a genuine incoming call as busy.
+        callStateRef.current = CallState.IDLE;
+        callLogger.setCallState(CallState.IDLE);
+        setCallStateInternal(CallState.IDLE); // Force IDLE as reset
+
+        console.log('[CALL] Cleanup completed');
+      } finally {
+        // PR-1: the latch MUST always be released. It was previously set to true and
+        // never cleared, so every cleanup after the first early-returned above: the
+        // Agora channel was never left, the mic stayed live, and onUserOffline was
+        // swallowed so a remote hangup never ended the call locally.
+        isCleaningUpRef.current = false;
+        cleanupPromiseRef.current = null;
       }
+    };
 
-      setSession(null);
-      setIsMuted(false);
-      setIsSpeaker(false);
-      setDuration(0);
-      // PR-2: errorMessage is deliberately NOT cleared here. Cleanup runs ~2s after a
-      // terminal state, so clearing it wiped the explanation off the screen while the
-      // user was still looking at it. Every entry point (initiateCall,
-      // acceptIncomingCall, handleRinging) clears it when a new call begins.
+    cleanupPromiseRef.current = run();
+    return cleanupPromiseRef.current;
+  }, [clearTerminalCleanup]);
 
-      // PR-1: null the refs synchronously. They are normally synced by a useEffect
-      // that only runs on the NEXT render, so between cleanup and that render the
-      // Agora callbacks below still saw a live session. Nulling here is also what
-      // keeps those callbacks inert now that the isCleaningUp latch is released.
-      sessionRef.current = null;
-      durationRef.current = 0;
+  /**
+   * Keep a terminal state (ENDED, REJECTED, FAILED, ...) on screen for a moment, then
+   * clean up. Only one is ever pending; it is cancelled by any cleanup or new call, and
+   * if a different call has become live by the time it fires, it does nothing.
+   */
+  const scheduleTerminalCleanup = useCallback(
+    (reason: string, delayMs: number = TERMINAL_DISPLAY_MS, onDone?: () => void) => {
+      const currentCallId = () =>
+        sessionRef.current?.sessionId ??
+        callService.getActiveSession()?.sessionId ??
+        callService.getConnectingSession()?.sessionId ??
+        callService.getPendingSession()?.sessionId ??
+        null;
 
-      // PR-1: cleanup deliberately bypasses setCallState(), which is the only place
-      // callStateRef is updated synchronously. Without this line the ref stays on the
-      // terminal state (ENDED/REJECTED/FAILED) until the next render, and in that
-      // window initiateCall() silently no-ops ("Try Again" does nothing) and
-      // callManager.handleIncomingCall() auto-rejects a genuine incoming call as busy.
-      callStateRef.current = CallState.IDLE;
-      callLogger.setCallState(CallState.IDLE);
-      setCallStateInternal(CallState.IDLE); // Force IDLE as reset
+      clearTerminalCleanup();
+      const scheduledFor = currentCallId();
 
-      console.log('[CALL] Cleanup completed');
-    } finally {
-      // PR-1: the latch MUST always be released. It was previously set to true and
-      // never cleared, so every cleanup after the first early-returned above: the
-      // Agora channel was never left, the mic stayed live, and onUserOffline was
-      // swallowed so a remote hangup never ended the call locally.
-      isCleaningUpRef.current = false;
-    }
-  }, []);
+      terminalCleanupRef.current = setTimeout(() => {
+        terminalCleanupRef.current = null;
+        const liveCallId = currentCallId();
+        if (liveCallId !== null && liveCallId !== scheduledFor) {
+          callLogger.info('CALL', `Skipping stale cleanup (${reason}) for ${scheduledFor}; ${liveCallId} is live`, { sessionId: liveCallId });
+          return;
+        }
+        cleanupAndResetCall(reason).finally(() => onDone?.());
+      }, delayMs);
+    },
+    [clearTerminalCleanup, cleanupAndResetCall],
+  );
 
   // PR-4: ring for a bounded time, then give up. Nothing could ever reach MISSED, so
   // if the caller's cancel was lost (app killed, socket dropped) the callee's phone
@@ -342,6 +393,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         incomingTimeoutRef.current = setTimeout(() => {
           incomingTimeoutRef.current = null;
           if (callStateRef.current !== CallState.INCOMING) return;
+          // The user tapped Accept and it is still in flight (mic prompt, REST accept).
+          // Marking it MISSED here sent a reject while the accept went on to join Agora.
+          if (callManager.isAcceptInProgress()) return;
 
           console.warn(`[CallContext] Incoming call timed out after ${INCOMING_TIMEOUT_MS / 1000}s`);
           ringtoneService.stop();
@@ -355,14 +409,14 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
             callService.reportMissedCall(missedSession).catch(() => undefined);
           }
 
-          setTimeout(() => cleanupAndResetCall('missed_no_answer'), TERMINAL_DISPLAY_MS);
+          scheduleTerminalCleanup('missed_no_answer');
         }, INCOMING_TIMEOUT_MS);
       }
     } else if (incomingTimeoutRef.current) {
       clearTimeout(incomingTimeoutRef.current);
       incomingTimeoutRef.current = null;
     }
-  }, [callState, setCallState, cleanupAndResetCall]);
+  }, [callState, setCallState, scheduleTerminalCleanup]);
 
   // AppState Listener to track background/foreground transitions & handle stale state recovery
   useEffect(() => {
@@ -490,7 +544,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else if (state === 5) {
           setCallState(CallState.FAILED);
           setErrorMessage('Connection failed. Please check your network.');
-          setTimeout(() => cleanupAndResetCall('agora_connection_failed'), 2000);
+          scheduleTerminalCleanup('agora_connection_failed');
         }
       },
       onConnectionLost: () => {
@@ -581,7 +635,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       agoraService.removeListener(handlers);
     };
-  }, [setCallState, cleanupAndResetCall]);
+  }, [setCallState, cleanupAndResetCall, scheduleTerminalCleanup]);
 
   // Handle Socket Events.
   // PR-3: the connection lifecycle now belongs to SocketProvider
@@ -593,6 +647,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCallState,
       setSession,
       cleanupAndResetCall,
+      scheduleTerminalCleanup,
       getCallState: () => callStateRef.current,
       setErrorMessage,
     });
@@ -753,7 +808,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         outgoingTimeoutRef.current = null;
       }
       setCallState(CallState.REJECTED);
-      setTimeout(() => cleanupAndResetCall('call_rejected'), 2000);
+      scheduleTerminalCleanup('call_rejected');
     };
 
     const handleCanceled = (payload: any) => {
@@ -767,7 +822,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         outgoingTimeoutRef.current = null;
       }
       setCallState(CallState.ENDED);
-      setTimeout(() => cleanupAndResetCall('call_canceled'), 2000);
+      scheduleTerminalCleanup('call_canceled');
     };
 
     const handleEnded = (payload: any) => {
@@ -814,15 +869,25 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // PR-3: do NOT disconnect here. The socket is shared with other features and
       // is owned by SocketProvider.
     };
-  }, [setCallState, cleanupAndResetCall]);
+  }, [setCallState, cleanupAndResetCall, scheduleTerminalCleanup]);
 
   const initiateCall = useCallback(async (request: import('../types/call').CallRequest) => {
+    // "Try Again" is offered while the previous call's result is still on screen.
+    // Finish tearing that call down now rather than ignoring the tap until the
+    // display timer returns us to IDLE (which also closes CallScreen).
+    if (TERMINAL_CALL_STATES.has(callStateRef.current)) {
+      clearTerminalCleanup();
+      await cleanupAndResetCall('superseded_by_retry');
+    }
     if (callStateRef.current !== CallState.IDLE) {
       console.log(`[CallContext] initiateCall ignored. Current state is ${callStateRef.current}`);
       return;
     }
-    isCleaningUpRef.current = false;
+    clearTerminalCleanup();
     setErrorMessage(null);
+    // Socket events and cancelCall change the state while /request is in flight; read
+    // it through a function so the checks below are not narrowed to IDLE.
+    const stateNow = (): CallState => callStateRef.current;
     // PR-4: mark the attempt BEFORE awaiting. call_ringing for this call can reach us
     // before /chat/calls/request responds with a session id, and this is what lets
     // handleRinging recognise it as ours during that window.
@@ -830,6 +895,18 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setCallState(CallState.OUTGOING);
       const newSession = await callService.initiateCall(request);
+
+      // The user hung up while /request was in flight (cancelCall had no session to
+      // cancel yet). The session now exists on the server, so cancel it there too.
+      if (stateNow() !== CallState.OUTGOING && stateNow() !== CallState.RINGING) {
+        await callService.cancelCall(newSession);
+        scheduleTerminalCleanup('cancelled_before_request_resolved');
+        return;
+      }
+
+      // Set the ref synchronously too: cancelCall reads it, and the effect that syncs
+      // it only runs after the next render.
+      sessionRef.current = newSession;
       setSession(newSession);
 
       outgoingTimeoutRef.current = setTimeout(async () => {
@@ -847,18 +924,21 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (unansweredSession) {
           await callService.cancelCall(unansweredSession);
         }
-        setTimeout(() => cleanupAndResetCall('no_answer'), TERMINAL_DISPLAY_MS);
+        scheduleTerminalCleanup('no_answer');
       }, OUTGOING_TIMEOUT_MS);
     } catch (error) {
       console.error('[CallContext] Failed to initiate call', error);
       callService.clearOutgoingIntent();
-      // PR-2: the backend sends user-facing copy on rejection. This catch never set
-      // errorMessage, so a rejected call showed a bare "Call Failed" with no reason.
-      setErrorMessage(extractApiErrorMessage(error, 'Could not start the call. Please try again.'));
-      setCallState(CallState.FAILED);
-      setTimeout(() => cleanupAndResetCall(), 2000);
+      // Cancelled by the user while /request was in flight: no error to show.
+      if (stateNow() !== CallState.ENDED) {
+        // PR-2: the backend sends user-facing copy on rejection. This catch never set
+        // errorMessage, so a rejected call showed a bare "Call Failed" with no reason.
+        setErrorMessage(extractApiErrorMessage(error, 'Could not start the call. Please try again.'));
+        setCallState(CallState.FAILED);
+      }
+      scheduleTerminalCleanup('initiate_failed');
     }
-  }, [setCallState, cleanupAndResetCall]);
+  }, [setCallState, cleanupAndResetCall, clearTerminalCleanup, scheduleTerminalCleanup]);
 
   // PR-2: both surfaces now run the SAME implementation. These used to call
   // callService.answerCall/declineCall - a second, divergent flow that did the REST
@@ -868,7 +948,6 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // context API (and CallScreen) does not have to change.
   const acceptIncomingCall = useCallback(async () => {
     if (callStateRef.current !== CallState.INCOMING) return;
-    isCleaningUpRef.current = false;
     setErrorMessage(null);
     await callManager.acceptCall();
   }, []);
@@ -879,26 +958,37 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const cancelCall = useCallback(async () => {
-    if (!sessionRef.current || (callStateRef.current !== CallState.OUTGOING && callStateRef.current !== CallState.RINGING)) return;
+    if (callStateRef.current !== CallState.OUTGOING && callStateRef.current !== CallState.RINGING) return;
+    setCallState(CallState.ENDED);
+
+    const sessionToCancel = sessionRef.current;
+    if (!sessionToCancel) {
+      // /chat/calls/request has not returned yet. initiateCall sees ENDED when it
+      // does, cancels the new session on the server and schedules the cleanup.
+      return;
+    }
+
     try {
-      setCallState(CallState.ENDED);
-      await callService.cancelCall(sessionRef.current);
+      await callService.cancelCall(sessionToCancel);
     } catch (error) {
       console.error('[CallContext] Error canceling call', error);
     } finally {
-      setTimeout(() => cleanupAndResetCall(), 2000);
+      scheduleTerminalCleanup('cancelled_by_user');
     }
-  }, [setCallState, cleanupAndResetCall]);
+  }, [setCallState, scheduleTerminalCleanup]);
 
   const endCall = useCallback(async () => {
-    if (callStateRef.current === CallState.IDLE || callStateRef.current === CallState.ENDED) return;
+    const state = callStateRef.current;
+    if (state === CallState.IDLE || TERMINAL_CALL_STATES.has(state)) return;
+
+    if (state === CallState.OUTGOING || state === CallState.RINGING) {
+      // Not answered yet, so this is a cancel. cancelCall schedules its own cleanup.
+      await cancelCall();
+      return;
+    }
+
     try {
-      if (callStateRef.current === CallState.OUTGOING || callStateRef.current === CallState.RINGING) {
-        // If the call hasn't been answered, it's a cancel action.
-        await cancelCall();
-        return;
-      }
-      if (callStateRef.current === CallState.CONNECTING) {
+      if (state === CallState.CONNECTING) {
         console.log('[CALL] User cancelled during connecting');
       }
       setCallState(CallState.ENDED);
@@ -906,9 +996,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('[CallContext] Error ending call', error);
     } finally {
-      setTimeout(() => cleanupAndResetCall(), 2000);
+      scheduleTerminalCleanup('ended_by_user');
     }
-  }, [setCallState, cleanupAndResetCall, cancelCall]);
+  }, [setCallState, cancelCall, scheduleTerminalCleanup]);
 
   endCallRef.current = endCall;
 

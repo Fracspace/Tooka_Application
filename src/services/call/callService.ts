@@ -27,6 +27,11 @@ export const callActionBody = (
 // PR-2: the backend returns user-facing copy on rejection (e.g. BOOKING_NOT_ACTIVE ->
 // "This booking is expired..."). Nothing surfaced it, so every failure rendered as a
 // bare "Call Failed" with no reason.
+/** How long to wait for a reconnecting socket before refusing to place a call. */
+const SOCKET_WAIT_MS = 5_000;
+export const CALL_OFFLINE_MESSAGE =
+  "Can't reach the spa right now. Check your internet connection and try again.";
+
 export const extractApiErrorMessage = (error: any, fallback: string): string => {
   const data = error?.response?.data;
   return (
@@ -247,9 +252,16 @@ class CallService {
     const ctx = getLogContext();
     callLogger.info('REST', 'ENTER: initiateCall', ctx, { request });
     
-    console.log(`[REST] POST /chat/calls/request - Booking: ${request.bookingId}, Spa: ${request.spaId}`);
-    
     try {
+      // Only the call_request socket event rings the spa (see below), so placing a call
+      // on a dead socket left the user listening to ringback for a call that never rang.
+      const socketReady = await socketService.waitForConnection(SOCKET_WAIT_MS);
+      if (!socketReady) {
+        callLogger.warn('SOCKET', 'initiateCall aborted: socket not connected', ctx);
+        throw new Error(CALL_OFFLINE_MESSAGE);
+      }
+
+      console.log(`[REST] POST /chat/calls/request - Booking: ${request.bookingId}, Spa: ${request.spaId}`);
       const response = await authAxiosClient.post('/chat/calls/request', {
         booking_id: request.bookingId,
         spa_id: request.spaId,
@@ -323,10 +335,17 @@ class CallService {
       // deliberately; empirically the backend keeps them on ONE session id, so the
       // accept still matches our pending session.
       // Remove this only once the backend fans REST /request out to the spa room.
-      socketService.emit('call_request', {
+      const ringSent = socketService.emit('call_request', {
         bookingId: session.bookingId,
         callType: session.callType
       });
+      if (!ringSent) {
+        // The socket dropped between the check above and now. The session exists on
+        // the server but the spa will never ring - close it rather than leave it open.
+        callLogger.warn('SOCKET', 'call_request not sent; cancelling the new session', ctx);
+        await this.cancelCall(session);
+        throw new Error(CALL_OFFLINE_MESSAGE);
+      }
       console.log(`[Socket] Emitted call_request. Session: ${session.sessionId}`);
 
       const totalDuration = Date.now() - startTime;
@@ -485,18 +504,20 @@ class CallService {
       const duration = Date.now() - startTime;
       callLogger.info('REST', `endCall API Response. Status: ${response.status}, Duration: ${duration}ms`, ctx, response.data);
 
-      // PR-2a: restored for the same reason as call_request. REST /request was proven
-      // to fan out only to the caller's own room, so the same asymmetry is assumed for
-      // /end until tested - without this emit the portal can stay in a call after the
-      // app hangs up. Costs one redundant server call; a stuck call costs more.
-      socketService.emit('call_end', session.sessionId);
-      console.log(`[Socket] Emitted call_end. Session: ${session.sessionId}`);
-
       const totalDuration = Date.now() - startTime;
       callLogger.info('REST', `EXIT: endCall - SUCCESS. Duration: ${totalDuration}ms`, ctx);
     } catch (error: any) {
       const duration = Date.now() - startTime;
       callLogger.error('REST', `EXIT: endCall - FAILURE. Status: ${error?.response?.status || 'Unknown'}, Duration: ${duration}ms`, ctx, error);
+    }
+
+    // PR-2a: restored for the same reason as call_request. REST /request was proven
+    // to fan out only to the caller's own room, so the same asymmetry is assumed for
+    // /end until tested - without this emit the portal can stay in a call after the
+    // app hangs up. Costs one redundant server call; a stuck call costs more.
+    // Sent even when REST /end failed: that is exactly when the portal most needs it.
+    if (socketService.emit('call_end', session.sessionId)) {
+      console.log(`[Socket] Emitted call_end. Session: ${session.sessionId}`);
     }
   }
 

@@ -74,9 +74,15 @@ export default function CallScreen() {
   // user was left staring at a black screen with no controls (CallControls and
   // CallFooter both render null for IDLE) until they found the chevron.
   const hasBeenActiveRef = useRef(false);
+  // True while "Try Again" resets the finished call: it passes through IDLE on the way
+  // to OUTGOING, and that IDLE must not close the screen.
+  const isRetryingRef = useRef(false);
   useEffect(() => {
     if (callState !== CallState.IDLE) {
       hasBeenActiveRef.current = true;
+      return;
+    }
+    if (isRetryingRef.current) {
       return;
     }
     // Still IDLE and a call is about to start: wait for it.
@@ -102,8 +108,20 @@ export default function CallScreen() {
     if (navigation.canGoBack()) navigation.goBack();
   };
 
-  const handleRetry = () => {
-    if (bookingId && spaId) initiateCall({ bookingId, spaId, callType: callType || 'voice' });
+  const handleRetry = async () => {
+    if (!bookingId || !spaId || isRetryingRef.current) return;
+    isRetryingRef.current = true;
+    try {
+      await initiateCall({
+        bookingId,
+        spaId,
+        callType: callType || 'voice',
+        spaName,
+        spaAvatarUrl: spaAvatar,
+      });
+    } finally {
+      isRetryingRef.current = false;
+    }
   };
 
   const handleMessage = () => {

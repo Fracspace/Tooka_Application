@@ -13,6 +13,18 @@ export enum CallState {
   ENDED = 'ENDED',
 }
 
+/**
+ * States a call rests in while its result is on screen, before cleanup returns it
+ * to IDLE. A new call (retry, or a fresh incoming one) may supersede any of these.
+ */
+export const TERMINAL_CALL_STATES: ReadonlySet<CallState> = new Set([
+  CallState.MISSED,
+  CallState.NO_ANSWER,
+  CallState.REJECTED,
+  CallState.FAILED,
+  CallState.ENDED,
+]);
+
 export interface CallParticipant {
   id: string;
   name: string;
