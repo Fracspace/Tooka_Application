@@ -50,6 +50,7 @@ class CrashlyticsService {
   async clearUser() {
     try {
       await crashlytics().setUserId('');
+      await crashlytics().setAttribute('user_id', '');
     } catch {}
   }
 

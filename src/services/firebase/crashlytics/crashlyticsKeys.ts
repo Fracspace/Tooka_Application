@@ -1,7 +1,6 @@
 export const CrashlyticsKeys = {
   USER_ID: 'user_id',
   USER_NAME: 'user_name',
-  USER_PHONE: 'user_phone',
 
   SCREEN: 'screen',
 

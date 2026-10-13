@@ -16,6 +16,25 @@ import {
 } from '../utils/authStorage';
 import type { AuthUser, AuthContextValue } from '../types/auth';
 import { Crashlytics, CrashlyticsKeys } from '../services/firebase/crashlytics';
+import { FirebaseMessaging } from '../services/firebase/messaging';
+import { removeFcmToken } from '../utils/fcmStorage';
+import { clearOnboardingAnswers } from '../utils/onboardingStorage';
+
+/**
+ * Everything on this device that belongs to the signed-in user. Logout used to clear
+ * only the auth session, so the device kept receiving the previous user's push
+ * notifications (its FCM token stayed registered to their profile) and their
+ * onboarding answers were synced onto the next account.
+ */
+const clearUserDeviceState = async (): Promise<void> => {
+  await Promise.allSettled([
+    clearAuthSession(),
+    Crashlytics.clearUser(),
+    FirebaseMessaging.deleteToken(),
+    removeFcmToken(),
+    clearOnboardingAnswers(),
+  ]);
+};
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -41,13 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           CrashlyticsKeys.USER_ID,
           session.user.id,
         );
-
-        await Crashlytics.setCustomKey(
-          CrashlyticsKeys.USER_PHONE,
-          session.user.phoneNumber,
-        );
       }
-      console.log('AuthContext hydrated:', session.token);
     } catch (error) {
       if (__DEV__) {
         console.warn('[AuthContext] hydration error:', error);
@@ -67,22 +80,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const response = await AuthApi.login({ phone, otp });
       const { token: serverToken, user: serverUser } = response.data;
-      console.log("token: ", serverToken);
 
-      // Update state
+      // Persist BEFORE updating state: logging in triggers profile/push-token sync,
+      // which reads the session from storage and skipped itself when it ran first.
+      await writeAuthSession(serverToken, serverUser, true);
+
       setToken(serverToken);
       setUser(serverUser);
       setIsLoggedIn(true);
 
       await Crashlytics.setUserId(serverUser.id);
-
-      await Crashlytics.setCustomKey(
-        CrashlyticsKeys.USER_PHONE,
-        serverUser.phoneNumber,
-      );
-
-      // Save to storage
-      await writeAuthSession(serverToken, serverUser, true);
 
       return serverUser;
     } catch (error) {
@@ -106,13 +113,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         const { token: serverToken, user: serverUser } = response.data;
 
-        // Update state
+        // Persist before updating state - see login.
+        await writeAuthSession(serverToken, serverUser, true);
+
         setToken(serverToken);
         setUser(serverUser);
         setIsLoggedIn(true);
-
-        // Save to storage
-        await writeAuthSession(serverToken, serverUser, true);
 
         return serverUser;
       } catch (error) {
@@ -131,8 +137,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       setToken(null);
       setIsLoggedIn(false);
-      await clearAuthSession();
-      await Crashlytics.clearUser();
+      await clearUserDeviceState();
     } catch (error) {
       if (__DEV__) {
         console.warn('[AuthContext] logout error:', error);
@@ -147,8 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       setToken(null);
       setIsLoggedIn(false);
-      await clearAuthSession();
-      await Crashlytics.clearUser();
+      await clearUserDeviceState();
     } catch (error) {
       if (__DEV__) {
         console.warn('[AuthContext] deleteAccount error:', error);

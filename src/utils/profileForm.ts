@@ -66,7 +66,6 @@ export const buildUpdateProfilePayload = async (
   const displayName = form.displayName.trim() || `${form.firstName.trim()} ${form.lastName.trim()}`.trim();
   const fcmToken = await getFcmToken();
   const onboarding = await getOnboarding();
-  console.log("FCM TOken :", fcmToken);
 
   const payload: UpdateProfilePayload = {
     username: displayName,
@@ -84,7 +83,6 @@ export const buildUpdateProfilePayload = async (
     pushTokenPlatform: Platform.OS === 'ios' ? 'ios' : 'android',
     preferredCategories: onboarding?.answers?.preferences ?? [],
   };
-  console.log('buildUpdateProfilePayload: form:', form, 'currentLocation:', currentLocation, 'payload:', payload);
 
   return removeEmptyProfilePayloadValues(payload);
 };

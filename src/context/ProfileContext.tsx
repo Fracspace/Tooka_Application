@@ -198,7 +198,6 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (saving) {
         return profile;
       }
-      console.log("Payloadddd: ", payload);
 
       setSaving(true);
       setError(null);

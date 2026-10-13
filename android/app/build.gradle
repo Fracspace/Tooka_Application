@@ -66,17 +66,32 @@ android {
 
         release {
 
-            // If key.properties doesn't exist,
-            // it falls back to debug so project still builds.
+            // Without key.properties there is no release signing config; the guard at
+            // the end of this file then fails release tasks instead of quietly
+            // producing a build signed with the public debug key.
             signingConfig keystorePropertiesFile.exists()
                     ? signingConfigs.release
-                    : signingConfigs.debug
+                    : null
 
             minifyEnabled enableProguardInReleaseBuilds
 
             proguardFiles getDefaultProguardFile("proguard-android.txt"),
                     "proguard-rules.pro"
         }
+    }
+}
+
+// Debug builds never need the release key, so only release tasks are blocked.
+gradle.taskGraph.whenReady { graph ->
+    def buildsRelease = graph.allTasks.any { task ->
+        task.project == project && task.name ==~ /(assemble|bundle|install|package)Release/
+    }
+    if (buildsRelease && !keystorePropertiesFile.exists()) {
+        throw new GradleException(
+            "android/key.properties is missing, so this release build cannot be signed " +
+            "with the Tooka upload key. Add key.properties (see the signingConfigs block) " +
+            "and build again."
+        )
     }
 }
 

@@ -38,13 +38,11 @@ const ProfileApi = {
     payload: UpdateProfilePayload,
     signal?: AbortSignal,
   ): Promise<UserProfile | null> => {
-    console.log("UPdate peofile payload: ", payload);
     const response = await authAxiosClient.put<ProfileApiResponse>(
       '/users/profile',
       payload,
       { signal },
     );
-    console.log("Response:", response.data);
 
     const raw =
       response.data?.data ??

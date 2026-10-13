@@ -62,7 +62,6 @@ const ProfileScreen: React.FC = () => {
   const displayEmail = profile?.email?.trim() || user?.email?.trim() || 'Add your email';
   const displayPhone = normalizePhone(profile?.phone ?? user?.phone ?? user?.phoneNumber);
   const avatarSource = profile?.avatarUrl ? { uri: profile.avatarUrl } : undefined;
-  console.log("userAvatar: ", profile);
 
   const showUnavailableToast = useCallback((title: string) => {
     Toast.show({

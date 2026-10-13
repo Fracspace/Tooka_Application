@@ -13,13 +13,11 @@ class FirebaseMessagingService {
         await messaging().registerDeviceForRemoteMessages();
       }
 
-      const token = await messaging().getToken();
-
-      console.log('[FCM] Token:', token);
-
-      return token;
+      return await messaging().getToken();
     } catch (error) {
-      console.error('[FCM] Failed to fetch token:', error);
+      if (__DEV__) {
+        console.error('[FCM] Failed to fetch token:', error);
+      }
       return null;
     }
   }
@@ -34,10 +32,10 @@ class FirebaseMessagingService {
       }
 
       await messaging().deleteToken();
-
-      console.log('[FCM] Token deleted');
     } catch (error) {
-      console.error('[FCM] Failed to delete token:', error);
+      if (__DEV__) {
+        console.error('[FCM] Failed to delete token:', error);
+      }
     }
   }
 

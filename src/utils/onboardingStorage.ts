@@ -59,6 +59,19 @@ export async function getOnboarding(): Promise<OnboardingStorageData | null> {
 }
 
 /**
+ * Forgets the saved goals/preferences but keeps onboarding marked as completed.
+ * Called on logout: profile sync pushes these answers to whoever logs in next, so
+ * they used to overwrite the next account's preferred categories.
+ */
+export async function clearOnboardingAnswers(): Promise<void> {
+  const existing = await getOnboarding();
+  if (!existing) {
+    return;
+  }
+  await saveOnboarding({ goals: [], preferences: [] });
+}
+
+/**
  * Clears the onboarding data from AsyncStorage.
  */
 export async function clearOnboarding(): Promise<void> {
