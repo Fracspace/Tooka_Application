@@ -7,6 +7,12 @@ import type { BackendBookingListItem } from '../types/booking';
 import { getBookingErrorMessage } from '../utils/getBookingErrorMessage';
 import { getBookingSection } from '../utils/getBookingSection';
 
+/** Appointment time in ms for sorting; bookings without one sort last. */
+const appointmentTime = (booking: { appointmentAt?: string | null }): number => {
+  const time = booking.appointmentAt ? Date.parse(booking.appointmentAt) : NaN;
+  return Number.isFinite(time) ? time : Number.MAX_SAFE_INTEGER;
+};
+
 type FetchOptions = {
   refresh?: boolean;
   silent?: boolean;
@@ -90,27 +96,29 @@ export function useMyBookings() {
     [fetchBookings],
   );
 
+  // Sorted: the list used to be in whatever order the server returned. Upcoming
+  // soonest first; completed and cancelled most recent first.
   const upcomingBookings = useMemo(
     () =>
-      allBookings.filter(
-        booking => getBookingSection(booking.status) === 'upcoming',
-      ),
+      allBookings
+        .filter(booking => getBookingSection(booking.status) === 'upcoming')
+        .sort((a, b) => appointmentTime(a) - appointmentTime(b)),
     [allBookings],
   );
 
   const completedBookings = useMemo(
     () =>
-      allBookings.filter(
-        booking => getBookingSection(booking.status) === 'completed',
-      ),
+      allBookings
+        .filter(booking => getBookingSection(booking.status) === 'completed')
+        .sort((a, b) => appointmentTime(b) - appointmentTime(a)),
     [allBookings],
   );
 
   const cancelledBookings = useMemo(
     () =>
-      allBookings.filter(
-        booking => getBookingSection(booking.status) === 'cancelled',
-      ),
+      allBookings
+        .filter(booking => getBookingSection(booking.status) === 'cancelled')
+        .sort((a, b) => appointmentTime(b) - appointmentTime(a)),
     [allBookings],
   );
 

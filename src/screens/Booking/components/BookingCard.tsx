@@ -23,13 +23,13 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Linking,
   Pressable,
   StyleProp,
   StyleSheet,
-  Switch,
   Text,
   useWindowDimensions,
   View,
@@ -41,6 +41,10 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BackendBookingListItem, BookingSection } from '../../../types/booking';
 import type { RootStackParamList } from '../../../navigation/AppNavigator';
 import { getBookingSection, isPaymentPendingStatus } from '../../../utils/getBookingSection';
+import { usePaymentContext } from '../../../context/PaymentContext';
+import { mapPaymentError } from '../../../payment/PaymentMapper';
+import { buildBookingDateAndTime } from '../../../utils/bookingDateTime';
+import { bookingOption } from '../bookingData';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -151,41 +155,20 @@ const StatusBadge = React.memo<StatusBadgeProps>(function StatusBadge({
 
 // ─── Sub-component: PaymentPendingBadge ───────────────────────────────────────
 
-const PaymentPendingBadge = React.memo(function PaymentPendingBadge() {
+const PaymentPendingBadge = React.memo(function PaymentPendingBadge({
+  label,
+}: {
+  label: string;
+}) {
   return (
     <View
       style={[styles.badge, styles.badgePending]}
       accessibilityRole="text"
-      accessibilityLabel="Payment processing"
+      accessibilityLabel={label}
     >
       <Text style={[styles.badgeText, styles.badgeTextPending]}>
-        Payment processing
+        {label}
       </Text>
-    </View>
-  );
-});
-
-// ─── Sub-component: ReminderToggle ────────────────────────────────────────────
-
-const ReminderToggle = React.memo(function ReminderToggle() {
-  const [enabled, setEnabled] = useState(false);
-
-  const toggle = useCallback(() => setEnabled(v => !v), []);
-
-  return (
-    <View style={styles.reminderRow} accessibilityRole="none">
-      <Text style={styles.reminderLabel}>Remind me</Text>
-      <Switch
-        value={enabled}
-        onValueChange={toggle}
-        trackColor={{ false: '#E0D8CC', true: C.primary }}
-        thumbColor={C.white}
-        ios_backgroundColor="#E0D8CC"
-        accessibilityRole="switch"
-        accessibilityLabel="Set booking reminder"
-        accessibilityState={{ checked: enabled }}
-        style={styles.reminderSwitch}
-      />
     </View>
   );
 });
@@ -196,21 +179,32 @@ type BookingActionsProps = {
   booking: BackendBookingListItem;
 };
 
+const getSpaId = (booking: BackendBookingListItem): string | undefined =>
+  (booking.raw.spa_id as string | undefined) ||
+  ((booking.raw.spa as { id?: string } | undefined)?.id ?? undefined);
+
 // Only rendered for upcoming, confirmed bookings (see BookingCard).
 const BookingActions = React.memo<BookingActionsProps>(function BookingActions({
   booking,
 }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const spaId = getSpaId(booking);
 
   const handleFreeCallSpa = useCallback(() => {
+    if (!spaId) return;
     navigation.navigate('CallScreen', {
       bookingId: booking.id,
-      spaId: (booking.raw.spa_id as string) || (booking.raw.spa as any)?.id || 'unknown_spa',
+      spaId,
       callType: 'voice',
       spaName: booking.spaName || 'Unknown Spa',
       spaAvatar: booking.raw?.spa_snapshot?.cover_photo_url || FALLBACK_IMAGE.uri,
     });
-  }, [navigation, booking]);
+  }, [navigation, booking, spaId]);
+
+  // No spa id: there is nobody to call (this used to dial the placeholder 'unknown_spa').
+  if (!spaId) {
+    return null;
+  }
 
   return (
     <View style={styles.actionsRow}>
@@ -228,6 +222,106 @@ const BookingActions = React.memo<BookingActionsProps>(function BookingActions({
         <Text style={[styles.actionBtnText, styles.actionBtnTextPrimary]}>
           Free Call Spa
         </Text>
+      </Pressable>
+    </View>
+  );
+});
+
+// ─── Sub-component: PendingPaymentActions ─────────────────────────────────────
+
+/** A payment is mid-flight (e.g. confirming in a UPI app): wait, do not pay again. */
+const isPaymentInFlight = (booking: BackendBookingListItem): boolean =>
+  (booking.paymentStatus ?? '').toString().trim().toLowerCase() === 'processing';
+
+// For pending_payment bookings. Every one of them used to say "Payment processing"
+// forever, even when the user had simply cancelled at the gateway, with no way to pay.
+const PendingPaymentActions = React.memo(function PendingPaymentActions({
+  booking,
+}: {
+  booking: BackendBookingListItem;
+}) {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { initiatePayment, setBookingSummary } = usePaymentContext();
+  const [starting, setStarting] = useState(false);
+
+  const handleCompletePayment = useCallback(async () => {
+    if (starting) return;
+    setStarting(true);
+    try {
+      const snapshot = booking.raw?.spa_snapshot;
+      const summary = {
+        spaName: booking.spaName,
+        spaImage: snapshot?.cover_photo_url ?? undefined,
+        location: [snapshot?.locality_name, snapshot?.city_name].filter(Boolean).join(', ') || undefined,
+        serviceName: booking.serviceName ?? bookingOption.title,
+        serviceDurationMinutes: null,
+        appointmentDate: booking.date,
+        appointmentTime: booking.time,
+        bookingDateAndTime: buildBookingDateAndTime({
+          appointmentDate: booking.date,
+          appointmentTime: booking.time,
+        }),
+      };
+      setBookingSummary(summary);
+      const payment = await initiatePayment(
+        booking.id,
+        booking.bookingReference ?? undefined,
+        summary,
+      );
+      navigation.navigate('PaymentScreen', {
+        paymentId: payment.paymentId,
+        bookingId: payment.bookingId,
+        bookingRef: payment.bookingRef,
+        paymentSessionId: payment.paymentSessionId,
+        cashfreeOrderId: payment.cashfreeOrderId,
+        amount: payment.amount,
+        currency: payment.currency,
+        spaName: payment.spaName,
+        spaImage: payment.spaImage,
+        location: payment.location,
+        serviceName: payment.serviceName,
+        serviceDurationMinutes: payment.serviceDurationMinutes,
+        appointmentDate: payment.appointmentDate,
+        appointmentTime: payment.appointmentTime,
+        bookingDateAndTime: payment.bookingDateAndTime,
+      });
+    } catch (error) {
+      Alert.alert("Couldn't start the payment", mapPaymentError(error).userMessage);
+    } finally {
+      setStarting(false);
+    }
+  }, [booking, initiatePayment, navigation, setBookingSummary, starting]);
+
+  if (isPaymentInFlight(booking)) {
+    return (
+      <Text style={styles.pendingNote}>
+        We'll confirm this booking as soon as your payment is verified.
+      </Text>
+    );
+  }
+
+  return (
+    <View style={styles.actionsRow}>
+      <Pressable
+        onPress={handleCompletePayment}
+        disabled={starting}
+        style={({ pressed }) => [
+          styles.actionBtn,
+          styles.actionBtnPrimary,
+          styles.actionBtnHalf,
+          (pressed || starting) && styles.actionBtnPressed,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel="Complete payment"
+        accessibilityState={{ disabled: starting, busy: starting }}
+      >
+        {starting ? (
+          <ActivityIndicator color={C.white} />
+        ) : (
+          <Text style={[styles.actionBtnText, styles.actionBtnTextPrimary]}>
+            Complete payment
+          </Text>
+        )}
       </Pressable>
     </View>
   );
@@ -314,9 +408,9 @@ const BookingCard = React.memo<BookingCardProps>(function BookingCard({
               <Text style={styles.timeText}>{booking.time || '--'}</Text>
             </View>
             {isPaymentPending ? (
-              <PaymentPendingBadge />
-            ) : section === 'upcoming' ? (
-              <ReminderToggle />
+              <PaymentPendingBadge
+                label={isPaymentInFlight(booking) ? 'Payment processing' : 'Awaiting payment'}
+              />
             ) : (
               <StatusBadge section={section} />
             )}
@@ -369,9 +463,7 @@ const BookingCard = React.memo<BookingCardProps>(function BookingCard({
       {/* ── Bottom Actions ── */}
       {/* Not confirmed until the payment clears, so no call action yet. */}
       {isPaymentPending ? (
-        <Text style={styles.pendingNote}>
-          We'll confirm this booking as soon as your payment is verified.
-        </Text>
+        <PendingPaymentActions booking={booking} />
       ) : section === 'upcoming' ? (
         <BookingActions booking={booking} />
       ) : null}
@@ -571,21 +663,6 @@ const styles = StyleSheet.create({
     color: C.muted,
     marginTop: 10,
     textAlign: 'center',
-  },
-
-  // Reminder Toggle
-  reminderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  reminderLabel: {
-    fontFamily: 'WorkSans-Medium',
-    fontSize: 11,
-    color: C.muted,
-  },
-  reminderSwitch: {
-    transform: [{ scaleX: 0.7 }, { scaleY: 0.7 }],
   },
 
   // Actions Row

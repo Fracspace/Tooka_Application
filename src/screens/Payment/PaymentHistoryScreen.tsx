@@ -19,6 +19,7 @@ import type { RootStackParamList } from '../../navigation/AppNavigator';
 import type { BackendBookingListItem } from '../../types/booking';
 import PaymentCard from './components/PaymentCard';
 import PaymentHeader from './components/PaymentHeader';
+import { getBookingPaymentStatus, getPaymentCategory } from './utils/paymentFormatters';
 
 type PaymentFilterTab = 'all' | 'completed' | 'cancelled';
 
@@ -50,48 +51,29 @@ export const PaymentHistoryScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<PaymentFilterTab>('all');
 
   const {
-    allBookings,
-    completedBookings,
-    cancelledBookings,
-    upcomingBookings,
+    allBookings: allPayments,
     loading,
     refreshing,
+    error,
+    refetch,
     onRefresh,
   } = useMyBookings();
 
-  // Combine all bookings to show history
-  const allPayments = useMemo(() => {
-    if (allBookings && allBookings.length > 0) {
-      return allBookings;
-    }
-    return [...completedBookings, ...cancelledBookings, ...upcomingBookings];
-  }, [allBookings, completedBookings, cancelledBookings, upcomingBookings]);
-
-  // Helper to check if payment is captured (completed)
-  const isPaymentCaptured = useCallback((item: BackendBookingListItem) => {
-    const rawPaymentStatus = (item.raw as Record<string, unknown>)?.payment_status;
-    const status = (item.paymentStatus || rawPaymentStatus || '')
-      .toString()
-      .toLowerCase()
-      .trim();
-    return status === 'captured';
-  }, []);
-
-  // Filter based on selected tab:
-  // "completed" -> payment_status === "captured"
-  // "cancelled" -> payment_status !== "captured"
-  // "all"       -> all payments
+  // Filter by the real payment status. "Cancelled" used to mean "not captured",
+  // so pending and never-paid bookings were listed (and labelled) as cancelled.
   const filteredPayments = useMemo(() => {
+    const category = (item: BackendBookingListItem) =>
+      getPaymentCategory(getBookingPaymentStatus(item));
     switch (activeTab) {
       case 'completed':
-        return allPayments.filter(item => isPaymentCaptured(item));
+        return allPayments.filter(item => category(item) === 'completed');
       case 'cancelled':
-        return allPayments.filter(item => !isPaymentCaptured(item));
+        return allPayments.filter(item => category(item) === 'unsuccessful');
       case 'all':
       default:
         return allPayments;
     }
-  }, [activeTab, allPayments, isPaymentCaptured]);
+  }, [activeTab, allPayments]);
 
   const isTablet = Math.min(width, height) >= 600;
   const contentMaxWidth = isTablet ? 720 : width;
@@ -121,6 +103,24 @@ export const PaymentHistoryScreen: React.FC = () => {
     }
 
     const illustrationSize = isTablet ? 400 : Math.min(width * 0.8, 280);
+
+    // A failed load used to show "No Payment History Yet!".
+    if (error && filteredPayments.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyTitle}>Couldn't load your payments</Text>
+          <Text style={styles.emptyBody}>{error}</Text>
+          <Pressable
+            onPress={refetch}
+            style={styles.retryButton}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading payments"
+          >
+            <Text style={styles.retryButtonText}>Try again</Text>
+          </Pressable>
+        </View>
+      );
+    }
 
     const emptyMessages: Record<PaymentFilterTab, { title: string; body: string }> = {
       all: {
@@ -152,7 +152,7 @@ export const PaymentHistoryScreen: React.FC = () => {
         <Text style={styles.emptyBody}>{currentMsg.body}</Text>
       </View>
     );
-  }, [loading, refreshing, filteredPayments.length, isTablet, width, activeTab]);
+  }, [loading, refreshing, filteredPayments.length, isTablet, width, activeTab, error, refetch]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
@@ -316,6 +316,20 @@ const styles = StyleSheet.create({
     color: PALETTE.textMuted,
     textAlign: 'center',
     lineHeight: 22,
+  },
+  retryButton: {
+    marginTop: 18,
+    height: 42,
+    paddingHorizontal: 26,
+    borderRadius: 10,
+    backgroundColor: PALETTE.heroOrange,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryButtonText: {
+    fontFamily: 'WorkSans-SemiBold',
+    fontSize: 14,
+    color: '#FFFFFF',
   },
 
   // Skeleton

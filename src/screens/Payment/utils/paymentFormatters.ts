@@ -73,6 +73,40 @@ export function getPaymentStatusUI(
   }
 }
 
+export type PaymentCategory = 'completed' | 'unsuccessful' | 'pending' | 'other';
+
+/** Which Payment History tab a payment status belongs to. */
+export function getPaymentCategory(paymentStatus: string | null | undefined): PaymentCategory {
+  switch (getPaymentStatusUI(paymentStatus).label) {
+    case 'Completed':
+      return 'completed';
+    case 'Cancelled':
+    case 'Failed':
+    case 'Refunded':
+      return 'unsuccessful';
+    case 'Pending':
+      return 'pending';
+    default:
+      return 'other';
+  }
+}
+
+/**
+ * The payment status of a booking. A pending_payment booking with no payment
+ * record yet is "pending" - the history used to call it "Cancelled".
+ */
+export function getBookingPaymentStatus(booking: {
+  status?: string | null;
+  paymentStatus?: string | null;
+  raw?: Record<string, unknown> | null;
+}): string | null {
+  const raw = booking.paymentStatus ?? (booking.raw?.payment_status as string | undefined);
+  if (typeof raw === 'string' && raw.trim()) {
+    return raw;
+  }
+  return booking.status?.trim().toLowerCase() === 'pending_payment' ? 'pending' : null;
+}
+
 export function formatCurrency(amount: number | string | null | undefined): string {
   if (amount == null) {
     return '₹0';
@@ -101,19 +135,9 @@ export function extractPaymentDate(
     return payment.payment_time;
   }
 
-  // Use updated_at or created_at as best available proxy until a dedicated timestamp exists
-  const timestamp =
-    rawRecord.updated_at ||
-    rawRecord.createdAt ||
-    rawRecord.created_at ||
-    rawRecord.appointment_at ||
-    rawRecord.appointmentAt;
-
-  if (typeof timestamp !== 'string' || !timestamp.trim()) {
-    return undefined;
-  }
-
-  return timestamp;
+  // No other fallback: updated_at / created_at / the appointment time were shown as
+  // the payment time (e.g. a cancellation time labelled as when it was paid).
+  return undefined;
 }
 
 export function formatDateTime(isoString: string | undefined): string | undefined {

@@ -15,6 +15,7 @@ import {
   formatCurrency,
   formatDateTime,
   formatPaymentMethod,
+  getBookingPaymentStatus,
   getPaymentStatusUI,
 } from '../utils/paymentFormatters';
 
@@ -111,28 +112,19 @@ export const PaymentCard = React.memo<PaymentCardProps>(function PaymentCardComp
     typeof booking.raw?.amount_paid === 'number'
       ? booking.raw.amount_paid
       : null;
-  const rawAmount = rawTotal ?? rawBase ?? rawPaid ?? bookingPrice;
+  const rawPaymentAmount = booking.raw?.payment?.payment_amount ?? null;
+  // What was actually paid first; this used to prefer the booking total.
+  const rawAmount = rawPaymentAmount ?? rawPaid ?? rawTotal ?? rawBase ?? bookingPrice;
   const amountStr = formatCurrency(rawAmount);
 
-  // Status: payment_status === "captured" is Completed, rest is Cancelled
-  const isCaptured =
-    (
-      booking.paymentStatus ||
-      (booking.raw as Record<string, unknown>)?.payment_status ||
-      ''
-    )
-      .toString()
-      .toLowerCase()
-      .trim() === 'captured';
-  const statusToDisplay = isCaptured ? 'captured' : 'cancelled';
+  // The real status (Completed / Pending / Failed / Cancelled / Refunded). Anything
+  // not captured used to be labelled "Cancelled", including payments in progress.
+  const statusToDisplay = getBookingPaymentStatus(booking);
 
   // Transaction Date/Time
   const appointmentAtStr = booking.appointmentAt ?? undefined;
   const paymentDateIso = extractPaymentDate(booking.raw);
-  const paymentDateTimeStr =
-    formatDateTime(paymentDateIso) ||
-    formatDateTime(appointmentAtStr) ||
-    '--';
+  const paymentDateTimeStr = formatDateTime(paymentDateIso) || '--';
 
   // Booked Slot Timing
   const slotDate = booking.date;

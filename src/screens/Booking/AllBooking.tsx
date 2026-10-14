@@ -22,6 +22,7 @@ import type { RootStackParamList } from '../../navigation/AppNavigator';
 import type { BackendBookingListItem, BookingSection } from '../../types/booking';
 import AllBookingHeader from './components/AllBookingHeader';
 import BookingCard from './components/BookingCard';
+import Toast from 'react-native-toast-message';
 
 type BookingTab = BookingSection;
 
@@ -215,6 +216,14 @@ const AllBookingScreen: React.FC = () => {
     );
   }, [effectiveActiveTab, error, refetch]);
 
+  // A failed refresh with bookings already on screen used to just stop the spinner.
+  const hasAnyBookings = availableTabs.length > 0;
+  useEffect(() => {
+    if (error && hasAnyBookings) {
+      Toast.show({ type: 'error', text1: "Couldn't refresh bookings", text2: error });
+    }
+  }, [error, hasAnyBookings]);
+
   if (loading && !hasFetchedOnce) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -232,7 +241,23 @@ const AllBookingScreen: React.FC = () => {
 
       {/* ── Content Container Overlapping Header ── */}
       <View style={styles.contentWrapper}>
-        {!hasBookings ? (
+        {!hasBookings && error ? (
+          /* A failed load used to fall through to "Your next wellness moment
+             awaits", so offline / server errors looked like an empty account. */
+          <ScrollView
+            contentContainerStyle={styles.emptyScrollContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#FFB02E"
+                colors={['#FFB02E']}
+              />
+            }
+          >
+            {listEmpty}
+          </ScrollView>
+        ) : !hasBookings ? (
           /* ── CASE A: NO BOOKINGS EMPTY STATE ── */
           <ScrollView
             contentContainerStyle={styles.emptyScrollContent}
