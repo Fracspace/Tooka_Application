@@ -17,6 +17,8 @@ type BookingSummarySheetProps = {
   loading?: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  /** Called once the sheet has fully closed (iOS); see useSlotBooking. */
+  onDismissed?: () => void;
   spaName?: string;
   spaImage?: string;
   location?: string;
@@ -56,6 +58,7 @@ function BookingSummarySheet({
   loading = false,
   onClose,
   onConfirm,
+  onDismissed,
   spaName,
   spaImage,
   location,
@@ -98,6 +101,7 @@ function BookingSummarySheet({
       animationType="fade"
       statusBarTranslucent
       onRequestClose={handleClose}
+      onDismiss={onDismissed}
     >
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />

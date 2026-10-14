@@ -223,6 +223,7 @@ function SpaDetailsScreen(): React.ReactElement {
         visible={booking.summaryVisible && Boolean(booking.selectedSlot)}
         loading={booking.submitting}
         onClose={booking.closeSummary}
+        onDismissed={booking.onSummaryDismissed}
         onConfirm={booking.confirmBooking}
         spaName={spa?.name}
         spaImage={bookingDetails.spaImage}

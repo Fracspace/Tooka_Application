@@ -2,15 +2,25 @@ import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 
 const mockGetAvailability = jest.fn();
+const mockCreateDirectBooking = jest.fn();
 jest.mock('../src/api/BookingApi', () => ({
   __esModule: true,
-  default: { getAvailability: (...args: unknown[]) => mockGetAvailability(...args) },
+  default: {
+    getAvailability: (...args: unknown[]) => mockGetAvailability(...args),
+    createDirectBooking: (...args: unknown[]) => mockCreateDirectBooking(...args),
+  },
 }));
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: jest.fn() }) }));
+const mockNavigate = jest.fn();
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: mockNavigate }) }));
 jest.mock('../src/context/AuthContext', () => ({ useAuth: () => ({ user: null }) }));
-jest.mock('../src/context/ProfileContext', () => ({ useProfile: () => ({ profile: null }) }));
+const mockProfile = { fullName: 'Asha Rao', phone: '+919999999999' };
+jest.mock('../src/context/ProfileContext', () => ({ useProfile: () => ({ profile: mockProfile }) }));
+const mockInitiatePayment = jest.fn();
 jest.mock('../src/context/PaymentContext', () => ({
-  usePaymentContext: () => ({ initiatePayment: jest.fn(), setBookingSummary: jest.fn() }),
+  usePaymentContext: () => ({
+    initiatePayment: (...args: unknown[]) => mockInitiatePayment(...args),
+    setBookingSummary: jest.fn(),
+  }),
 }));
 
 import { useSlotBooking } from '../src/hooks/useSlotBooking';
@@ -37,7 +47,12 @@ const flush = () => ReactTestRenderer.act(async () => {
   await new Promise<void>((resolve) => setTimeout(() => resolve(), 0));
 });
 
-beforeEach(() => mockGetAvailability.mockReset());
+beforeEach(() => {
+  mockGetAvailability.mockReset();
+  mockCreateDirectBooking.mockReset();
+  mockInitiatePayment.mockReset();
+  mockNavigate.mockReset();
+});
 
 describe('useSlotBooking', () => {
   it('selects the next available slot automatically', async () => {
@@ -121,5 +136,38 @@ describe('useSlotBooking', () => {
     await flush();
 
     expect(latest.summaryVisible).toBe(false);
+  });
+
+  it('opens the payment screen only after the summary has fully closed (iOS Cashfree)', async () => {
+    mockGetAvailability.mockResolvedValue([slot('s1', TODAY.date, '10:00')]);
+    mockCreateDirectBooking.mockResolvedValue({ id: 'b1', booking_ref: 'REF1' });
+    mockInitiatePayment.mockResolvedValue({ paymentId: 'p1', bookingId: 'b1' });
+
+    await ReactTestRenderer.act(async () => {
+      ReactTestRenderer.create(<Harness spaId="spa-a" />);
+    });
+    await flush();
+    await ReactTestRenderer.act(async () => {
+      latest.openSummary();
+    });
+
+    let confirmed!: Promise<void>;
+    await ReactTestRenderer.act(async () => {
+      confirmed = latest.confirmBooking();
+    });
+    await flush();
+
+    // The Modal is closing but has not reported that it is gone yet.
+    expect(latest.summaryVisible).toBe(false);
+    expect(mockNavigate).not.toHaveBeenCalled();
+
+    await ReactTestRenderer.act(async () => {
+      latest.onSummaryDismissed();
+      await confirmed;
+    });
+    expect(mockNavigate).toHaveBeenCalledWith(
+      'PaymentScreen',
+      expect.objectContaining({ paymentId: 'p1', bookingId: 'b1' }),
+    );
   });
 });

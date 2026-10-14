@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import axios from 'axios';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -262,6 +262,37 @@ export function useSlotBooking({
     setSummaryVisible(false);
   }, []);
 
+  // Cashfree's iOS checkout presents itself on top of whatever is showing. Opened
+  // while the summary Modal was still fading out, it was closed along with the Modal:
+  // the gateway flashed and the payment screen waited forever for a result. So the
+  // summary must be fully gone before navigating to the payment screen.
+  const summaryVisibleRef = useRef(summaryVisible);
+  summaryVisibleRef.current = summaryVisible;
+  const summaryDismissedRef = useRef<(() => void) | null>(null);
+  const onSummaryDismissed = useCallback(() => {
+    summaryDismissedRef.current?.();
+  }, []);
+  const closeSummaryAndWait = useCallback(
+    () =>
+      new Promise<void>((resolve) => {
+        if (!summaryVisibleRef.current) {
+          resolve();
+          return;
+        }
+        // onDismiss only fires on iOS; elsewhere (or if it never fires) fall back
+        // to the fade duration.
+        const timer = setTimeout(done, Platform.OS === 'ios' ? 1000 : 350);
+        function done() {
+          clearTimeout(timer);
+          summaryDismissedRef.current = null;
+          resolve();
+        }
+        summaryDismissedRef.current = done;
+        setSummaryVisible(false);
+      }),
+    [],
+  );
+
   // Coming back from Login: show the summary the user was about to see, instead of
   // making them find the slot and tap Continue again.
   const autoOpenedRef = useRef(false);
@@ -349,7 +380,7 @@ export function useSlotBooking({
       setBookingSummary(bookingSummary);
       const paymentContext = await initiatePayment(bookingId, bookingReference, bookingSummary);
 
-      setSummaryVisible(false);
+      await closeSummaryAndWait();
       navigation.navigate('PaymentScreen', {
         paymentId: paymentContext.paymentId,
         bookingId: paymentContext.bookingId,
@@ -375,7 +406,17 @@ export function useSlotBooking({
       setSubmitting(false);
       confirmLockRef.current = false;
     }
-  }, [selectedSlot, spaId, profile, user, details, navigation, setBookingSummary, initiatePayment]);
+  }, [
+    selectedSlot,
+    spaId,
+    profile,
+    user,
+    details,
+    navigation,
+    setBookingSummary,
+    initiatePayment,
+    closeSummaryAndWait,
+  ]);
 
   const summaryDateLabel = selectedSlot
     ? [scheduleDates.find((d) => d.date === selectedSlot.date)?.label, formatShortDate(selectedSlot.date)]
@@ -400,6 +441,7 @@ export function useSlotBooking({
     summaryTimeLabel,
     openSummary,
     closeSummary,
+    onSummaryDismissed,
     submitting,
     confirmBooking,
   };

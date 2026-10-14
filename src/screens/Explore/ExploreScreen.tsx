@@ -841,6 +841,7 @@ const ExploreScreen: React.FC = () => {
         visible={booking.summaryVisible && Boolean(booking.selectedSlot)}
         loading={booking.submitting}
         onClose={booking.closeSummary}
+        onDismissed={booking.onSummaryDismissed}
         onConfirm={booking.confirmBooking}
         spaName={bookingDetails.spaName}
         spaImage={bookingDetails.spaImage}
