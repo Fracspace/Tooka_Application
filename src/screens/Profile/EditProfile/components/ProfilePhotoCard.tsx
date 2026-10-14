@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Image, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Image, Pressable, Text, View } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 import { COLORS } from '../constants';
@@ -10,9 +10,11 @@ import { resolveImageUri } from '../../../../types/profileImage';
 type Props = {
   photoUri: ProfileImage;
   onChoosePhoto: () => void;
+  /** Shows progress and disables the button; taps used to be silently ignored. */
+  uploading?: boolean;
 };
 
-function ProfilePhotoCard({ photoUri, onChoosePhoto }: Props): React.ReactElement {
+function ProfilePhotoCard({ photoUri, onChoosePhoto, uploading = false }: Props): React.ReactElement {
   const opacity = useRef(new Animated.Value(0)).current;
 
   // Safely compute a plain string URI — never pass an object to <Image source>.
@@ -30,7 +32,9 @@ function ProfilePhotoCard({ photoUri, onChoosePhoto }: Props): React.ReactElemen
   return (
     <View style={styles.photoCard}>
       <Animated.View style={[styles.uploadCircle, { opacity }]}>
-        {resolvedUri ? (
+        {uploading ? (
+          <ActivityIndicator color={COLORS.primary} />
+        ) : resolvedUri ? (
           <Image source={{ uri: resolvedUri }} style={styles.selectedPhoto} resizeMode="cover" />
         ) : (
           <Ionicons name="cloud-upload-outline" size={25} color={COLORS.primary} />
@@ -40,11 +44,16 @@ function ProfilePhotoCard({ photoUri, onChoosePhoto }: Props): React.ReactElemen
       <Text style={styles.photoSubtitle}>Tap to upload your photo</Text>
       <Pressable
         onPress={onChoosePhoto}
-        style={({ pressed }) => [styles.chooseButton, pressed && { opacity: 0.72 }]}
+        disabled={uploading}
+        style={({ pressed }) => [
+          styles.chooseButton,
+          (pressed || uploading) && { opacity: 0.72 },
+        ]}
         accessibilityRole="button"
         accessibilityLabel="Choose profile photo"
+        accessibilityState={{ disabled: uploading, busy: uploading }}
       >
-        <Text style={styles.chooseButtonText}>Choose Photo</Text>
+        <Text style={styles.chooseButtonText}>{uploading ? 'Uploading…' : 'Choose Photo'}</Text>
       </Pressable>
     </View>
   );

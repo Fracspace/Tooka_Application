@@ -15,12 +15,11 @@ export const validateProfileUpdate = (
   const fullName = payload.fullName?.trim() ?? '';
   const nameParts = fullName.split(/\s+/).filter(Boolean);
 
+  // Last name and gender are optional: registration accepts a single name, and
+  // gender is never pre-filled, so requiring either blocked every profile save
+  // (even just an email change) for those users.
   if (!nameParts[0]) {
     return { valid: false, message: 'First name is required.' };
-  }
-
-  if (!nameParts[1]) {
-    return { valid: false, message: 'Last name is required.' };
   }
 
   if (nameParts[0].length > 50 || nameParts.slice(1).join(' ').length > 50) {
@@ -40,10 +39,6 @@ export const validateProfileUpdate = (
     if (Number.isNaN(dob.getTime()) || dob > new Date()) {
       return { valid: false, message: 'Date of birth cannot be in the future.' };
     }
-  }
-
-  if (!payload.gender?.trim()) {
-    return { valid: false, message: 'Select your gender.' };
   }
 
   if (

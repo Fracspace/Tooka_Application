@@ -71,13 +71,15 @@ export const buildUpdateProfilePayload = async (
   const displayName = form.displayName.trim() || `${form.firstName.trim()} ${form.lastName.trim()}`.trim();
   const fcmToken = await getFcmToken();
   const onboarding = await getOnboarding();
+  const preferences = onboarding?.answers?.preferences ?? [];
 
   const payload: UpdateProfilePayload = {
     username: displayName,
     fullName: `${form.firstName.trim()} ${form.lastName.trim()}`.trim(),
     displayName,
     email: form.email.trim(),
-    phone: form.phoneNumber.replace(/\D/g, ''),
+    // No phone: it is the login identity and read-only here. Sending the form's
+    // 10-digit copy rewrote the stored "+91..." number in another format (or blank).
     // undefined (not '') so removeEmptyProfilePayloadValues leaves them out entirely.
     gender: form.gender ?? undefined,
     dateOfBirth: form.dateOfBirth ? formatDateForApi(form.dateOfBirth) : undefined,
@@ -85,9 +87,12 @@ export const buildUpdateProfilePayload = async (
     lng: form.residentialLocation?.longitude,
     lati: currentLocation?.latitude,
     lang: currentLocation?.longitude,
-    pushToken: fcmToken ?? '',
-    pushTokenPlatform: Platform.OS === 'ios' ? 'ios' : 'android',
-    preferredCategories: onboarding?.answers?.preferences ?? [],
+    // Only send these when this device has them. Empty values overwrote the server:
+    // after a logout on this device the onboarding answers are cleared, so the next
+    // user's save wiped their categories, and a missing FCM token wiped the push token.
+    pushToken: fcmToken || undefined,
+    pushTokenPlatform: fcmToken ? (Platform.OS === 'ios' ? 'ios' : 'android') : undefined,
+    preferredCategories: preferences.length > 0 ? preferences : undefined,
   };
 
   return removeEmptyProfilePayloadValues(payload);

@@ -150,7 +150,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Delete account handler
   const deleteAccount = useCallback(async (): Promise<void> => {
     try {
-      await ProfileApi.deleteAccount();
+      const response = await ProfileApi.deleteAccount();
+      // A 200 can still say it did not happen; logging the user out and showing
+      // "Account deleted" in that case was false.
+      if (!response?.success || response?.data?.deleted === false) {
+        throw new Error('Your account could not be deleted. Please try again.');
+      }
       setUser(null);
       setToken(null);
       setIsLoggedIn(false);

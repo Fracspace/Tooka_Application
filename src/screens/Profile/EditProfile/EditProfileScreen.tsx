@@ -52,11 +52,17 @@ const DEFAULT_PICKER_DATE = new Date(2000, 0, 1);
 
 type EditProfileNavigationProp = NativeStackNavigationProp<RootStackParamList, 'EditProfile'>;
 
+// Downscaled on the device: full-resolution photos were uploaded as-is and often
+// hit the 15s request timeout.
 const imagePickerOptions: ImageLibraryOptions = {
   mediaType: 'photo',
   quality: 0.8,
+  maxWidth: 1024,
+  maxHeight: 1024,
   selectionLimit: 1,
 };
+
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
 function EditProfileScreen(): React.ReactElement {
   const isMounted = React.useRef(true);
@@ -144,6 +150,14 @@ function EditProfileScreen(): React.ReactElement {
       }
 
       const [asset] = response.assets ?? [];
+      if (asset?.fileSize && asset.fileSize > MAX_AVATAR_BYTES) {
+        Toast.show({
+          type: 'error',
+          text1: 'Photo is too large',
+          text2: 'Please choose a photo under 5 MB.',
+        });
+        return;
+      }
       const prepared = asset ? prepareProfileImageUpload(asset) : null;
       if (!prepared || typeof prepared === 'string') {
         Toast.show({
@@ -165,12 +179,13 @@ function EditProfileScreen(): React.ReactElement {
             text1: 'Avatar updated successfully',
           });
         }
-      } catch {
+      } catch (uploadError) {
         updateField('profilePhotoUri', profile?.avatarUrl ?? null);
         Toast.show({
           type: 'error',
           text1: 'Upload failed',
-          text2: 'Could not upload avatar. Please try again.',
+          // The server's reason (e.g. file too large) instead of a generic line.
+          text2: getProfileErrorMessage(uploadError),
         });
       }
     });
@@ -328,6 +343,7 @@ function EditProfileScreen(): React.ReactElement {
               <ProfilePhotoCard
                 photoUri={form.profilePhotoUri}
                 onChoosePhoto={handleChoosePhoto}
+                uploading={avatarUploading}
               />
 
             <View style={styles.row}>
