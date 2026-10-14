@@ -11,6 +11,7 @@ import {
   Animated,
   FlatList,
   Image,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -140,12 +141,18 @@ const SpaMarker = memo<SpaMarkerProps>(
       onPress(spa);
     }, [onPress, pressScale, spa]);
 
-    const animatedScale = Animated.add(
-      pressScale,
-      selectedScale.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, selectedScaleValue],
-      }),
+    // Built once per marker: a new Animated node on every render re-attached the
+    // animation for every pin on every Explore state change.
+    const animatedScale = useMemo(
+      () =>
+        Animated.add(
+          pressScale,
+          selectedScale.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, selectedScaleValue],
+          }),
+        ),
+      [pressScale, selectedScale, selectedScaleValue],
     );
 
     // Spas without a map pin used to be drawn at (0, 0), off the coast of Africa.
@@ -216,7 +223,14 @@ const ExploreScreen: React.FC = () => {
     [location?.latitude, location?.longitude],
   );
 
-  const { spas: contextSpas, loadNextPage, loadingMore } = useNearbySpas();
+  const {
+    spas: contextSpas,
+    loadNextPage,
+    loadingMore,
+    loading: spasLoading,
+    error: spasError,
+    retry: retrySpas,
+  } = useNearbySpas();
   const spas: ExploreSpa[] = contextSpas;
   // console.log("Spas in exploreScreen: ", spas);
 
@@ -514,6 +528,13 @@ const ExploreScreen: React.FC = () => {
     [],
   );
 
+  // Stable, so the memoized markers do not all re-render whenever Explore does
+  // (an inline arrow here defeated SpaMarker's memo).
+  const handleMarkerPress = useCallback(
+    (spa: ExploreSpa) => selectSpa(spa, { openSheet: true, syncCard: true }),
+    [selectSpa],
+  );
+
   const renderSpaCard = useCallback(
     ({ item }: ListRenderItemInfo<ExploreSpa>) => {
       const selected = item.id === selectedSpaId;
@@ -588,13 +609,52 @@ const ExploreScreen: React.FC = () => {
   );
 
   const renderFooter = useCallback(() => {
-    if (!loadingMore) return null;
-    return (
-      <View style={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, height: 172 }}>
-        <ActivityIndicator size="small" color="#FFB02E" />
-      </View>
-    );
-  }, [loadingMore]);
+    if (loadingMore) {
+      return (
+        <View style={styles.listFooter}>
+          <ActivityIndicator size="small" color="#FFB02E" />
+        </View>
+      );
+    }
+    // A failed "load more" used to fail silently.
+    if (spasError && spas.length > 0) {
+      return (
+        <View style={styles.listFooter}>
+          <Pressable
+            style={styles.footerRetry}
+            onPress={retrySpas}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading more spas">
+            <Ionicons name="refresh" size={18} color="#FFB02E" />
+            <Text style={styles.footerRetryText}>Retry</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    return null;
+  }, [loadingMore, spasError, spas.length, retrySpas]);
+
+  // What to show where the carousel goes when there are no spas to list. A bare map
+  // with no cards and no message used to be all the user got.
+  const hasLocationAccess = location?.permission === 'granted';
+  const emptyState: { title: string; subtitle: string; action?: { label: string; onPress: () => void } } | null =
+    spas.length > 0
+      ? null
+      : !loading && location && !hasLocationAccess
+      ? {
+          title: 'Location is off',
+          subtitle: 'Allow location access to see spas near you.',
+          action: { label: 'Open Settings', onPress: () => Linking.openSettings() },
+        }
+      : spasError
+      ? {
+          title: "Couldn't load spas",
+          subtitle: spasError,
+          action: { label: 'Try again', onPress: retrySpas },
+        }
+      : spasLoading || loading
+      ? { title: 'Finding spas near you…', subtitle: '' }
+      : { title: 'No spas found nearby', subtitle: 'Try again later or explore another area.' };
 
   return (
     <View style={styles.container}>
@@ -621,9 +681,7 @@ const ExploreScreen: React.FC = () => {
               key={spa.id}
               spa={spa}
               selected={spa.id === selectedSpaId}
-              onPress={(nextSpa) =>
-                selectSpa(nextSpa, { openSheet: true, syncCard: true })
-              }
+              onPress={handleMarkerPress}
             />
           ))}
         </MapView>
@@ -655,9 +713,32 @@ const ExploreScreen: React.FC = () => {
           <Text style={styles.locationLoadingText}>Finding location</Text>
         </View>
       )}
-      {sheetIndex < 2 && (
-        <FlatList<ExploreSpa>
+      {emptyState ? (
+        <View
+          style={[styles.emptyCard, { bottom: cardListBottom, width: cardWidth }]}
+          accessibilityRole="summary">
+          {emptyState.action ? null : <ActivityIndicator size="small" color="#FFB02E" />}
+          <Text style={styles.emptyTitle}>{emptyState.title}</Text>
+          {emptyState.subtitle ? (
+            <Text style={styles.emptySubtitle}>{emptyState.subtitle}</Text>
+          ) : null}
+          {emptyState.action ? (
+            <Pressable
+              style={styles.emptyAction}
+              onPress={emptyState.action.onPress}
+              accessibilityRole="button"
+              accessibilityLabel={emptyState.action.label}>
+              <Text style={styles.emptyActionText}>{emptyState.action.label}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
+      {/* Kept mounted under the full-height sheet: unmounting it reset the scroll
+          position, so it came back on the first card while another spa was selected. */}
+      <FlatList<ExploreSpa>
           ref={listRef}
+          pointerEvents={sheetIndex === 2 ? 'none' : 'auto'}
           data={spas}
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -683,7 +764,6 @@ const ExploreScreen: React.FC = () => {
           onEndReachedThreshold={0.5}
           ListFooterComponent={renderFooter}
         />
-      )}
 
       <BottomSheet
         ref={sheetRef}
@@ -894,6 +974,66 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
     elevation: 8,
+  },
+  emptyCard: {
+    position: 'absolute',
+    alignSelf: 'center',
+    minHeight: 150,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    padding: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.13,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
+  emptyTitle: {
+    fontFamily: 'Sora-SemiBold',
+    fontSize: 15,
+    color: '#1F1F1F',
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontFamily: 'WorkSans-Regular',
+    fontSize: 13,
+    color: '#8F8F8F',
+    textAlign: 'center',
+  },
+  emptyAction: {
+    marginTop: 8,
+    height: 38,
+    paddingHorizontal: 22,
+    borderRadius: 7,
+    backgroundColor: '#FFB02E',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyActionText: {
+    fontFamily: 'Sora-SemiBold',
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  listFooter: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    height: 172,
+  },
+  footerRetry: {
+    alignItems: 'center',
+    gap: 4,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+  },
+  footerRetryText: {
+    fontFamily: 'Sora-SemiBold',
+    fontSize: 12,
+    color: '#FFB02E',
   },
   cardSelected: {
     borderWidth: 1,

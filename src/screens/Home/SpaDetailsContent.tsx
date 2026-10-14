@@ -29,8 +29,9 @@ import type { SpaDetails } from '../../types/spaDetails';
 import type { BookingDate, BookingOption, TimeSlot } from '../Booking/types';
 import { formatPrice } from '../../utils/number';
 
-const PLACEHOLDER_IMAGE =
-  'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1000&q=80';
+// Tooka's own generic cover. A stock photo of some other spa was shown here as if
+// it were this spa's hero and "handpicked" image.
+const PLACEHOLDER_IMAGE = 'https://d2f15ematxpwp4.cloudfront.net/appImages/Spacover.jpg';
 
 const AMENITY_ICON_MAP: Record<string, string> = {
   steam: 'water-outline',
@@ -183,6 +184,9 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
   const [isGalleryModalVisible, setIsGalleryModalVisible] = useState(false);
   const [showAllTreatments, setShowAllTreatments] = useState(false);
   const [hoursModalVisible, setHoursModalVisible] = useState(false);
+  // The image shown in the full-screen gallery, tracked while swiping so the
+  // "Gallery (n/m)" counter follows along (it stayed on the opening image).
+  const [galleryModalIndex, setGalleryModalIndex] = useState(0);
 
   const formattedHours = useMemo(() => {
     const rawHours = spa?.opening_hours ?? spa?.timings ?? [];
@@ -272,6 +276,8 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
   }, [services, showAllTreatments]);
 
   // Gallery items strictly ordered: 1. cover_photo_url, 2. media[].url, 3. gallery[].image_url
+  const hasAnyHours = formattedHours.some((row) => row.timeText !== 'Hours unavailable');
+
   const mediaItems = useMemo(() => {
     const urls: string[] = [];
 
@@ -317,6 +323,7 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
     }
     return urls;
   }, [spa?.cover_photo_url, spa?.media, spa?.gallery]);
+  const hasRealPhotos = mediaItems[0] !== PLACEHOLDER_IMAGE;
 
   // Safety check for index out of bounds
   useEffect(() => {
@@ -359,8 +366,9 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
   }, []);
 
   const handleOpenGalleryModal = useCallback(() => {
+    setGalleryModalIndex(currentImageIndex);
     setIsGalleryModalVisible(true);
-  }, []);
+  }, [currentImageIndex]);
 
   const handleCloseGalleryModal = useCallback(() => {
     setIsGalleryModalVisible(false);
@@ -468,6 +476,8 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
               style={styles.heroBackButton}
               onPress={onBack ?? (() => navigation.goBack())}
               hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
             >
               <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
             </Pressable>
@@ -480,6 +490,8 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
             <Pressable
               key={`thumb-${item.actualIndex}`}
               onPress={() => handleSelectThumbnail(item.actualIndex)}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={`Show photo ${item.actualIndex + 1}`}
               style={[
                 styles.galleryThumb,
                 currentImageIndex === item.actualIndex && styles.galleryThumbSelected,
@@ -491,6 +503,8 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
           {remainingCount > 0 ? (
             <Pressable
               onPress={handleOpenGalleryModal}
+              accessibilityRole="button"
+              accessibilityLabel={`Open gallery, ${remainingCount} more photos`}
               style={[styles.galleryThumb, styles.galleryExtraThumb]}
             >
               <Image
@@ -530,18 +544,19 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
               </View>
             ) : null}
 
-            <Pressable
-              onPress={() => setHoursModalVisible(true)}
-              hitSlop={10}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 0 }}
-            >
-              <Text style={{ fontFamily: 'WorkSans-Medium', fontSize: 12, color: '#FFB02E' }}>View Hours </Text>
-              <Ionicons
-                name={"chevron-forward-outline"}
-                size={12}
-                color="#FFAA26"
-              />
-            </Pressable>
+            {/* Only when there are hours to show: every row used to read "Hours unavailable". */}
+            {hasAnyHours ? (
+              <Pressable
+                onPress={() => setHoursModalVisible(true)}
+                hitSlop={10}
+                style={styles.viewHoursButton}
+                accessibilityRole="button"
+                accessibilityLabel="View business hours"
+              >
+                <Text style={styles.viewHoursText}>View Hours </Text>
+                <Ionicons name="chevron-forward-outline" size={12} color="#FFAA26" />
+              </Pressable>
+            ) : null}
           </View>
 
           <View style={styles.locationRow}>
@@ -589,7 +604,9 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
                   Handpicked treatments for your mind, body & soul.
                 </Text>
               </View>
-              <Image source={{ uri: mediaItems[0] }} style={styles.handpickedImage} resizeMode="cover" />
+              {hasRealPhotos ? (
+                <Image source={{ uri: mediaItems[0] }} style={styles.handpickedImage} resizeMode="cover" />
+              ) : null}
             </View>
 
             <View style={styles.servicesList}>
@@ -660,6 +677,9 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
                     <Pressable
                       key={d.id}
                       onPress={() => onSelectDate?.(d.id)}
+                      accessibilityRole="tab"
+                      accessibilityLabel={labelText}
+                      accessibilityState={{ selected: isSelectedDate }}
                       style={[styles.dateTab, isSelectedDate && styles.dateTabActive]}
                     >
                       <Text style={[styles.dateTabText, isSelectedDate && styles.dateTabTextActive]}>
@@ -721,6 +741,9 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
                         key={s.id}
                         disabled={isDisabled}
                         onPress={() => onSelectSlot?.(s.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={isDisabled ? `${s.label}, unavailable` : s.label}
+                        accessibilityState={{ selected: isSelectedSlot, disabled: isDisabled }}
                         style={[
                           styles.slotBtn,
                           { width: slotWidth },
@@ -793,6 +816,12 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
           <Pressable
             disabled={!isBookable || proceedDisabled || proceedLoading}
             onPress={onProceedBooking}
+            accessibilityRole="button"
+            accessibilityLabel={ctaLabel}
+            accessibilityState={{
+              disabled: !isBookable || proceedDisabled || proceedLoading,
+              busy: proceedLoading,
+            }}
             style={({ pressed }) => [
               styles.ctaButton,
               pressed && styles.ctaButtonPressed,
@@ -817,11 +846,17 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
       >
         <SafeAreaView style={styles.modalRoot}>
           <View style={styles.modalHeader}>
-            <Pressable onPress={handleCloseGalleryModal} style={styles.modalCloseBtn} hitSlop={10}>
+            <Pressable
+              onPress={handleCloseGalleryModal}
+              style={styles.modalCloseBtn}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Close gallery"
+            >
               <Ionicons name="close" size={26} color="#FFFFFF" />
             </Pressable>
             <Text style={styles.modalTitle}>
-              Gallery ({currentImageIndex + 1}/{mediaItems.length})
+              Gallery ({galleryModalIndex + 1}/{mediaItems.length})
             </Text>
             <View style={{ width: 36 }} />
           </View>
@@ -833,6 +868,9 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
             showsHorizontalScrollIndicator={false}
             keyExtractor={(_, index) => `modal-img-${index}`}
             initialScrollIndex={currentImageIndex}
+            onMomentumScrollEnd={(event) =>
+              setGalleryModalIndex(Math.round(event.nativeEvent.contentOffset.x / width))
+            }
             getItemLayout={(_, index) => ({
               length: width,
               offset: width * index,
@@ -877,6 +915,15 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
                   Plan your visit around the spa’s schedule.
                 </Text>
               </View>
+              {/* The only way out used to be tapping the (unlabelled) backdrop. */}
+              <Pressable
+                onPress={() => setHoursModalVisible(false)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Close business hours"
+              >
+                <Ionicons name="close" size={22} color="#4A6585" />
+              </Pressable>
             </View>
 
             <View style={styles.hoursDivider} />
@@ -1472,6 +1519,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
+  },
+  viewHoursButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  viewHoursText: {
+    fontFamily: 'WorkSans-Medium',
+    fontSize: 12,
+    color: '#FFB02E',
   },
   hoursModalCard: {
     width: '100%',
