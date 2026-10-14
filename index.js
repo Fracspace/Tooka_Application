@@ -9,7 +9,7 @@ import { AppRegistry } from 'react-native';
 // (messaging(), crashlytics().log(...)), which flooded the dev logs - the call
 // logger alone writes to Crashlytics on every event. The modular API migration is
 // still to do before the next RNFirebase major removes the namespaced one.
-globalThis.RNFB_SILENCE_MODULAR_DEPRECATION_WARNINGS = true;
+global.RNFB_SILENCE_MODULAR_DEPRECATION_WARNINGS = true;
 import messaging from '@react-native-firebase/messaging';
 import App from './App';
 import { name as appName } from './app.json';
