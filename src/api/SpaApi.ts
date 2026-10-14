@@ -65,7 +65,13 @@ export const SpaApi = {
       },
     );
 
-    return response.data?.data ?? ({} as SpaDetails);
+    // An empty body used to come back as `{}`: a blank page with no error, booking
+    // not blocked (is_bookable undefined), and Explore caching it for the session.
+    const spa = response.data?.data;
+    if (!spa?.id) {
+      throw new Error('Spa details are unavailable.');
+    }
+    return spa;
   },
 
   /**
