@@ -23,6 +23,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import SpaDetailsSkeleton from '../../components/loaders/SpaDetailsSkeleton';
+import StateMessage from '../../components/common/StateMessage';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import type { SpaDetails } from '../../types/spaDetails';
 import type { BookingDate, BookingOption, TimeSlot } from '../Booking/types';
@@ -144,6 +145,8 @@ const formatTimeStr = (rawTime: string | null | undefined): string => {
 const SpaDetailsContent = memo(function SpaDetailsContentInner({
   spa,
   loading = false,
+  error,
+  onRetry,
   onBack,
   showBackButton = true,
   showBookBar = true,
@@ -436,11 +439,19 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
     ctaLabel = `Continue with ${selectedTimeLabel} ➔`;
   }
 
-  if (loading && spa === null) {
-    return <SpaDetailsSkeleton />;
-  }
-
   if (!spa) {
+    // A failed load used to leave the skeleton shimmering forever; error and
+    // onRetry were accepted but never used.
+    if (error && !loading) {
+      return (
+        <StateMessage
+          title="Couldn't load this spa"
+          subtitle={error}
+          actionLabel="Try again"
+          onAction={onRetry ?? (() => undefined)}
+        />
+      );
+    }
     return <SpaDetailsSkeleton />;
   }
 

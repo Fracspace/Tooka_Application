@@ -44,7 +44,10 @@ export function useSpaDetails(spaId: string) {
         }
 
         setError('Unable to load spa details.');
-        setSpa(null);
+        // A failed pull-to-refresh keeps the page that was already loaded.
+        if (!refresh) {
+          setSpa(null);
+        }
       } finally {
         // Only the latest request settles the UI; it clears both flags because it
         // may have replaced a load of the other kind.

@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   BackHandler,
   RefreshControl,
   ScrollView,
@@ -13,91 +12,24 @@ import {
   type RouteProp,
 } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import axios from 'axios';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import SpaDetailsContent from './SpaDetailsContent';
 import { useSpaDetails } from '../../hooks/useSpaDetails';
+import { useSlotBooking } from '../../hooks/useSlotBooking';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { useAuth } from '../../context/AuthContext';
-import { useProfile } from '../../context/ProfileContext';
-import { usePaymentContext } from '../../context/PaymentContext';
-import BookingApi from '../../api/BookingApi';
-import type { BookingScheduleDate, BookingSlot } from '../../types/booking';
-import type { TimeSlot } from '../Booking/types';
 import BookingSummarySheet from '../Booking/components/BookingSummarySheet';
 import { bookingOption } from '../Booking/bookingData';
-import { buildBookingDateAndTime } from '../../utils/bookingDateTime';
 import { Analytics, AnalyticsEvents, AnalyticsParams } from '../../services/firebase/analytics';
 import { Crashlytics, CrashlyticsKeys } from '../../services/firebase/crashlytics';
 import { formatPrice } from '../../utils/number';
-import { getGuestName } from '../../utils/bookingGuest';
 
 type SpaDetailsNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
   'SpaDetails'
 >;
 type SpaDetailsRouteProp = RouteProp<RootStackParamList, 'SpaDetails'>;
-
-const pad = (value: number): string => String(value).padStart(2, '0');
-
-const toDateKey = (date: Date): string =>
-  `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-
-const addDays = (date: Date, days: number): Date => {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-};
-
-const formatTabLabel = (date: Date, index: number): string => {
-  if (index === 0) return 'Today';
-  if (index === 1) return 'Tomorrow';
-  return 'Day After';
-};
-
-const buildScheduleDates = (): BookingScheduleDate[] => {
-  const today = new Date();
-  return [0, 1, 2].map((offset) => {
-    const date = addDays(today, offset);
-    const dateKey = toDateKey(date);
-    return {
-      id: dateKey,
-      label: formatTabLabel(date, offset),
-      date: dateKey,
-    };
-  });
-};
-
-const formatTimeLabel = (time: string): string => {
-  const [hoursRaw, minutesRaw = '00'] = time.split(':');
-  const hours = Number(hoursRaw);
-  const minutes = Number(minutesRaw);
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return time;
-  const period = hours >= 12 ? 'PM' : 'AM';
-  const twelveHour = hours % 12 || 12;
-  return `${pad(twelveHour)}:${pad(minutes)} ${period}`;
-};
-
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-const formatShortDate = (dateKey: string): string => {
-  const [, month, day] = dateKey.split('-').map(Number);
-  const monthName = MONTH_NAMES[month - 1];
-  return monthName && Number.isFinite(day) ? `${day} ${monthName}` : dateKey;
-};
-
-const getErrorMessage = (error: unknown): string => {
-  if (axios.isCancel(error)) return '';
-  if (axios.isAxiosError(error)) {
-    const message = error.response?.data?.message;
-    if (typeof message === 'string' && message.trim()) return message;
-    if (error.message.toLowerCase().includes('network')) {
-      return 'You are offline. Please check your internet connection.';
-    }
-  }
-  return 'Something went wrong. Please try again.';
-};
 
 function SpaDetailsScreen(): React.ReactElement {
   const navigation = useNavigation<SpaDetailsNavigationProp>();
@@ -115,57 +47,7 @@ function SpaDetailsScreen(): React.ReactElement {
   const isTablet = width >= 768;
 
   const { spa, loading, refreshing, error, refetch, onRefresh } = useSpaDetails(spaId);
-  const { isAuthenticated, user } = useAuth();
-  const { profile } = useProfile();
-  const { initiatePayment, setBookingSummary } = usePaymentContext();
-
-  // Availability & Booking State
-  const scheduleDates = useMemo(() => buildScheduleDates(), []);
-  const [selectedDateId, setSelectedDateId] = useState(
-    paramDateId && scheduleDates.some((d) => d.id === paramDateId)
-      ? paramDateId
-      : scheduleDates[0]?.id ?? '',
-  );
-  const [selectedSlotId, setSelectedSlotId] = useState(paramSlotId ?? '');
-  const pendingSlotIdRef = useRef<string>(paramSlotId ?? '');
-  const selectedSlotIdRef = useRef<string>(selectedSlotId);
-  // On first load, move to the next date when the current one has no open slots
-  const autoAdvanceDateRef = useRef(!paramDateId && !paramSlotId);
-
-  useEffect(() => {
-    selectedSlotIdRef.current = selectedSlotId;
-  }, [selectedSlotId]);
-
-  useEffect(() => {
-    if (paramDateId && scheduleDates.some((d) => d.id === paramDateId)) {
-      setSelectedDateId(paramDateId);
-    }
-  }, [paramDateId, scheduleDates]);
-
-  useEffect(() => {
-    if (paramSlotId) {
-      pendingSlotIdRef.current = paramSlotId;
-      setSelectedSlotId(paramSlotId);
-    }
-  }, [paramSlotId]);
-
-  const [slots, setSlots] = useState<BookingSlot[]>([]);
-  const [loadingSlots, setLoadingSlots] = useState(false);
-  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  // Double-tap guard: `submitting` is state, so a fast second tap ran before it
-  // updated and created a second booking.
-  const confirmLockRef = useRef(false);
-  // A booking created when starting its payment then failed. Retrying the same slot
-  // reuses it instead of leaving it pending and creating another one.
-  const unpaidBookingRef = useRef<{
-    slotId: string;
-    bookingId: string;
-    bookingReference?: string;
-  } | null>(null);
-
-  const requestIdRef = useRef(0);
-  const availabilityControllerRef = useRef<AbortController | null>(null);
+  const { isAuthenticated } = useAuth();
 
   const [selectedService, setSelectedService] = useState<{
     id?: string;
@@ -175,126 +57,9 @@ function SpaDetailsScreen(): React.ReactElement {
     name: serviceName,
   });
 
-  const selectedDate = useMemo(
-    () => scheduleDates.find((d) => d.id === selectedDateId) ?? scheduleDates[0],
-    [scheduleDates, selectedDateId],
-  );
-
-  const timeSlots = useMemo<TimeSlot[]>(
-    () =>
-      slots.map((slot) => ({
-        id: slot.slotId,
-        label: formatTimeLabel(slot.startTime),
-        status: slot.status,
-        date: slot.date,
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-      })),
-    [slots],
-  );
-
-  const selectedSlot = useMemo(
-    () => slots.find((s) => s.slotId === selectedSlotId && s.status === 'available'),
-    [selectedSlotId, slots],
-  );
-
-  useEffect(() => {
-    if (!spa) return;
-    Analytics.logEvent(AnalyticsEvents.SPA_VIEWED, {
-      [AnalyticsParams.SPA_ID]: spa.id,
-      [AnalyticsParams.SPA_NAME]: spa.name,
-    });
-  }, [spa]);
-
   useEffect(() => {
     setSelectedService({ id: serviceId, name: serviceName });
   }, [serviceId, serviceName]);
-
-  // Load Availability
-  const loadAvailability = useCallback(
-    async (date: string) => {
-      if (!spaId || !date) return;
-
-      availabilityControllerRef.current?.abort();
-      const controller = new AbortController();
-      availabilityControllerRef.current = controller;
-      const requestId = requestIdRef.current + 1;
-      requestIdRef.current = requestId;
-
-      setLoadingSlots(true);
-      setAvailabilityError(null);
-      if (!pendingSlotIdRef.current && !selectedSlotIdRef.current) {
-        setSelectedSlotId('');
-      }
-
-      let advancingToNextDate = false;
-
-      try {
-        const nextSlots = await BookingApi.getAvailability({
-          spaId,
-          date,
-          signal: controller.signal,
-        });
-
-        if (requestIdRef.current === requestId) {
-          setSlots(nextSlots);
-          const availableSlots = nextSlots.filter((s) => s.status === 'available');
-          const targetSlotId = pendingSlotIdRef.current || selectedSlotIdRef.current;
-          // Keep the requested slot if still open, otherwise default to the next available one
-          const slotToSelect =
-            availableSlots.find((s) => s.slotId === targetSlotId) ?? availableSlots[0];
-
-          if (slotToSelect) {
-            autoAdvanceDateRef.current = false;
-            setSelectedSlotId(slotToSelect.slotId);
-          } else {
-            setSelectedSlotId('');
-            const dateIndex = scheduleDates.findIndex((d) => d.date === date);
-            const nextDate = dateIndex >= 0 ? scheduleDates[dateIndex + 1] : undefined;
-            if (autoAdvanceDateRef.current && nextDate) {
-              advancingToNextDate = true;
-              setSelectedDateId(nextDate.id);
-            } else {
-              autoAdvanceDateRef.current = false;
-            }
-          }
-        }
-      } catch (err) {
-        if (controller.signal.aborted || axios.isCancel(err)) return;
-        if (requestIdRef.current === requestId) {
-          autoAdvanceDateRef.current = false;
-          setSlots([]);
-          setAvailabilityError(getErrorMessage(err));
-        }
-      } finally {
-        // When moving to the next date, keep the loader up until its slots arrive
-        if (requestIdRef.current === requestId && !advancingToNextDate) {
-          setLoadingSlots(false);
-          availabilityControllerRef.current = null;
-        }
-      }
-    },
-    [spaId, scheduleDates],
-  );
-
-  useEffect(() => {
-    loadAvailability(selectedDate?.date);
-    return () => {
-      availabilityControllerRef.current?.abort();
-    };
-  }, [loadAvailability, selectedDate?.date]);
-
-  const handleSelectDate = useCallback((dateId: string) => {
-    autoAdvanceDateRef.current = false;
-    setSelectedDateId(dateId);
-    setSelectedSlotId('');
-    pendingSlotIdRef.current = '';
-  }, []);
-
-  const handleSelectSlot = useCallback((slotId: string) => {
-    setSelectedSlotId(slotId);
-    pendingSlotIdRef.current = slotId;
-  }, []);
 
   const activeServiceId = selectedService.id ?? serviceId;
   const targetService = useMemo(
@@ -308,7 +73,39 @@ function SpaDetailsScreen(): React.ReactElement {
     [spa?.booking_fee, spa?.minimum_booking_amount],
   );
 
-  const [summaryVisible, setSummaryVisible] = useState(false);
+  // The booking reserves a slot, not a service (createDirectBooking takes none), so
+  // only name a service the user actually came from.
+  const bookingDetails = useMemo(
+    () => ({
+      spaName: spa?.name,
+      spaImage: targetService?.cover_image_url ?? spa?.cover_photo_url ?? undefined,
+      location: spa?.locality_name ?? spa?.city_name ?? undefined,
+      serviceName: targetService?.name ?? serviceName ?? bookingOption.title,
+      serviceDurationMinutes: targetService?.duration_minutes ?? null,
+    }),
+    [spa, targetService, serviceName],
+  );
+
+  const booking = useSlotBooking({
+    spaId,
+    enabled: true,
+    initialDateId: paramDateId,
+    initialSlotId: paramSlotId,
+    details: bookingDetails,
+  });
+
+  useEffect(() => {
+    if (!spa) return;
+    Analytics.logEvent(AnalyticsEvents.SPA_VIEWED, {
+      [AnalyticsParams.SPA_ID]: spa.id,
+      [AnalyticsParams.SPA_NAME]: spa.name,
+    });
+    // Was called in the render body, i.e. on every re-render.
+    Crashlytics.setCustomKey(CrashlyticsKeys.SPA_ID, spa.id);
+    Crashlytics.setCustomKey(CrashlyticsKeys.SPA_NAME, spa.name);
+  }, [spa]);
+
+  const { openSummary, selectedDateId, selectedSlotId } = booking;
 
   // Primary Booking Proceed: validate, then show the booking summary
   const handleProceedBooking = useCallback(() => {
@@ -323,18 +120,13 @@ function SpaDetailsScreen(): React.ReactElement {
         serviceName: targetService?.name ?? serviceName,
         openBooking: true,
         selectedDateId,
-        selectedSlotId: selectedSlotIdRef.current || selectedSlotId || undefined,
+        selectedSlotId: selectedSlotId || undefined,
         fromScreen: fromScreen ?? 'Home',
       });
       return;
     }
 
-    if (!selectedSlot) {
-      Alert.alert('Select Time Slot', 'Please select an available time slot to continue.');
-      return;
-    }
-
-    setSummaryVisible(true);
+    openSummary();
   }, [
     spa,
     isAuthenticated,
@@ -346,144 +138,7 @@ function SpaDetailsScreen(): React.ReactElement {
     selectedDateId,
     selectedSlotId,
     fromScreen,
-    selectedSlot,
-  ]);
-
-  const handleCloseSummary = useCallback(() => {
-    setSummaryVisible(false);
-  }, []);
-
-  // Confirmed from summary: create booking & start Cashfree payment
-  const handleConfirmBooking = useCallback(async () => {
-    if (!selectedSlot) {
-      setSummaryVisible(false);
-      return;
-    }
-
-    const guestName = getGuestName(profile, user);
-    if (!guestName) {
-      // The spa needs a real name; bookings without one used to be sent as "Guest".
-      setSummaryVisible(false);
-      Alert.alert(
-        'Add your name',
-        'The spa needs your name for the booking. Add it to your profile, then book again.',
-        [
-          { text: 'Not now', style: 'cancel' },
-          { text: 'Add name', onPress: () => navigation.navigate('EditProfile') },
-        ],
-      );
-      return;
-    }
-    const guestPhone = profile?.phone ?? user?.phoneNumber ?? user?.phone ?? '';
-
-    if (confirmLockRef.current) {
-      return;
-    }
-    confirmLockRef.current = true;
-    setSubmitting(true);
-    let bookingId = '';
-    let bookingReference: string | undefined;
-    const appointmentAt = `${selectedSlot.date}T${selectedSlot.startTime}Z`;
-
-    const bookingSummary = {
-      spaName: spa?.name,
-      spaImage: targetService?.cover_image_url ?? spa?.cover_photo_url ?? undefined,
-      location: spa?.locality_name ?? spa?.city_name ?? undefined,
-      // The booking reserves a slot, not a service (createDirectBooking takes no
-      // service), so only name one the user actually came from. This used to fall
-      // back to the spa's name and a made-up 60 minutes.
-      serviceName: targetService?.name ?? serviceName ?? bookingOption.title,
-      serviceDurationMinutes: targetService?.duration_minutes ?? null,
-      appointmentDate: selectedSlot.date,
-      appointmentTime: formatTimeLabel(selectedSlot.startTime),
-      bookingDateAndTime: buildBookingDateAndTime({
-        appointmentDate: selectedSlot.date,
-        appointmentTime: formatTimeLabel(selectedSlot.startTime),
-      }),
-    };
-
-    const reusableBooking =
-      unpaidBookingRef.current?.slotId === selectedSlot.slotId
-        ? unpaidBookingRef.current
-        : null;
-
-    if (reusableBooking) {
-      bookingId = reusableBooking.bookingId;
-      bookingReference = reusableBooking.bookingReference;
-    } else {
-      try {
-        const response = await BookingApi.createDirectBooking({
-          spa_id: spaId,
-          slot_id: selectedSlot.slotId,
-          appointment_at: appointmentAt,
-          guest_name: guestName,
-          guest_phone: guestPhone,
-          guest_count: 1,
-        });
-
-        bookingId = response.id;
-        if (!bookingId) {
-          throw new Error('Booking response did not include a booking ID.');
-        }
-        bookingReference = response.booking_ref ?? undefined;
-        unpaidBookingRef.current = {
-          slotId: selectedSlot.slotId,
-          bookingId,
-          bookingReference,
-        };
-      } catch (err) {
-        Alert.alert('Booking failed', getErrorMessage(err));
-        setSubmitting(false);
-        confirmLockRef.current = false;
-        return;
-      }
-    }
-
-    try {
-      setBookingSummary(bookingSummary);
-      const paymentContext = await initiatePayment(
-        bookingId,
-        bookingReference,
-        bookingSummary,
-      );
-
-      setSummaryVisible(false);
-      navigation.navigate('PaymentScreen', {
-        paymentId: paymentContext.paymentId,
-        bookingId: paymentContext.bookingId,
-        bookingRef: paymentContext.bookingRef,
-        paymentSessionId: paymentContext.paymentSessionId,
-        cashfreeOrderId: paymentContext.cashfreeOrderId,
-        amount: paymentContext.amount,
-        currency: paymentContext.currency,
-        spaName: paymentContext.spaName,
-        spaImage: paymentContext.spaImage,
-        location: paymentContext.location,
-        serviceName: paymentContext.serviceName,
-        serviceDurationMinutes: paymentContext.serviceDurationMinutes,
-        appointmentDate: paymentContext.appointmentDate,
-        appointmentTime: paymentContext.appointmentTime,
-        bookingDateAndTime: paymentContext.bookingDateAndTime,
-      });
-      // The booking now belongs to this payment flow (BookingResult retries it).
-      unpaidBookingRef.current = null;
-    } catch (err) {
-      Alert.alert('Payment initiation failed', getErrorMessage(err));
-    } finally {
-      setSubmitting(false);
-      confirmLockRef.current = false;
-    }
-  }, [
-    spa,
-    targetService,
-    serviceName,
-    selectedSlot,
-    profile,
-    user,
-    setBookingSummary,
-    initiatePayment,
-    navigation,
-    spaId,
+    openSummary,
   ]);
 
   const handleBack = useCallback(() => {
@@ -515,20 +170,14 @@ function SpaDetailsScreen(): React.ReactElement {
     return () => backHandler.remove();
   }, [fromLogin, fromScreen, navigation]);
 
-  if (spa) {
-    Crashlytics.setCustomKey(CrashlyticsKeys.SPA_ID, spa.id);
-    Crashlytics.setCustomKey(CrashlyticsKeys.SPA_NAME, spa.name);
-  }
-
-  const summaryDateLabel = selectedSlot
-    ? [
-        scheduleDates.find((d) => d.date === selectedSlot.date)?.label,
-        formatShortDate(selectedSlot.date),
-      ]
-        .filter(Boolean)
-        .join(', ')
-    : '';
   const summaryLocation = [spa?.locality_name, spa?.city_name].filter(Boolean).join(', ');
+
+  // Pull-to-refresh used to reload the spa but leave stale slot availability.
+  const { reloadAvailability } = booking;
+  const handleRefresh = useCallback(() => {
+    onRefresh();
+    reloadAvailability();
+  }, [onRefresh, reloadAvailability]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -541,7 +190,7 @@ function SpaDetailsScreen(): React.ReactElement {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={onRefresh}
+            onRefresh={handleRefresh}
             tintColor="#FFAA26"
           />
         }
@@ -552,33 +201,33 @@ function SpaDetailsScreen(): React.ReactElement {
           error={error}
           onRetry={refetch}
           onBack={handleBack}
-          dates={scheduleDates}
-          selectedDateId={selectedDateId}
-          onSelectDate={handleSelectDate}
-          slots={timeSlots}
-          selectedSlotId={selectedSlotId}
-          onSelectSlot={handleSelectSlot}
-          loadingSlots={loadingSlots}
-          availabilityError={availabilityError}
+          dates={booking.scheduleDates}
+          selectedDateId={booking.selectedDateId}
+          onSelectDate={booking.selectDate}
+          slots={booking.timeSlots}
+          selectedSlotId={booking.selectedSlotId}
+          onSelectSlot={booking.selectSlot}
+          loadingSlots={booking.loadingSlots}
+          availabilityError={booking.availabilityError}
           bookingOption={bookingOption}
           onProceedBooking={handleProceedBooking}
-          proceedLoading={submitting}
-          proceedDisabled={!selectedSlot}
+          proceedLoading={booking.submitting}
+          proceedDisabled={!booking.selectedSlot}
         />
       </ScrollView>
 
       <BookingSummarySheet
-        visible={summaryVisible && Boolean(selectedSlot)}
-        loading={submitting}
-        onClose={handleCloseSummary}
-        onConfirm={handleConfirmBooking}
+        visible={booking.summaryVisible && Boolean(booking.selectedSlot)}
+        loading={booking.submitting}
+        onClose={booking.closeSummary}
+        onConfirm={booking.confirmBooking}
         spaName={spa?.name}
-        spaImage={targetService?.cover_image_url ?? spa?.cover_photo_url ?? undefined}
+        spaImage={bookingDetails.spaImage}
         location={summaryLocation}
-        dateLabel={summaryDateLabel}
-        timeLabel={selectedSlot ? formatTimeLabel(selectedSlot.startTime) : ''}
-        serviceName={targetService?.name ?? serviceName}
-        serviceDurationMinutes={targetService?.duration_minutes ?? undefined}
+        dateLabel={booking.summaryDateLabel}
+        timeLabel={booking.summaryTimeLabel}
+        serviceName={bookingDetails.serviceName}
+        serviceDurationMinutes={bookingDetails.serviceDurationMinutes ?? undefined}
         bookingFeeText={bookingFeeText}
         bookingFeeNote={bookingOption.description}
       />
