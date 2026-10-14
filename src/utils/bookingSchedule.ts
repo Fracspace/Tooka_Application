@@ -45,12 +45,38 @@ export const formatShortDate = (dateKey: string): string => {
   return monthName && Number.isFinite(day) ? `${day} ${monthName}` : dateKey;
 };
 
+const asText = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim() ? value : undefined;
+
+/**
+ * The API's error message: top-level `message`, or `error.message`, which is all
+ * that older backends send.
+ */
+const getApiErrorMessage = (data: unknown): string | undefined => {
+  const body = data as { message?: unknown; error?: { message?: unknown } } | undefined;
+  return asText(body?.message) ?? asText(body?.error?.message);
+};
+
+/**
+ * The slot is held or taken by someone else (409, code SLOT_ON_HOLD while another
+ * user is paying for it).
+ */
+export const isSlotUnavailableError = (error: unknown): boolean => {
+  if (!axios.isAxiosError(error)) return false;
+  const body = error.response?.data as { code?: unknown; error?: { code?: unknown } } | undefined;
+  return (
+    error.response?.status === 409 ||
+    body?.error?.code === 'SLOT_ON_HOLD' ||
+    body?.code === 'SLOT_ON_HOLD'
+  );
+};
+
 /** User-facing copy for a failed booking/availability request. */
 export const getSlotBookingErrorMessage = (error: unknown): string => {
   if (axios.isCancel(error)) return '';
   if (axios.isAxiosError(error)) {
-    const message = error.response?.data?.message;
-    if (typeof message === 'string' && message.trim()) return message;
+    const message = getApiErrorMessage(error.response?.data);
+    if (message) return message;
     if (error.message.toLowerCase().includes('network')) {
       return 'You are offline. Please check your internet connection.';
     }

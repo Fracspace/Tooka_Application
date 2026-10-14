@@ -40,6 +40,7 @@ import {
   PAYMENT_POLL_TIMEOUT_MS,
 } from '../../payment/paymentPolling';
 import { paymentLogger } from '../../payment/paymentLogger';
+import { isNotYetPaidStatus } from '../../payment/PaymentMapper';
 import {
   BackendPaymentStatus,
   PaymentFlowState,
@@ -84,11 +85,6 @@ const isPendingBackendStatus = (status: BackendPaymentStatus): boolean =>
   status === BackendPaymentStatus.Initiated ||
   status === BackendPaymentStatus.Pending ||
   status === BackendPaymentStatus.Processing;
-
-/** No payment attempt has completed on the order yet (as opposed to one in flight). */
-const isNotYetPaidStatus = (status: BackendPaymentStatus): boolean =>
-  status === BackendPaymentStatus.Initiated ||
-  status === BackendPaymentStatus.Pending;
 
 /** What the Cashfree SDK told us. A hint only - the backend status is the truth. */
 type SdkOutcome = 'success' | 'failed' | 'cancelled' | 'unknown';

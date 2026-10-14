@@ -15,6 +15,15 @@ jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate:
 jest.mock('../src/context/AuthContext', () => ({ useAuth: () => ({ user: null }) }));
 const mockProfile = { fullName: 'Asha Rao', phone: '+919999999999' };
 jest.mock('../src/context/ProfileContext', () => ({ useProfile: () => ({ profile: mockProfile }) }));
+const mockReleaseSlotHold = jest.fn();
+jest.mock('../src/services/slotHold', () => ({
+  releaseSlotHold: (...args: unknown[]) => mockReleaseSlotHold(...args),
+}));
+const mockAlert = jest.fn();
+jest.mock('react-native', () => ({
+  Alert: { alert: (...args: unknown[]) => mockAlert(...args) },
+  Platform: { OS: 'ios' },
+}));
 const mockInitiatePayment = jest.fn();
 jest.mock('../src/context/PaymentContext', () => ({
   usePaymentContext: () => ({
@@ -52,7 +61,34 @@ beforeEach(() => {
   mockCreateDirectBooking.mockReset();
   mockInitiatePayment.mockReset();
   mockNavigate.mockReset();
+  mockReleaseSlotHold.mockReset();
+  mockAlert.mockReset();
 });
+
+const slotOnHoldError = () =>
+  Object.assign(new Error('Request failed with status code 409'), {
+    isAxiosError: true,
+    response: {
+      status: 409,
+      data: {
+        success: false,
+        message: 'Someone else is booking this slot right now.',
+        error: { code: 'SLOT_ON_HOLD', statusCode: 409 },
+      },
+    },
+  });
+
+const renderAndOpenSummary = async () => {
+  let renderer!: ReactTestRenderer.ReactTestRenderer;
+  await ReactTestRenderer.act(async () => {
+    renderer = ReactTestRenderer.create(<Harness spaId="spa-a" />);
+  });
+  await flush();
+  await ReactTestRenderer.act(async () => {
+    latest.openSummary();
+  });
+  return renderer;
+};
 
 describe('useSlotBooking', () => {
   it('selects the next available slot automatically', async () => {
@@ -169,5 +205,89 @@ describe('useSlotBooking', () => {
       'PaymentScreen',
       expect.objectContaining({ paymentId: 'p1', bookingId: 'b1' }),
     );
+  });
+
+  it('moves to the next open slot when someone else is paying for this one (SLOT_ON_HOLD)', async () => {
+    mockGetAvailability
+      .mockResolvedValueOnce([slot('s1', TODAY.date, '10:00'), slot('s2', TODAY.date, '11:00')])
+      // After the 409 the backend reports s1 as held by the other user.
+      .mockResolvedValueOnce([slot('s1', TODAY.date, '10:00', 'blocked'), slot('s2', TODAY.date, '11:00')]);
+    mockCreateDirectBooking.mockRejectedValue(slotOnHoldError());
+
+    await renderAndOpenSummary();
+    expect(latest.selectedSlotId).toBe('s1');
+
+    await ReactTestRenderer.act(async () => {
+      await latest.confirmBooking();
+    });
+    await flush();
+
+    expect(latest.summaryVisible).toBe(false);
+    expect(mockGetAvailability).toHaveBeenCalledTimes(2);
+    expect(latest.selectedSlotId).toBe('s2');
+    expect(mockAlert).toHaveBeenCalledWith('This time is no longer available', expect.any(String));
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('releases a booking whose payment never started once the user closes the summary', async () => {
+    mockGetAvailability.mockResolvedValue([slot('s1', TODAY.date, '10:00')]);
+    mockCreateDirectBooking.mockResolvedValue({ id: 'b1', booking_ref: 'REF1' });
+    mockInitiatePayment.mockRejectedValue(new Error('gateway down'));
+
+    await renderAndOpenSummary();
+    await ReactTestRenderer.act(async () => {
+      await latest.confirmBooking();
+    });
+    expect(mockAlert).toHaveBeenCalledWith('Payment initiation failed', expect.any(String));
+    expect(mockReleaseSlotHold).not.toHaveBeenCalled();
+
+    // Confirm again on the same slot: the booking is reused, not released.
+    mockInitiatePayment.mockRejectedValueOnce(new Error('gateway down'));
+    await ReactTestRenderer.act(async () => {
+      await latest.confirmBooking();
+    });
+    expect(mockCreateDirectBooking).toHaveBeenCalledTimes(1);
+
+    await ReactTestRenderer.act(async () => {
+      latest.closeSummary();
+    });
+    expect(mockReleaseSlotHold).toHaveBeenCalledWith('b1');
+  });
+
+  it('releases a booking whose payment never started when the screen closes', async () => {
+    mockGetAvailability.mockResolvedValue([slot('s1', TODAY.date, '10:00')]);
+    mockCreateDirectBooking.mockResolvedValue({ id: 'b1', booking_ref: 'REF1' });
+    mockInitiatePayment.mockRejectedValue(new Error('gateway down'));
+
+    const renderer = await renderAndOpenSummary();
+    await ReactTestRenderer.act(async () => {
+      await latest.confirmBooking();
+    });
+    await ReactTestRenderer.act(async () => {
+      renderer.unmount();
+    });
+    expect(mockReleaseSlotHold).toHaveBeenCalledWith('b1');
+  });
+
+  it('does not release a booking that went on to the payment screen', async () => {
+    mockGetAvailability.mockResolvedValue([slot('s1', TODAY.date, '10:00')]);
+    mockCreateDirectBooking.mockResolvedValue({ id: 'b1', booking_ref: 'REF1' });
+    mockInitiatePayment.mockResolvedValue({ paymentId: 'p1', bookingId: 'b1' });
+
+    const renderer = await renderAndOpenSummary();
+    let confirmed!: Promise<void>;
+    await ReactTestRenderer.act(async () => {
+      confirmed = latest.confirmBooking();
+    });
+    await flush();
+    await ReactTestRenderer.act(async () => {
+      latest.onSummaryDismissed();
+      await confirmed;
+    });
+    await ReactTestRenderer.act(async () => {
+      renderer.unmount();
+    });
+    expect(mockNavigate).toHaveBeenCalled();
+    expect(mockReleaseSlotHold).not.toHaveBeenCalled();
   });
 });

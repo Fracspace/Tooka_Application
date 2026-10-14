@@ -175,12 +175,26 @@ export const mapCategoryToResultType = (
   }
 };
 
+/** No payment attempt has completed on the order yet (as opposed to one in flight). */
+export const isNotYetPaidStatus = (status: BackendPaymentStatus): boolean =>
+  status === BackendPaymentStatus.Initiated ||
+  status === BackendPaymentStatus.Pending;
+
+// Cashfree refused to open its checkout at all, so nothing can have been paid.
+// installer_package_not_approved: production Android builds not installed from the
+// Play Store. These used to map to Unknown and wait ~30s before "Payment Processing".
+const SDK_NOT_STARTED_CODES = new Set(['installer_package_not_approved']);
+
 export const mapSdkErrorToResult = (error: {
   getMessage?: () => string;
   getCode?: () => string;
 }): SdkPaymentResult => {
   const message = error.getMessage?.()?.toLowerCase() ?? '';
   const code = error.getCode?.()?.toLowerCase() ?? '';
+
+  if (SDK_NOT_STARTED_CODES.has(code)) {
+    return SdkPaymentResult.Failed;
+  }
 
   if (
     message.includes('cancel') ||

@@ -34,6 +34,7 @@ import Toast from 'react-native-toast-message';
 
 import PaymentApi from '../../api/PaymentApi';
 import { usePaymentContext } from '../../context/PaymentContext';
+import { useReleaseHoldOnLeave } from '../../hooks/useReleaseHoldOnLeave';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { mapPaymentError } from '../../payment/PaymentMapper';
 import { BackendPaymentStatus } from '../../payment/PaymentTypes';
@@ -168,6 +169,11 @@ function BookingResultScreen(): React.ReactElement {
   // console.log('BookingResultScreen params:', route.params);
 
   const type = parseResultType(resultType);
+  const keepSlotHold = useReleaseHoldOnLeave({
+    resultType: type,
+    bookingId: route.params?.bookingId,
+    paymentId: route.params?.paymentId,
+  });
   const state = STATE_COPY[type];
   const isProcessing = type === 'processing' || type === 'timeout';
   const maxWidth = Math.min(width - 40, 430);
@@ -347,6 +353,7 @@ function BookingResultScreen(): React.ReactElement {
         },
       );
 
+      keepSlotHold();
       navigation.replace('PaymentScreen', {
         paymentId: paymentContext.paymentId,
         bookingId: paymentContext.bookingId,
@@ -373,7 +380,7 @@ function BookingResultScreen(): React.ReactElement {
         setRetrying(false);
       }
     }
-  }, [initiatePayment, navigation, resetPaymentFlow, route.params]);
+  }, [initiatePayment, keepSlotHold, navigation, resetPaymentFlow, route.params]);
 
   const handlePrimary = useCallback(() => {
     if (type === 'success') {

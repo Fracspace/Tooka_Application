@@ -11,6 +11,7 @@ import { useProfile } from '../context/ProfileContext';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { TimeSlot } from '../screens/Booking/types';
 import type { BookingSlot } from '../types/booking';
+import { releaseSlotHold } from '../services/slotHold';
 import { getGuestName } from '../utils/bookingGuest';
 import { buildBookingDateAndTime } from '../utils/bookingDateTime';
 import {
@@ -18,6 +19,7 @@ import {
   formatShortDate,
   formatTimeLabel,
   getSlotBookingErrorMessage,
+  isSlotUnavailableError,
 } from '../utils/bookingSchedule';
 
 /** What the payment and result screens show about the booking. */
@@ -103,6 +105,17 @@ export function useSlotBooking({
     selectedSlotIdRef.current = selectedSlotId;
   }, [selectedSlotId]);
 
+  // That booking holds its slot for everyone else (up to 15 minutes) until it is
+  // paid or released. Release it as soon as the user moves on without paying.
+  const releaseUnpaidBooking = useCallback((keepSlotId?: string) => {
+    const unpaid = unpaidBookingRef.current;
+    if (!unpaid || unpaid.slotId === keepSlotId) return;
+    unpaidBookingRef.current = null;
+    releaseSlotHold(unpaid.bookingId);
+  }, []);
+
+  useEffect(() => () => releaseUnpaidBooking(), [releaseUnpaidBooking]);
+
   useEffect(() => {
     if (isScheduleDate(initialDateId)) {
       setSelectedDateId(initialDateId as string);
@@ -127,13 +140,13 @@ export function useSlotBooking({
     autoAdvanceDateRef.current = true;
     pendingSlotIdRef.current = '';
     selectedSlotIdRef.current = '';
-    unpaidBookingRef.current = null;
+    releaseUnpaidBooking();
     setSelectedSlotId('');
     setSlots([]);
     setAvailabilityError(null);
     setSummaryVisible(false);
     setSelectedDateId(scheduleDates[0]?.id ?? '');
-  }, [spaId, scheduleDates]);
+  }, [spaId, scheduleDates, releaseUnpaidBooking]);
 
   const selectedDate = useMemo(
     () => scheduleDates.find((d) => d.id === selectedDateId) ?? scheduleDates[0],
@@ -239,15 +252,17 @@ export function useSlotBooking({
 
   const selectDate = useCallback((dateId: string) => {
     autoAdvanceDateRef.current = false;
+    releaseUnpaidBooking();
     setSelectedDateId(dateId);
     setSelectedSlotId('');
     pendingSlotIdRef.current = '';
-  }, []);
+  }, [releaseUnpaidBooking]);
 
   const selectSlot = useCallback((slotId: string) => {
+    releaseUnpaidBooking(slotId);
     setSelectedSlotId(slotId);
     pendingSlotIdRef.current = slotId;
-  }, []);
+  }, [releaseUnpaidBooking]);
 
   /** Show the booking summary for the selected slot. */
   const openSummary = useCallback(() => {
@@ -258,9 +273,11 @@ export function useSlotBooking({
     setSummaryVisible(true);
   }, [selectedSlot]);
 
+  /** The user dismissed the summary (not the close on the way to payment). */
   const closeSummary = useCallback(() => {
     setSummaryVisible(false);
-  }, []);
+    releaseUnpaidBooking();
+  }, [releaseUnpaidBooking]);
 
   // Cashfree's iOS checkout presents itself on top of whatever is showing. Opened
   // while the summary Modal was still fading out, it was closed along with the Modal:
@@ -369,9 +386,22 @@ export function useSlotBooking({
         bookingReference = response.booking_ref ?? undefined;
         unpaidBookingRef.current = { slotId: selectedSlot.slotId, bookingId, bookingReference };
       } catch (err) {
-        Alert.alert('Booking failed', getSlotBookingErrorMessage(err));
         setSubmitting(false);
         confirmLockRef.current = false;
+        if (isSlotUnavailableError(err)) {
+          // Someone else is paying for this slot (the list was loaded before they
+          // took it). Refresh, so the next open slot is selected instead.
+          setSummaryVisible(false);
+          pendingSlotIdRef.current = '';
+          autoAdvanceDateRef.current = true;
+          loadAvailability(selectedSlot.date);
+          Alert.alert(
+            'This time is no longer available',
+            'Someone else is booking this slot right now. We have refreshed the available times, please pick another.',
+          );
+          return;
+        }
+        Alert.alert('Booking failed', getSlotBookingErrorMessage(err));
         return;
       }
     }
@@ -416,6 +446,7 @@ export function useSlotBooking({
     setBookingSummary,
     initiatePayment,
     closeSummaryAndWait,
+    loadAvailability,
   ]);
 
   const summaryDateLabel = selectedSlot

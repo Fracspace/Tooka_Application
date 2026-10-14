@@ -370,6 +370,11 @@ export const BookingApi = {
     return unwrapBooking(response.data);
   },
 
+  /** Give up the slot a pending_payment booking holds (it becomes "expired"). */
+  releaseBooking: async (bookingId: string): Promise<void> => {
+    await authAxiosClient.post(`/bookings/${encodeURIComponent(bookingId)}/release`);
+  },
+
   getBookingHistory: async ({
     status,
     page = 1,

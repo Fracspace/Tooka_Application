@@ -16,7 +16,8 @@ export const getBookingErrorMessage = (error: unknown): string => {
 
   if (axios.isAxiosError(error)) {
     const status = error.response?.status;
-    const apiMessage = error.response?.data?.message;
+    // Older backends only send error.message.
+    const apiMessage = error.response?.data?.message ?? error.response?.data?.error?.message;
 
     if (typeof apiMessage === 'string' && apiMessage.trim()) {
       return apiMessage;

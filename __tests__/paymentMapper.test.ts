@@ -1,8 +1,9 @@
 import {
   mapInitiatePaymentResponse,
   mapPaymentVerificationResponse,
+  mapSdkErrorToResult,
 } from '../src/payment/PaymentMapper';
-import { BackendPaymentStatus } from '../src/payment/PaymentTypes';
+import { BackendPaymentStatus, SdkPaymentResult } from '../src/payment/PaymentTypes';
 
 describe('mapPaymentVerificationResponse', () => {
   it('maps known statuses', () => {
@@ -40,5 +41,29 @@ describe('mapInitiatePaymentResponse', () => {
     delete withoutAmount.order_amount;
     expect(() => mapInitiatePaymentResponse(withoutAmount)).toThrow();
     expect(() => mapInitiatePaymentResponse({ ...complete, order_amount: 0 })).toThrow();
+  });
+});
+
+describe('mapSdkErrorToResult', () => {
+  const sdkError = (code: string, message: string) => ({
+    getCode: () => code,
+    getMessage: () => message,
+  });
+
+  it('treats Cashfree refusing to open (untrusted installer) as failed, not unknown', () => {
+    expect(
+      mapSdkErrorToResult(
+        sdkError(
+          'installer_package_not_approved',
+          'NOT_AVAILABLE is not a trusted source. App should be installed from play store or another whitelisted app store.',
+        ),
+      ),
+    ).toBe(SdkPaymentResult.Failed);
+  });
+
+  it('still reads a user cancel sent with code payment_failed as cancelled', () => {
+    expect(
+      mapSdkErrorToResult(sdkError('payment_failed', 'User cancelled the transaction.')),
+    ).toBe(SdkPaymentResult.Cancelled);
   });
 });
