@@ -702,13 +702,6 @@ const HomeScreen: React.FC = () => {
           </View>
         )}
 
-        {/* <OfferCard
-          item={offer}
-          onPress={() => {
-            // TODO: Add offer action
-          }}
-        /> */}
-
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Your wellness moment</Text>
           <Pressable onPress={() => { }}>
