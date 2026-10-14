@@ -334,6 +334,11 @@ const HomeScreen: React.FC = () => {
 
   const handleFavoritePress = useCallback(() => undefined, []);
 
+  // The wellness moment cards did nothing when tapped.
+  const handleOpenExplore = useCallback(() => {
+    navigation.navigate('Explore');
+  }, [navigation]);
+
   const renderFeaturedSpaItem = useCallback(
     ({ item }: ListRenderItemInfo<FeaturedSpaItem>) => (
       <FeaturedSpaCard
@@ -714,7 +719,7 @@ const HomeScreen: React.FC = () => {
         <View style={styles.wellnessRow}>
           <ScrollView horizontal style={{ flexDirection: 'row', gap: 10 }}>
             {wellnessMoments.map((item) => (
-              <WellnessCard key={item.id} item={item} onPress={() => { }} />
+              <WellnessCard key={item.id} item={item} onPress={handleOpenExplore} />
             ))}
           </ScrollView>
         </View>

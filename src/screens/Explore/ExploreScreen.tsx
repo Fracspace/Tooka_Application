@@ -52,6 +52,7 @@ import { bookingOption } from '../Booking/bookingData';
 import { buildBookingDateAndTime } from '../../utils/bookingDateTime';
 import SpaDetailsContent from '../Home/SpaDetailsContent';
 import { formatRatingLabel } from '../../utils/number';
+import { getGuestName } from '../../utils/bookingGuest';
 
 type ExploreNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -508,12 +509,19 @@ const ExploreScreen: React.FC = () => {
       return;
     }
 
-    const guestName =
-      profile?.fullName ??
-      profile?.displayName ??
-      user?.fullName ??
-      user?.userName ??
-      'Guest';
+    const guestName = getGuestName(profile, user);
+    if (!guestName) {
+      // The spa needs a real name; bookings without one used to be sent as "Guest".
+      Alert.alert(
+        'Add your name',
+        'The spa needs your name for the booking. Add it to your profile, then book again.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Add name', onPress: () => navigation.navigate('EditProfile') },
+        ],
+      );
+      return;
+    }
     const guestPhone = profile?.phone ?? user?.phoneNumber ?? user?.phone ?? '';
 
     if (confirmLockRef.current) {
@@ -529,8 +537,10 @@ const ExploreScreen: React.FC = () => {
       spaName: spaDetails?.name ?? selectedSpa.name,
       spaImage: spaDetails?.cover_photo_url ?? selectedSpa.image ?? undefined,
       location: spaDetails?.locality_name ?? spaDetails?.city_name ?? selectedSpa.address ?? undefined,
-      serviceName: spaDetails?.name ?? selectedSpa.name,
-      serviceDurationMinutes: 60,
+      // A slot booking: no service is chosen here (createDirectBooking takes none).
+      // This used to send the spa's name as the service with a made-up 60 minutes.
+      serviceName: bookingOption.title,
+      serviceDurationMinutes: null,
       appointmentDate: selectedSlot.date,
       appointmentTime: formatTimeLabel(selectedSlot.startTime),
       bookingDateAndTime: buildBookingDateAndTime({

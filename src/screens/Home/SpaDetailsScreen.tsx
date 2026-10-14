@@ -31,6 +31,7 @@ import { buildBookingDateAndTime } from '../../utils/bookingDateTime';
 import { Analytics, AnalyticsEvents, AnalyticsParams } from '../../services/firebase/analytics';
 import { Crashlytics, CrashlyticsKeys } from '../../services/firebase/crashlytics';
 import { formatPrice } from '../../utils/number';
+import { getGuestName } from '../../utils/bookingGuest';
 
 type SpaDetailsNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -359,12 +360,20 @@ function SpaDetailsScreen(): React.ReactElement {
       return;
     }
 
-    const guestName =
-      profile?.fullName ??
-      profile?.displayName ??
-      user?.fullName ??
-      user?.userName ??
-      'Guest';
+    const guestName = getGuestName(profile, user);
+    if (!guestName) {
+      // The spa needs a real name; bookings without one used to be sent as "Guest".
+      setSummaryVisible(false);
+      Alert.alert(
+        'Add your name',
+        'The spa needs your name for the booking. Add it to your profile, then book again.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Add name', onPress: () => navigation.navigate('EditProfile') },
+        ],
+      );
+      return;
+    }
     const guestPhone = profile?.phone ?? user?.phoneNumber ?? user?.phone ?? '';
 
     if (confirmLockRef.current) {
@@ -380,8 +389,11 @@ function SpaDetailsScreen(): React.ReactElement {
       spaName: spa?.name,
       spaImage: targetService?.cover_image_url ?? spa?.cover_photo_url ?? undefined,
       location: spa?.locality_name ?? spa?.city_name ?? undefined,
-      serviceName: targetService?.name ?? serviceName ?? spa?.name,
-      serviceDurationMinutes: targetService?.duration_minutes ?? 60,
+      // The booking reserves a slot, not a service (createDirectBooking takes no
+      // service), so only name one the user actually came from. This used to fall
+      // back to the spa's name and a made-up 60 minutes.
+      serviceName: targetService?.name ?? serviceName ?? bookingOption.title,
+      serviceDurationMinutes: targetService?.duration_minutes ?? null,
       appointmentDate: selectedSlot.date,
       appointmentTime: formatTimeLabel(selectedSlot.startTime),
       bookingDateAndTime: buildBookingDateAndTime({
