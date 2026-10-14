@@ -114,7 +114,8 @@ export function mapApiSpaToMappedSpa(
     distanceMeters,
     description: spa.tagline ?? '',
     address: spa.locality_name ?? spa.city_name ?? 'Location unavailable',
-    subtitle: `${distanceStr} Away from you`,
+    // No distance known: show where it is instead of "-- Away from you".
+    subtitle: distanceMeters != null ? `${distanceStr} Away from you` : spa.locality_name ?? spa.city_name ?? '',
     typeA: categoryTag,
     typeB: featureTag,
     starting_price: spa.starting_price ?? null,

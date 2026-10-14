@@ -169,11 +169,15 @@ const HomeScreen: React.FC = () => {
   const wellnessMoments = wellnessMomentsData as WellnessMomentItem[];
   const wellnessInsight = wellnessInsightData as WellnessInsightItem;
 
+  // null until a city is known: wait for location instead of fetching a default
+  // ('Hyderabad' was fetched first, then aborted and refetched, and became the
+  // "curated" city for users with no location at all).
   const resolvedCity = useMemo(() => {
+    if (locationLoading) return null;
     const pCity = profile?.city?.trim();
     const lCity = location?.city?.trim();
-    return lCity || pCity || 'Hyderabad';
-  }, [profile?.city, location?.city]);
+    return lCity || pCity || null;
+  }, [profile?.city, location?.city, locationLoading]);
 
   const { spas, loading, error, refreshing, refetch, onRefresh } = useSpaDiscovery(resolvedCity);
 
@@ -207,7 +211,7 @@ const HomeScreen: React.FC = () => {
           id: spa.id,
           name: spa.name ?? 'Untitled Spa',
           location: spa.locality_name ?? spa.city_name ?? '',
-          distance: distanceStr,
+          distance: distanceStr === '--' ? '' : distanceStr,
           rating: formatRatingLabel(toRatingOrNull(spa.rating_google)),
           reviews: formatReviewsLabel(spa.review_count_google),
           price: formatPrice(spa.starting_price) ?? '',
@@ -292,7 +296,7 @@ const HomeScreen: React.FC = () => {
     // console.log("Search Results: ", searchResults);
     return searchResults.map((spa) => {
       const { distanceStr } = getSpaDistance(
-        { lat: spa.latitude, lng: spa.longitude },
+        { lat: spa.latitude, lng: spa.longitude, distance_m: spa.distance_m },
         location?.latitude,
         location?.longitude,
       );
@@ -301,7 +305,7 @@ const HomeScreen: React.FC = () => {
         id: spa.id,
         name: spa.name ?? 'Untitled Spa',
         location: spa.subtitle ?? '',
-        distance: distanceStr,
+        distance: distanceStr === '--' ? '' : distanceStr,
         rating: spa.rating,
         reviews: formatReviewsLabel(spa.reviewCount),
         price: formatPrice(spa.starting_price) ?? '',
@@ -488,6 +492,13 @@ const HomeScreen: React.FC = () => {
             subtitle="Please try again."
             actionLabel="Retry"
             onAction={refetch}
+          />
+        ) : shouldRenderEmptyState && !resolvedCity ? (
+          <StateMessage
+            title="Where are you?"
+            subtitle="Choose your location to see spas curated for your city."
+            actionLabel="Choose location"
+            onAction={handlePressLocation}
           />
         ) : shouldRenderEmptyState ? (
           <StateMessage

@@ -95,6 +95,34 @@ const persistPermissionStatus = async (
   });
 };
 
+const PERMISSION_LOST_STATUSES: LocationPermissionStatus[] = ['denied', 'blocked', 'restricted'];
+
+/**
+ * A location attempt failed. Both failure paths used to save an EMPTY location,
+ * so one GPS timeout indoors (or a failed "Use current location" tap) wiped the
+ * saved coordinates, city - and even a city the user had picked by hand.
+ *
+ * Now: a manual pick always survives; otherwise the last good location is kept
+ * unless location permission itself has been taken away.
+ */
+const persistLocationFailure = async (
+  permission: LocationPermissionStatus,
+  error: string | null = null,
+): Promise<StoredLocation> => {
+  const saved = await getSavedLocation();
+  const hasSavedPlace = saved?.latitude != null && saved?.longitude != null;
+  const permissionLost = PERMISSION_LOST_STATUSES.includes(permission);
+
+  if (saved && hasSavedPlace && (saved.isManualSelection || !permissionLost)) {
+    return persistLocation({ ...saved, error });
+  }
+  return persistPermissionStatus(permission, error);
+};
+
+// Bumped by every manual city pick. A GPS lookup that started before the pick
+// (they can take ~20s) must not save over it when it finally finishes.
+let manualSelectionVersion = 0;
+
 // const requestAndroidPermission =
 //   async (): Promise<LocationPermissionStatus> => {
 //     try {
@@ -395,6 +423,7 @@ export async function getSavedLocation(): Promise<StoredLocation | null> {
 export async function saveSelectedLocation(
   location: StoredLocation,
 ): Promise<StoredLocation> {
+  manualSelectionVersion += 1;
   const nextLocation: StoredLocation = {
     ...location,
     isManualSelection: location.isManualSelection ?? true,
@@ -426,6 +455,15 @@ let locationReqCount = 0;
 export async function getCurrentLocation(): Promise<StoredLocation | null> {
   const reqId = ++locationReqCount;
   const startTime = Date.now();
+  const startedForVersion = manualSelectionVersion;
+
+  // Save a GPS result only if the user has not picked a city meanwhile.
+  const persistGpsResult = async (location: StoredLocation): Promise<StoredLocation> => {
+    if (manualSelectionVersion !== startedForVersion) {
+      return (await getSavedLocation()) ?? location;
+    }
+    return persistLocation(location);
+  };
   if (__DEV__) {
     console.log(`[LOCATION][req #${reqId}][t=0ms] getCurrentLocation START`);
   }
@@ -440,7 +478,7 @@ export async function getCurrentLocation(): Promise<StoredLocation | null> {
     }
 
     if (permission !== 'granted') {
-      return await persistPermissionStatus(permission);
+      return await persistLocationFailure(permission);
     }
 
     let position: GeolocationResponse | null = null;
@@ -472,7 +510,7 @@ export async function getCurrentLocation(): Promise<StoredLocation | null> {
           console.warn(`[LOCATION][req #${reqId}][t=${Date.now() - startTime}ms] GPS acquisition failed completely:`, watchError);
         }
 
-        return await persistPermissionStatus(
+        return await persistLocationFailure(
           permissionStatus,
           watchError?.message ?? 'Unable to get current location.',
         );
@@ -504,7 +542,7 @@ export async function getCurrentLocation(): Promise<StoredLocation | null> {
       if (__DEV__) {
         console.log(`[LOCATION][req #${reqId}][t=${Date.now() - startTime}ms] Using fresh cached address:`, cached.city);
       }
-      return await persistLocation({
+      return await persistGpsResult({
         ...nextLocation,
         locality: cached.locality ?? null,
         subLocality: cached.subLocality ?? null,
@@ -528,12 +566,17 @@ export async function getCurrentLocation(): Promise<StoredLocation | null> {
         nextLocation.latitude,
         nextLocation.longitude,
       );
+      // The lookup reports failures as an empty result, which used to be saved as
+      // city: null ("Unknown Location"). Fall back to the cached address instead.
+      if (!resolvedAddress?.city) {
+        throw new Error('Address lookup returned no city');
+      }
 
       if (__DEV__) {
         console.log(`[LOCATION][req #${reqId}][t=${Date.now() - startTime}ms] resolveAddressForCoordinates SUCCESS:`, resolvedAddress);
       }
 
-      return await persistLocation({
+      return await persistGpsResult({
         ...nextLocation,
         locality: resolvedAddress.locality ?? null,
         subLocality: resolvedAddress.subLocality ?? null,
@@ -547,7 +590,7 @@ export async function getCurrentLocation(): Promise<StoredLocation | null> {
         console.warn(`[LOCATION][req #${reqId}][t=${Date.now() - startTime}ms] failed to resolve address:`, error);
       }
 
-      return await persistLocation({
+      return await persistGpsResult({
         ...nextLocation,
         locality: cached?.locality ?? null,
         subLocality: cached?.subLocality ?? null,

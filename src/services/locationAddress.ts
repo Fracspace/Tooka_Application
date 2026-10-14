@@ -173,6 +173,7 @@ export const searchLocationAddress = async (
       },
     );
 
+    assertGoogleStatus(response?.data);
     const results = Array.isArray(response?.data?.results)
       ? response.data.results
       : [];
@@ -226,6 +227,20 @@ export const searchLocationAddress = async (
   }
 };
 
+/**
+ * Google reports quota, billing and key problems (OVER_QUERY_LIMIT,
+ * REQUEST_DENIED, INVALID_REQUEST...) as HTTP 200 with an error `status`, which
+ * the app used to read as "no results".
+ */
+export class GooglePlacesError extends Error {}
+
+const assertGoogleStatus = (data: any): void => {
+  const status = data?.status;
+  if (status && status !== 'OK' && status !== 'ZERO_RESULTS') {
+    throw new GooglePlacesError(`Google Places request failed: ${status}`);
+  }
+};
+
 export interface LocationAutocompleteResult {
   placeId: string;
   description: string;
@@ -257,6 +272,7 @@ export const searchLocationAutocomplete = async (
       },
     );
 
+    assertGoogleStatus(response?.data);
     const predictions = Array.isArray(response?.data?.predictions)
       ? response.data.predictions
       : [];
@@ -282,7 +298,8 @@ export const searchLocationAutocomplete = async (
     if (__DEV__) {
       console.warn('[locationAddress] autocomplete failed', error);
     }
-    return [];
+    // Let the screen tell the user the search failed, instead of "No locations found".
+    throw error;
   }
 };
 
@@ -307,6 +324,7 @@ export const getLocationDetailsFromPlaceId = async (
       },
     );
 
+    assertGoogleStatus(response?.data);
     const result = response?.data?.result;
     if (!result) {
       return null;

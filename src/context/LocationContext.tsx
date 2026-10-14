@@ -6,7 +6,7 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import { AppState } from 'react-native';
+import { AppState, type AppStateStatus } from 'react-native';
 import {
   getSavedLocation as readSavedLocation,
   hasLocationPermission as checkLocationPermission,
@@ -97,8 +97,14 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({
 
     initializeLocation();
 
+    // Only a real return from the background refreshes. 'inactive' -> 'active' also
+    // fires after a permission dialog or the notification shade, which started extra
+    // GPS + Geocoding lookups racing each other.
+    let previousAppState: AppStateStatus = AppState.currentState;
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
-      if (nextAppState === 'active') {
+      const cameFromBackground = previousAppState === 'background';
+      previousAppState = nextAppState;
+      if (nextAppState === 'active' && cameFromBackground) {
         try {
           const saved = await readSavedLocation();
           if (saved?.isManualSelection) {

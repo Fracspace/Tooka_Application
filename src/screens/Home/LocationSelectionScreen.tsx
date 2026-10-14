@@ -24,6 +24,7 @@ import {
   type LocationSearchResult,
 } from '../../services/locationAddress';
 import type { StoredLocation } from '../../types/location';
+import Toast from 'react-native-toast-message';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'LocationSelection'>;
 
@@ -53,6 +54,7 @@ const LocationSelectionScreen: React.FC = () => {
   const latestReqIdRef = useRef(0);
 
   const debouncedQueryRef = useRef('');
+  const [searchFailed, setSearchFailed] = useState(false);
 
   // Debounce search query
   useEffect(() => {
@@ -92,6 +94,7 @@ const LocationSelectionScreen: React.FC = () => {
 
     const reqId = ++latestReqIdRef.current;
     setSearching(true);
+    setSearchFailed(false);
 
     searchLocationAutocomplete(trimmed)
       .then((predictions) => {
@@ -102,6 +105,7 @@ const LocationSelectionScreen: React.FC = () => {
       .catch(() => {
         if (latestReqIdRef.current === reqId) {
           setAutocompleteResults([]);
+          setSearchFailed(true);
         }
       })
       .finally(() => {
@@ -152,6 +156,15 @@ const LocationSelectionScreen: React.FC = () => {
     }
   }, []);
 
+  // Tapping a suggestion whose lookups both failed used to do nothing at all.
+  const showSelectFailed = useCallback(() => {
+    Toast.show({
+      type: 'error',
+      text1: "Couldn't get that location",
+      text2: 'Please try again or pick another result.',
+    });
+  }, []);
+
   const handleSelectAutocompleteItem = useCallback(
     async (item: LocationAutocompleteResult) => {
       setSelectingPlaceId(item.placeId);
@@ -187,15 +200,17 @@ const LocationSelectionScreen: React.FC = () => {
           navigation.goBack();
           return;
         }
+        showSelectFailed();
       } catch (err) {
         if (__DEV__) {
           console.warn('[LocationSelectionScreen] resolve prediction error:', err);
         }
+        showSelectFailed();
       } finally {
         setSelectingPlaceId(null);
       }
     },
-    [navigation, setSelectedLocation],
+    [navigation, setSelectedLocation, showSelectFailed],
   );
 
   const handleSelectSearchResult = useCallback(
@@ -325,8 +340,14 @@ const LocationSelectionScreen: React.FC = () => {
             ) : autocompleteResults.length === 0 && query.trim().length >= 2 ? (
               <View style={styles.emptyBox}>
                 <Ionicons name="location-outline" size={32} color="#8F8F8F" />
-                <Text style={styles.emptyTitle}>No locations found</Text>
-                <Text style={styles.emptySubtitle}>Try typing a different city or locality name.</Text>
+                <Text style={styles.emptyTitle}>
+                  {searchFailed ? "Couldn't search locations" : 'No locations found'}
+                </Text>
+                <Text style={styles.emptySubtitle}>
+                  {searchFailed
+                    ? 'Please check your connection and try again.'
+                    : 'Try typing a different city or locality name.'}
+                </Text>
               </View>
             ) : (
               <FlatList

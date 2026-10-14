@@ -2,9 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SpaApi from '../api/SpaApi';
 import type { Spa } from '../types/spa';
 
-const DEFAULT_CITY = 'Hyderabad';
-
-export function useSpaDiscovery(city: string = DEFAULT_CITY) {
+/**
+ * Curated spas for a city. `null` means the city is not known yet (location still
+ * loading, or none set): nothing is fetched. It used to default to 'Hyderabad',
+ * so users anywhere else saw Hyderabad spas labelled "Curated for you".
+ */
+export function useSpaDiscovery(city: string | null) {
   const [spas, setSpas] = useState<Spa[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -14,6 +17,16 @@ export function useSpaDiscovery(city: string = DEFAULT_CITY) {
 
   const fetchSpas = useCallback(
     async ({ refresh }: { refresh?: boolean } = {}) => {
+      if (!city) {
+        abortControllerRef.current?.abort();
+        abortControllerRef.current = null;
+        setSpas([]);
+        setError(null);
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
@@ -49,12 +62,11 @@ export function useSpaDiscovery(city: string = DEFAULT_CITY) {
         setError('Something went wrong. Please try again.');
         setSpas([]);
       } finally {
+        // Only the latest request settles the UI; it clears both flags because it
+        // may have replaced a request of the other kind (the refresh spinner stuck).
         if (abortControllerRef.current === controller) {
-          if (refresh) {
-            setRefreshing(false);
-          } else {
-            setLoading(false);
-          }
+          setLoading(false);
+          setRefreshing(false);
           abortControllerRef.current = null;
         }
       }

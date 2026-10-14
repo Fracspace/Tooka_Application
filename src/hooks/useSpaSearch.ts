@@ -8,15 +8,16 @@ export interface SearchSpaItem {
   id: string;
   name: string;
   subtitle: string;
-  typeA: string;
-  typeB: string;
   /** Display label: "4.7", or "New" when unrated. */
   rating: string;
   reviewCount: number;
   badge: string;
   image: string;
-  latitude: number;
-  longitude: number;
+  /** null when the spa has no pin (was 0, i.e. measured from 0,0 - thousands of km). */
+  latitude: number | null;
+  longitude: number | null;
+  /** The backend's own distance from the user, preferred when present. */
+  distance_m?: number | string | null;
   starting_price?: string | null;
 }
 
@@ -51,15 +52,14 @@ const mapSpaToSearchItem = (spa: Spa): SearchSpaItem => {
     id: spa.id,
     name: spa.name ?? 'Untitled Spa',
     subtitle: locality,
-    typeA: 'Massage',
-    typeB: 'Spa',
     rating: formatRatingLabel(toRatingOrNull(spa.rating_google)),
     reviewCount: parseInt(String(spa.review_count_google ?? 0), 10) || 0,
     badge: getSpaBadge(spa),
     image: spa.cover_photo_url === "" ? PLACEHOLDER_IMAGE : spa.cover_photo_url ?? PLACEHOLDER_IMAGE,
     starting_price: spa.starting_price ?? null,
-    latitude: Number.parseFloat(spa.lat) || 0,
-    longitude: Number.parseFloat(spa.lng) || 0,
+    latitude: Number.parseFloat(spa.lat) || null,
+    longitude: Number.parseFloat(spa.lng) || null,
+    distance_m: spa.distance_m ?? null,
   };
 };
 
