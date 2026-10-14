@@ -28,9 +28,19 @@ import ProfileScreen from '../screens/Profile/ProfileScreen';
 import { useAuth } from '../context/AuthContext';
 import AuthenticationScreen from '../authentication/screens/AuthenticationScreen';
 
+/** Explore can be reopened on a spa (e.g. after logging in to book it). */
+export type ExploreParams =
+  | {
+      spaId?: string;
+      selectedDateId?: string;
+      selectedSlotId?: string;
+      openBooking?: boolean;
+    }
+  | undefined;
+
 export type BottomTabParamList = {
   Home: undefined;
-  Explore: undefined;
+  Explore: ExploreParams;
   Bookings: undefined;
   Profile: undefined;
 };

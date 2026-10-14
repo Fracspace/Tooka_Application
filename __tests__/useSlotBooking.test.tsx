@@ -28,8 +28,8 @@ const slot = (id: string, date: string, startTime: string, status = 'available')
 });
 
 let latest: ReturnType<typeof useSlotBooking>;
-function Harness({ spaId }: { spaId: string }) {
-  latest = useSlotBooking({ spaId, enabled: true, details: DETAILS });
+function Harness({ spaId, autoOpenSummary }: { spaId: string; autoOpenSummary?: boolean }) {
+  latest = useSlotBooking({ spaId, enabled: true, details: DETAILS, autoOpenSummary });
   return null;
 }
 
@@ -98,5 +98,28 @@ describe('useSlotBooking', () => {
 
     expect(latest.selectedSlotId).toBe('b1');
     expect(latest.selectedDateId).toBe(TODAY.id);
+  });
+
+  it('opens the booking summary by itself after returning from Login', async () => {
+    mockGetAvailability.mockResolvedValue([slot('s1', TODAY.date, '10:00')]);
+
+    await ReactTestRenderer.act(async () => {
+      ReactTestRenderer.create(<Harness spaId="spa-a" autoOpenSummary />);
+    });
+    await flush();
+
+    expect(latest.selectedSlotId).toBe('s1');
+    expect(latest.summaryVisible).toBe(true);
+  });
+
+  it('does not open the summary on a normal visit', async () => {
+    mockGetAvailability.mockResolvedValue([slot('s1', TODAY.date, '10:00')]);
+
+    await ReactTestRenderer.act(async () => {
+      ReactTestRenderer.create(<Harness spaId="spa-a" />);
+    });
+    await flush();
+
+    expect(latest.summaryVisible).toBe(false);
   });
 });

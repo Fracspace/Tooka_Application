@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  BackHandler,
   Keyboard,
   KeyboardAvoidingView,
   LayoutAnimation,
@@ -77,11 +78,20 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ isEmbedded 
   const selectedSlotId = isEmbedded ? undefined : route?.params?.selectedSlotId;
   const fromScreen = isEmbedded ? undefined : route?.params?.fromScreen;
 
+  // The post-login redirect timer; cleared on unmount so leaving the screen in
+  // that 500ms window cannot fire a navigation reset afterwards.
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The number the last OTP was sent to, to honour the resend cooldown.
+  const lastOtpPhoneRef = useRef<string | null>(null);
+
   // Clean up any pending requests on unmount
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
+      }
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
       }
     };
   }, []);
@@ -166,6 +176,14 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ isEmbedded 
       return;
     }
 
+    // Same number, code still valid: go on with the OTP already sent. Going back
+    // and resubmitting used to send a new one at once, skipping the 30s cooldown.
+    if (lastOtpPhoneRef.current === phone && !isExpired && isRegistered !== null) {
+      setError('');
+      transitionToStep(isRegistered ? 'otp' : 'name');
+      return;
+    }
+
     setLoading(true);
     setError('');
     setSuccessMessage('');
@@ -178,6 +196,7 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ isEmbedded 
       if (response.success) {
         setIsRegistered(response.data.isRegistered);
         setSuccessMessage('OTP sent successfully');
+        lastOtpPhoneRef.current = phone;
         reset(); // reset resend timer
 
         if (response.data.isRegistered) {
@@ -193,7 +212,7 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ isEmbedded 
     } finally {
       setLoading(false);
     }
-  }, [phone, loading, reset, transitionToStep]);
+  }, [phone, loading, reset, transitionToStep, isExpired, isRegistered]);
 
   // Step 1.5: Name submit for new users
   const handleNameSubmit = useCallback(() => {
@@ -245,8 +264,23 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ isEmbedded 
       transitionToStep('success');
 
       // Navigate back or to spa details
-      setTimeout(() => {
-        if (spaId) {
+      redirectTimerRef.current = setTimeout(() => {
+        if (spaId && fromScreen === 'Explore') {
+          // Back to Explore on the same spa, with the slot restored and the booking
+          // summary open. This used to land on SpaDetails instead.
+          navigation.reset({
+            index: 0,
+            routes: [
+              {
+                name: 'BottomNavigation',
+                params: {
+                  screen: 'Explore',
+                  params: { spaId, selectedDateId, selectedSlotId, openBooking: true },
+                },
+              },
+            ],
+          });
+        } else if (spaId) {
           navigation.reset({
             index: 1,
             routes: [
@@ -286,6 +320,25 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ isEmbedded 
       setLoading(false);
     }
   }, [phone, otpDigits, isRegistered, name, loading, spaId, serviceId, serviceName, selectedDateId, selectedSlotId, fromScreen, isEmbedded, login, register, navigation, setProfile, transitionToStep]);
+
+  // Android back steps back through the flow (OTP -> name/phone, name -> phone)
+  // instead of closing the whole login screen.
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (step === 'otp') {
+        setError('');
+        transitionToStep(isRegistered === false ? 'name' : 'phone');
+        return true;
+      }
+      if (step === 'name') {
+        setError('');
+        transitionToStep('phone');
+        return true;
+      }
+      return false;
+    });
+    return () => subscription.remove();
+  }, [step, isRegistered, transitionToStep]);
 
   const handleGoBackToPhone = useCallback(() => {
     setError('');

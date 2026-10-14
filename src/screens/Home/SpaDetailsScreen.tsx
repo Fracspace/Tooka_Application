@@ -40,6 +40,7 @@ function SpaDetailsScreen(): React.ReactElement {
     serviceName,
     selectedDateId: paramDateId,
     selectedSlotId: paramSlotId,
+    openBooking,
     fromLogin,
     fromScreen,
   } = route.params;
@@ -91,6 +92,8 @@ function SpaDetailsScreen(): React.ReactElement {
     enabled: true,
     initialDateId: paramDateId,
     initialSlotId: paramSlotId,
+    // After logging in to book, reopen the summary once the spa has loaded.
+    autoOpenSummary: Boolean(openBooking && isAuthenticated && spa),
     details: bookingDetails,
   });
 

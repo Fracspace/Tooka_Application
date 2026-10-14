@@ -37,6 +37,11 @@ interface UseSlotBookingOptions {
   /** Date/slot to restore, e.g. after returning from Login. */
   initialDateId?: string;
   initialSlotId?: string;
+  /**
+   * Open the booking summary once a slot is selected (after Login returns the user
+   * here with openBooking). Read on every render, applied at most once.
+   */
+  autoOpenSummary?: boolean;
   details: SlotBookingDetails;
 }
 
@@ -51,6 +56,7 @@ export function useSlotBooking({
   enabled,
   initialDateId,
   initialSlotId,
+  autoOpenSummary = false,
   details,
 }: UseSlotBookingOptions) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -255,6 +261,16 @@ export function useSlotBooking({
   const closeSummary = useCallback(() => {
     setSummaryVisible(false);
   }, []);
+
+  // Coming back from Login: show the summary the user was about to see, instead of
+  // making them find the slot and tap Continue again.
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (autoOpenSummary && selectedSlot && !autoOpenedRef.current) {
+      autoOpenedRef.current = true;
+      setSummaryVisible(true);
+    }
+  }, [autoOpenSummary, selectedSlot]);
 
   /** Confirmed from the summary: create the booking and start the payment. */
   const confirmBooking = useCallback(async () => {

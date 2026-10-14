@@ -199,6 +199,9 @@ const ExploreScreen: React.FC = () => {
   const route = useRoute<any>();
   const paramDateId = route?.params?.selectedDateId;
   const paramSlotId = route?.params?.selectedSlotId;
+  // Set when Login sends the user back here to finish booking a spa.
+  const paramSpaId: string | undefined = route?.params?.spaId;
+  const paramOpenBooking: boolean = Boolean(route?.params?.openBooking);
 
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -234,7 +237,9 @@ const ExploreScreen: React.FC = () => {
   const spas: ExploreSpa[] = contextSpas;
   // console.log("Spas in exploreScreen: ", spas);
 
-  const [selectedSpaId, setSelectedSpaId] = useState<string | undefined>(spas[0]?.id);
+  const [selectedSpaId, setSelectedSpaId] = useState<string | undefined>(
+    paramSpaId ?? spas[0]?.id,
+  );
   const [spaDetails, setSpaDetails] = useState<SpaDetails | null>(null);
   const [spaDetailsLoading, setSpaDetailsLoading] = useState(false);
   const [spaDetailsError, setSpaDetailsError] = useState<string | null>(null);
@@ -280,6 +285,13 @@ const ExploreScreen: React.FC = () => {
     enabled: isSheetOpen,
     initialDateId: paramDateId,
     initialSlotId: paramSlotId,
+    // Back from Login: show the summary for the spa they were booking.
+    autoOpenSummary: Boolean(
+      paramOpenBooking &&
+        isAuthenticated &&
+        selectedSpa?.id === paramSpaId &&
+        spaDetails?.id === paramSpaId,
+    ),
     details: bookingDetails,
   });
 
@@ -421,6 +433,17 @@ const ExploreScreen: React.FC = () => {
     },
     [animateToCoordinate, scrollToSpa],
   );
+
+  // Back from Login with a spa to book: reopen its sheet once it is in the list.
+  const openedParamSpaRef = useRef(false);
+  useEffect(() => {
+    if (!paramSpaId || openedParamSpaRef.current) return;
+    const spa = spas.find((item) => item.id === paramSpaId);
+    if (!spa) return;
+    openedParamSpaRef.current = true;
+    // Next frame: the sheet and carousel need to be laid out first.
+    requestAnimationFrame(() => selectSpa(spa, { openSheet: true }));
+  }, [paramSpaId, spas, selectSpa]);
 
   useEffect(() => {
     mapRef.current?.animateCamera(

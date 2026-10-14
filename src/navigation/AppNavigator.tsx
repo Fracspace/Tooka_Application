@@ -31,6 +31,7 @@ import IncomingCallScreen from '../screens/Call/IncomingCallScreen';
 
 import LocationSelectionScreen from '../screens/Home/LocationSelectionScreen';
 import { NotificationNavigation } from '../services/firebase/messaging';
+import type { ExploreParams } from './BottomNavigation';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RootStackParamList — single source of navigation type truth.
@@ -46,7 +47,7 @@ export type RootStackParamList = {
   BottomNavigation: NavigatorScreenParams<BottomTabParamList> | undefined;
   Home: undefined;
   LocationSelection: undefined;
-  Explore: undefined;
+  Explore: ExploreParams;
   SpaDetails: {
     spaId: string;
     serviceId?: string;
