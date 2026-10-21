@@ -3,12 +3,13 @@
  * against the design canvas. Turn on with SHOW_V4_GALLERY in src/config/uiFlags.
  */
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, rise, useReduceMotion } from '../../theme';
 import BookingSummarySheetV4 from '../../screens/Booking/components/v4/BookingSummarySheetV4';
+import BookingResultV4 from '../../screens/Booking/v4/BookingResultV4';
 import {
   BackButton,
   Button,
@@ -54,9 +55,35 @@ export default function Gallery() {
   const [filter, setFilter] = useState(0);
   const [run, setRun] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [result, setResult] = useState<'success' | 'failure' | null>(null);
 
   return (
     <Screen haze>
+      <Modal visible={result !== null} animationType="slide" onRequestClose={() => setResult(null)}>
+        {result ? (
+          <BookingResultV4
+            params={{
+              spaName: 'The lemmon spa',
+              spaImage: 'https://d2f15ematxpwp4.cloudfront.net/appImages/Spacover.jpg',
+              appointmentDate: new Date().toISOString().slice(0, 10),
+              appointmentTime: '06:00 PM',
+              serviceDurationMinutes: 60,
+              amount: 199,
+            }}
+            type={result}
+            isProcessing={false}
+            message={undefined}
+            retrying={false}
+            bookingCode="SPA6896181244"
+            dateTime="Today | 06:00 PM"
+            paymentCompletedAt={undefined}
+            showPaymentDetails={false}
+            handleCopy={() => undefined}
+            handlePrimary={() => setResult(null)}
+            handleSecondary={() => setResult(null)}
+          />
+        ) : null}
+      </Modal>
       <BookingSummarySheetV4
         visible={sheetOpen}
         onClose={() => setSheetOpen(false)}
@@ -143,6 +170,8 @@ export default function Gallery() {
           ))}
           <Button label="Replay entrances" variant="secondary" size="md" onPress={() => setRun(r => r + 1)} />
           <Button label="Open Review & pay sheet" variant="secondary" size="md" onPress={() => setSheetOpen(true)} />
+          <Button label="Open Booked (success)" variant="secondary" size="md" onPress={() => setResult('success')} />
+          <Button label="Open Booked (failed)" variant="secondary" size="md" onPress={() => setResult('failure')} />
         </Section>
 
         <Section title="COLOURS">
