@@ -12,7 +12,10 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-type BookingSummarySheetProps = {
+import BookingSummarySheetV4 from './v4/BookingSummarySheetV4';
+import { isV4 } from '../../../config/uiFlags';
+
+export type BookingSummarySheetProps = {
   visible: boolean;
   loading?: boolean;
   onClose: () => void;
@@ -26,6 +29,8 @@ type BookingSummarySheetProps = {
   timeLabel: string;
   serviceName?: string;
   serviceDurationMinutes?: number;
+  /** Length of the booked slot; only the v4 sheet shows it. */
+  slotDurationMinutes?: number;
   /** Formatted fee ("₹199"), or null when the spa has none on record. */
   bookingFeeText: string | null;
   bookingFeeNote?: string;
@@ -53,7 +58,7 @@ function SummaryRow({
   );
 }
 
-function BookingSummarySheet({
+function BookingSummarySheetOld({
   visible,
   loading = false,
   onClose,
@@ -332,5 +337,10 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
 });
+
+// Picks the old or v4 sheet; both take the same props and behave the same.
+function BookingSummarySheet(props: BookingSummarySheetProps): React.ReactElement {
+  return isV4('reviewAndPay') ? <BookingSummarySheetV4 {...props} /> : <BookingSummarySheetOld {...props} />;
+}
 
 export default BookingSummarySheet;

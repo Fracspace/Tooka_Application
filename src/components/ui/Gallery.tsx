@@ -8,6 +8,7 @@ import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, rise, useReduceMotion } from '../../theme';
+import BookingSummarySheetV4 from '../../screens/Booking/components/v4/BookingSummarySheetV4';
 import {
   BackButton,
   Button,
@@ -52,9 +53,23 @@ export default function Gallery() {
   const [tab, setTab] = useState('Home');
   const [filter, setFilter] = useState(0);
   const [run, setRun] = useState(0);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   return (
     <Screen haze>
+      <BookingSummarySheetV4
+        visible={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        onConfirm={() => setSheetOpen(false)}
+        spaName="The lemmon spa"
+        location="C.G. Road, Ahmedabad"
+        dateLabel="Today, 21 Oct"
+        timeLabel="06:00 PM"
+        slotDurationMinutes={60}
+        spaImage="https://d2f15ematxpwp4.cloudfront.net/appImages/Spacover.jpg"
+        bookingFeeText="₹199"
+        bookingFeeNote="Refundable as per the spa's terms"
+      />
       <ScrollView
         key={run}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: tabSpace }]}>
@@ -127,6 +142,7 @@ export default function Gallery() {
             </Animated.View>
           ))}
           <Button label="Replay entrances" variant="secondary" size="md" onPress={() => setRun(r => r + 1)} />
+          <Button label="Open Review & pay sheet" variant="secondary" size="md" onPress={() => setSheetOpen(true)} />
         </Section>
 
         <Section title="COLOURS">

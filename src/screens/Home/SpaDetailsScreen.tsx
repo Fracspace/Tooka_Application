@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import SpaDetailsContent from './SpaDetailsContent';
 import { useSpaDetailsScreen } from '../../hooks/useSpaDetailsScreen';
 import BookingSummarySheet from '../Booking/components/BookingSummarySheet';
+import { slotMinutes } from '../Booking/slotFormat';
 import SpaDetailsV4 from './v4/SpaDetailsV4';
 import { isV4 } from '../../config/uiFlags';
 
@@ -39,6 +40,7 @@ function SpaDetailsScreen(): React.ReactElement {
       location={summaryLocation}
       dateLabel={booking.summaryDateLabel}
       timeLabel={booking.summaryTimeLabel}
+      slotDurationMinutes={slotMinutes(booking.selectedSlot)}
       serviceName={bookingDetails.serviceName}
       serviceDurationMinutes={bookingDetails.serviceDurationMinutes ?? undefined}
       bookingFeeText={bookingFeeText}

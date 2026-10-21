@@ -45,6 +45,7 @@ import type { SpaDetails } from '../../types/spaDetails';
 import { bookingOption } from '../Booking/bookingData';
 import SpaDetailsContent from '../Home/SpaDetailsContent';
 import BookingSummarySheet from '../Booking/components/BookingSummarySheet';
+import { slotMinutes } from '../Booking/slotFormat';
 import { useSlotBooking } from '../../hooks/useSlotBooking';
 import { formatPrice, formatRatingLabel } from '../../utils/number';
 
@@ -848,6 +849,7 @@ const ExploreScreen: React.FC = () => {
         location={bookingDetails.location}
         dateLabel={booking.summaryDateLabel}
         timeLabel={booking.summaryTimeLabel}
+        slotDurationMinutes={slotMinutes(booking.selectedSlot)}
         serviceName={bookingDetails.serviceName}
         bookingFeeText={bookingFeeText}
         bookingFeeNote={bookingOption.description}

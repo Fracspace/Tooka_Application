@@ -10,7 +10,7 @@ export const USE_V4_UI = true;
 
 export const V4_SCREENS = {
   spaDetails: true,
-  reviewAndPay: false,
+  reviewAndPay: true,
   booked: false,
   home: false,
   explore: false,
