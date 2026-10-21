@@ -9,7 +9,7 @@
 export const USE_V4_UI = true;
 
 export const V4_SCREENS = {
-  spaDetails: false,
+  spaDetails: true,
   reviewAndPay: false,
   booked: false,
   home: false,

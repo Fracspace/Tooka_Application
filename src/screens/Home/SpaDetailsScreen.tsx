@@ -5,8 +5,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import SpaDetailsContent from './SpaDetailsContent';
 import { useSpaDetailsScreen } from '../../hooks/useSpaDetailsScreen';
 import BookingSummarySheet from '../Booking/components/BookingSummarySheet';
+import SpaDetailsV4 from './v4/SpaDetailsV4';
+import { isV4 } from '../../config/uiFlags';
 
 function SpaDetailsScreen(): React.ReactElement {
+  const screen = useSpaDetailsScreen();
   const {
     isTablet,
     spa,
@@ -22,7 +25,35 @@ function SpaDetailsScreen(): React.ReactElement {
     bookingDetails,
     bookingFeeText,
     summaryLocation,
-  } = useSpaDetailsScreen();
+  } = screen;
+
+  const summarySheet = (
+    <BookingSummarySheet
+      visible={booking.summaryVisible && Boolean(booking.selectedSlot)}
+      loading={booking.submitting}
+      onClose={booking.closeSummary}
+      onDismissed={booking.onSummaryDismissed}
+      onConfirm={booking.confirmBooking}
+      spaName={spa?.name}
+      spaImage={bookingDetails.spaImage}
+      location={summaryLocation}
+      dateLabel={booking.summaryDateLabel}
+      timeLabel={booking.summaryTimeLabel}
+      serviceName={bookingDetails.serviceName}
+      serviceDurationMinutes={bookingDetails.serviceDurationMinutes ?? undefined}
+      bookingFeeText={bookingFeeText}
+      bookingFeeNote={bookingOption.description}
+    />
+  );
+
+  if (isV4('spaDetails')) {
+    return (
+      <>
+        <SpaDetailsV4 {...screen} />
+        {summarySheet}
+      </>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -61,22 +92,7 @@ function SpaDetailsScreen(): React.ReactElement {
         />
       </ScrollView>
 
-      <BookingSummarySheet
-        visible={booking.summaryVisible && Boolean(booking.selectedSlot)}
-        loading={booking.submitting}
-        onClose={booking.closeSummary}
-        onDismissed={booking.onSummaryDismissed}
-        onConfirm={booking.confirmBooking}
-        spaName={spa?.name}
-        spaImage={bookingDetails.spaImage}
-        location={summaryLocation}
-        dateLabel={booking.summaryDateLabel}
-        timeLabel={booking.summaryTimeLabel}
-        serviceName={bookingDetails.serviceName}
-        serviceDurationMinutes={bookingDetails.serviceDurationMinutes ?? undefined}
-        bookingFeeText={bookingFeeText}
-        bookingFeeNote={bookingOption.description}
-      />
+      {summarySheet}
     </SafeAreaView>
   );
 }

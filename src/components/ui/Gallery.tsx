@@ -80,7 +80,7 @@ export default function Gallery() {
           <Button label="Book" size="md" />
           <View style={styles.row}>
             <Button label="Change" variant="outline" size="sm" />
-            <Button label="Directions" variant="secondary" size="sm" iconLeft={<Icon name="directions" size={16} />} />
+            <Button label="Directions" variant="cream" size="sm" iconLeft={<Icon name="directions" size={16} color={colors.ink} />} />
             <Button label="Edit" variant="ghost" size="sm" />
           </View>
           <View style={styles.row}>

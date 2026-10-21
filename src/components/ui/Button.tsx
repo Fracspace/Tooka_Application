@@ -22,14 +22,15 @@ import { useReduceMotion } from '../../theme';
 import { colors, gradients, radii, shadows, type as typeStyles } from '../../theme';
 import { PressableScale } from './PressableScale';
 
-type Variant = 'primary' | 'secondary' | 'outline' | 'ghost';
+type Variant = 'primary' | 'secondary' | 'cream' | 'outline' | 'ghost';
 type Size = 'lg' | 'md' | 'sm';
 
 type Props = {
   label: string;
   onPress?: () => void;
   /**
-   * primary: saffron (Book, Pay, Done). secondary: dark surface. outline: a
+   * primary: saffron (Book, Pay, Done). secondary: dark surface. cream: light
+   * surface with dark text (Spa Details "Directions"). outline: a
    * saffron ring (Review's "Change"). ghost: text only ("View in My Bookings").
    */
   variant?: Variant;
@@ -64,7 +65,7 @@ export function Button({
   const inactive = disabled || loading;
   const showSheen = (sheen ?? variant === 'primary') && !inactive;
   const textColor =
-    variant === 'primary' ? colors.onBrand : variant === 'outline' ? colors.brand2 : variant === 'ghost' ? colors.muted : colors.text;
+    variant === 'primary' ? colors.onBrand : variant === 'cream' ? colors.ink : variant === 'outline' ? colors.brand2 : variant === 'ghost' ? colors.muted : colors.text;
 
   return (
     <PressableScale
@@ -180,6 +181,7 @@ const sizeStyles = StyleSheet.create({
 const variantStyles = StyleSheet.create({
   primary: { backgroundColor: colors.brand, boxShadow: shadows.cta },
   secondary: { backgroundColor: colors.s2, boxShadow: shadows.ringHi },
+  cream: { backgroundColor: colors.text },
   outline: { boxShadow: shadows.brandRingStrong },
   ghost: {},
 });
