@@ -24,11 +24,6 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>StallionProjectId</key>
-	<string>6a61a081f34a0abe5b0e59ad</string>
-
-	<key>StallionAppToken</key>
-	<string>spb_ap_1atOeY79j0cGkcKSM4V3btJC7YE9p4os3uLYoj4YGx</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>amazonpay</string>
@@ -56,20 +51,24 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Tooka needs microphone access so you can securely talk with the spa without sharing your personal phone number.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Tooka needs access to your camera if you choose to take photos.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>We use your location to show nearby spas.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>We use your location to show nearby spas.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Tooka needs microphone access so you can securely talk with the spa without sharing your personal phone number.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Tooka needs permission to save photos to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Tooka needs access to your photo library if you choose to upload photos.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
+	<key>StallionAppToken</key>
+	<string>spb_ap_1atOeY79j0cGkcKSM4V3btJC7YE9p4os3uLYoj4YGx</string>
+	<key>StallionProjectId</key>
+	<string>6a61a081f34a0abe5b0e59ad</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Fontisto.ttf</string>
