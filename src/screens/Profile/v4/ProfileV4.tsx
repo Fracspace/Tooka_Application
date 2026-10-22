@@ -317,7 +317,7 @@ function HelpCard({ icon, eyebrow, title, onPress }: { icon: IconName; eyebrow: 
   return (
     <PressableScale onPress={onPress} scaleTo={0.96} accessibilityRole="button" accessibilityLabel={title} style={styles.help}>
       <View style={styles.ic}>
-        <Icon name={icon} size={18} color={colors.brand} />
+        <Icon name={icon} size={18} color={colors.cream} />
       </View>
       <View>
         <Text style={styles.helpEyebrow}>{eyebrow}</Text>
@@ -346,7 +346,7 @@ function Item({ icon, title, subtitle, onPress, chevron = true, danger = false, 
       accessibilityLabel={title}
       style={({ pressed }) => [styles.item, divider && styles.itemDivider, pressed && styles.itemPressed]}>
       <View style={styles.ic}>
-        <Icon name={icon} size={18} color={danger ? colors.danger : colors.brand} />
+        <Icon name={icon} size={18} color={danger ? colors.danger : colors.cream} />
       </View>
       <View style={styles.itemText}>
         <Text style={[styles.itemTitle, { color: tint }]}>{title}</Text>
@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: colors.brandTint,
+    backgroundColor: colors.glassEdge,
     alignItems: 'center',
     justifyContent: 'center',
   },
