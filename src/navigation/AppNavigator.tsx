@@ -13,6 +13,7 @@ import type { BottomTabParamList } from './BottomNavigation';
 import SplashScreen from '../screens/Splash/SplashScreen';
 import OnboardingScreen from '../screens/Onboarding/OnboardingScreen';
 import ExploreScreen from '../screens/Explore/ExploreScreen';
+import SpotlightDetailsScreen from '../screens/Home/v4/SpotlightDetailsScreen';
 import PaymentHistoryScreen from '../screens/Payment/PaymentHistoryScreen';
 import EditProfileScreen from '../screens/Profile/EditProfile/EditProfileScreen';
 import AuthenticationScreen from '../authentication/screens/AuthenticationScreen';
@@ -48,6 +49,11 @@ export type RootStackParamList = {
   Home: undefined;
   LocationSelection: undefined;
   Explore: ExploreParams;
+  /** Home spotlight: swipeable Spa Details cards, opened at `index`. */
+  SpotlightDetails: {
+    spas: { id: string; name: string; image: string }[];
+    index: number;
+  };
   SpaDetails: {
     spaId: string;
     serviceId?: string;
@@ -214,6 +220,12 @@ const AppNavigator = () => {
         />
 
         <Stack.Screen name="SpaDetails" component={SpaDetailsScreen} />
+
+        <Stack.Screen
+          name="SpotlightDetails"
+          component={SpotlightDetailsScreen}
+          options={{ presentation: 'transparentModal', animation: 'none', gestureEnabled: false }}
+        />
 
         <Stack.Screen name="AllBooking" component={AllBookingScreen} />
 

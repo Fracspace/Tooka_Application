@@ -57,8 +57,8 @@ export const fonts = {
 
 /** Text styles. Letter spacing is the design's `em` value times the font size. */
 export const type = {
-  hero: { fontFamily: fonts.display, fontSize: 30, lineHeight: 36, letterSpacing: -0.6 },
-  h1: { fontFamily: fonts.display, fontSize: 26, lineHeight: 32, letterSpacing: -0.65 },
+  hero: { fontFamily: fonts.display, fontSize: 22, lineHeight: 36, letterSpacing: -0.6 },
+  h1: { fontFamily: fonts.display, fontSize: 22, lineHeight: 32, letterSpacing: -0.65 },
   title: { fontFamily: fonts.display, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 },
   cardTitle: { fontFamily: fonts.display, fontSize: 16, lineHeight: 21 },
   itemTitle: { fontFamily: fonts.display, fontSize: 14, lineHeight: 19 },

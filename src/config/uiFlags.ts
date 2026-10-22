@@ -12,7 +12,7 @@ export const V4_SCREENS = {
   spaDetails: true,
   reviewAndPay: true,
   booked: true,
-  home: false,
+  home: true,
   explore: false,
   bookings: false,
   tabBar: false,

@@ -9,26 +9,12 @@ import { slotMinutes } from '../Booking/slotFormat';
 import SpaDetailsV4 from './v4/SpaDetailsV4';
 import { isV4 } from '../../config/uiFlags';
 
-function SpaDetailsScreen(): React.ReactElement {
-  const screen = useSpaDetailsScreen();
-  const {
-    isTablet,
-    spa,
-    loading,
-    refreshing,
-    error,
-    refetch,
-    handleRefresh,
-    handleBack,
-    handleProceedBooking,
-    booking,
-    bookingOption,
-    bookingDetails,
-    bookingFeeText,
-    summaryLocation,
-  } = screen;
+type Screen = ReturnType<typeof useSpaDetailsScreen>;
 
-  const summarySheet = (
+/** The booking summary for a Spa Details screen (also used by the Home spotlight pager). */
+export function SpaDetailsSummarySheet({ screen }: { screen: Screen }): React.ReactElement {
+  const { spa, booking, bookingOption, bookingDetails, bookingFeeText, summaryLocation } = screen;
+  return (
     <BookingSummarySheet
       visible={booking.summaryVisible && Boolean(booking.selectedSlot)}
       loading={booking.submitting}
@@ -47,6 +33,25 @@ function SpaDetailsScreen(): React.ReactElement {
       bookingFeeNote={bookingOption.description}
     />
   );
+}
+
+function SpaDetailsScreen(): React.ReactElement {
+  const screen = useSpaDetailsScreen();
+  const {
+    isTablet,
+    spa,
+    loading,
+    refreshing,
+    error,
+    refetch,
+    handleRefresh,
+    handleBack,
+    handleProceedBooking,
+    booking,
+    bookingOption,
+  } = screen;
+
+  const summarySheet = <SpaDetailsSummarySheet screen={screen} />;
 
   if (isV4('spaDetails')) {
     return (

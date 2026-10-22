@@ -24,11 +24,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useHomeScreen, type FeaturedSpaItem, type NearbySpaItem } from '../../hooks/useHomeScreen';
 import FullScreenLoader from '../../components/loaders/FullScreenLoader';
 import StateMessage from '../../components/common/StateMessage';
+import HomeV4 from './v4/HomeV4';
+import { isV4 } from '../../config/uiFlags';
 
 const FEATURED_CARD_WIDTH = 250;
 const FEATURED_CARD_MARGIN = 16;
 
 const HomeScreen: React.FC = () => {
+  const screen = useHomeScreen();
   const {
     isTablet,
     location,
@@ -66,7 +69,7 @@ const HomeScreen: React.FC = () => {
     handleRefresh,
     isInitialLoading,
     shouldRenderEmptyState,
-  } = useHomeScreen();
+  } = screen;
 
   const renderFeaturedSpaItem = useCallback(
     ({ item }: ListRenderItemInfo<FeaturedSpaItem>) => (
@@ -99,6 +102,10 @@ const HomeScreen: React.FC = () => {
     }),
     [],
   );
+
+  if (isV4('home')) {
+    return <HomeV4 {...screen} />;
+  }
 
   if (isInitialLoading) {
     return (

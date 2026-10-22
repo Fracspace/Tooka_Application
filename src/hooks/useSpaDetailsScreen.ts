@@ -23,9 +23,14 @@ type SpaDetailsNavigationProp = NativeStackNavigationProp<
 type SpaDetailsRouteProp = RouteProp<RootStackParamList, 'SpaDetails'>;
 
 // Data and actions for the Spa Details screen; the screen only lays them out.
-export function useSpaDetailsScreen() {
+// `spaIdOverride` shows that spa instead of the route's one (the Home spotlight
+// pager shows a different spa on each page, all on one screen).
+export function useSpaDetailsScreen(spaIdOverride?: string) {
   const navigation = useNavigation<SpaDetailsNavigationProp>();
   const route = useRoute<SpaDetailsRouteProp>();
+  const params: RootStackParamList['SpaDetails'] = spaIdOverride
+    ? { spaId: spaIdOverride, fromScreen: 'Home' }
+    : route.params;
   const {
     spaId,
     serviceId,
@@ -35,7 +40,7 @@ export function useSpaDetailsScreen() {
     openBooking,
     fromLogin,
     fromScreen,
-  } = route.params;
+  } = params;
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
 

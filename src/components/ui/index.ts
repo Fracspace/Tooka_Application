@@ -1,6 +1,7 @@
 export { Button } from './Button';
 export { Card } from './Card';
 export { Chip } from './Chip';
+export { FitImage } from './FitImage';
 export { Haze } from './Haze';
 export { Icon, type IconName } from './Icon';
 export { PressableScale } from './PressableScale';

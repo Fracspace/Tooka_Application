@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import Animated, {
   interpolate,
+  runOnJS,
+  type SharedValue,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
@@ -21,16 +23,33 @@ import Animated, {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BackButton, Button, Card, Icon, PressableScale, Screen, Text } from '../../../components/ui';
+import { BackButton, Button, Card, Icon, PressableScale, RoundButton, Screen, Text } from '../../../components/ui';
 import { brandAlpha, colors, fonts, gradients, motion, radii, rise, useReduceMotion } from '../../../theme';
 import { useSpaDetailsContentState } from '../../../hooks/useSpaDetailsContentState';
 import type { useSpaDetailsScreen } from '../../../hooks/useSpaDetailsScreen';
 import type { TimeSlot } from '../../Booking/types';
 import { formatDateSubLabel, formatServicePrice } from '../spaDetailsFormat';
 
-type Props = Omit<ReturnType<typeof useSpaDetailsScreen>, 'bookingDetails' | 'summaryLocation'>;
+/**
+ * Set when Spa Details is shown as a card in the Home spotlight pager: the
+ * pager grows the card with the scroll position, and pulling down at the top
+ * (or the chevron) closes it.
+ */
+export type SpaDetailsSheet = {
+  scrollY: SharedValue<number>;
+  /** 0 while the card is small, 1 once it fills the screen. */
+  expand: SharedValue<number>;
+  onClose: () => void;
+};
 
-const HERO_HEIGHT = 468;
+/** How far past the top a pull has to go to close the card. */
+const PULL_TO_CLOSE = 80;
+
+type Props = Omit<ReturnType<typeof useSpaDetailsScreen>, 'bookingDetails' | 'summaryLocation'> & {
+  sheet?: SpaDetailsSheet;
+};
+
+const HERO_HEIGHT = 420;
 
 // Slots grouped the way the design shows them. Unknown times go in one unlabelled group.
 const groupSlots = (slots: TimeSlot[]) => {
@@ -96,6 +115,7 @@ function SpaDetailsV4({
   booking,
   bookingOption,
   bookingFeeText,
+  sheet,
 }: Props): React.ReactElement {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -138,9 +158,24 @@ function SpaDetailsV4({
 
   // The header gets a solid bar and the spa's name once the photo scrolls away.
   const scrollY = useSharedValue(0);
-  const onScroll = useAnimatedScrollHandler((e) => {
-    scrollY.value = e.contentOffset.y;
+  const sheetScrollY = sheet?.scrollY;
+  const sheetClose = sheet?.onClose;
+  const onScroll = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      scrollY.value = e.contentOffset.y;
+      if (sheetScrollY) sheetScrollY.value = e.contentOffset.y;
+    },
+    onEndDrag: (e) => {
+      if (sheetClose && e.contentOffset.y < -PULL_TO_CLOSE) runOnJS(sheetClose)();
+    },
   });
+  // In the pager the card starts below the status bar; the header moves down
+  // under it as the card grows to full screen.
+  const sheetExpand = sheet?.expand;
+  const headerTop = sheet ? 12 : insets.top + 6;
+  const headerShift = useAnimatedStyle(() => ({
+    transform: [{ translateY: sheetExpand ? insets.top * sheetExpand.value : 0 }],
+  }));
   const barStyle = useAnimatedStyle(() => ({
     opacity: interpolate(scrollY.value, [HERO_HEIGHT - 160, HERO_HEIGHT - 90], [0, 1], 'clamp'),
   }));
@@ -189,7 +224,9 @@ function SpaDetailsV4({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 150 + insets.bottom }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand} progressViewOffset={insets.top} />
+          sheet ? undefined : (
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand} progressViewOffset={insets.top} />
+          )
         }
       >
         {/* Hero photos */}
@@ -599,14 +636,25 @@ function SpaDetailsV4({
       </Animated.ScrollView>
 
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 6 }]} pointerEvents="box-none">
-        <Animated.View style={[StyleSheet.absoluteFill, styles.headerBar, barStyle]} pointerEvents="none" />
-        <BackButton variant="glass" onPress={handleBack} />
+      <Animated.View style={[styles.header, { paddingTop: headerTop }, headerShift]} pointerEvents="box-none">
+        {/* In the pager the header slides down below the status bar as the card
+            fills the screen, so the bar reaches up over the status bar too. */}
+        <Animated.View
+          style={[StyleSheet.absoluteFill, styles.headerBar, sheet && { top: -insets.top }, barStyle]}
+          pointerEvents="none"
+        />
+        {sheet ? (
+          <RoundButton variant="glass" onPress={sheet.onClose} accessibilityLabel="Close">
+            <Icon name="chevronDown" size={18} color={colors.text} />
+          </RoundButton>
+        ) : (
+          <BackButton variant="glass" onPress={handleBack} />
+        )}
         <Animated.View style={[styles.flex, barStyle]} pointerEvents="none">
           <Text variant="cardTitle" numberOfLines={1} style={styles.headerTitle}>{spaName}</Text>
         </Animated.View>
         <View style={styles.headerSpacer} />
-      </View>
+      </Animated.View>
 
       {/* Dock */}
       <View style={[styles.dock, { paddingBottom: Math.max(insets.bottom, 14) }]} pointerEvents="box-none">
