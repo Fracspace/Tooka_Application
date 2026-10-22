@@ -1,8 +1,9 @@
-import React, { useCallback } from 'react';
-import { Linking, Pressable, Text, View } from 'react-native';
+import React from 'react';
+import { Pressable, Text, View } from 'react-native';
 
 import type { LegalContact, LegalLink } from '../types';
 import { styles } from '../styles';
+import { useLegalLinks } from '../../../hooks/useLegalLinks';
 
 type Props = {
   contact?: LegalContact;
@@ -10,27 +11,7 @@ type Props = {
 };
 
 function ContactSection({ contact, links }: Props): React.ReactElement | null {
-  const handleEmailPress = useCallback(async (email: string) => {
-    const url = `mailto:${email}`;
-
-    // Open directly: canOpenURL reports false for mailto: on iOS/Android 11+ unless
-    // the scheme is declared, which made this link silently do nothing.
-    try {
-      await Linking.openURL(url);
-    } catch {
-      // Silently ignore — email client may be unavailable.
-    }
-  }, []);
-
-  const handleLinkPress = useCallback(async (url: string) => {
-    // Open directly: canOpenURL reports false for mailto: on iOS/Android 11+ unless
-    // the scheme is declared, which made this link silently do nothing.
-    try {
-      await Linking.openURL(url);
-    } catch {
-      // Silently ignore — browser may be unavailable.
-    }
-  }, []);
+  const { handleEmailPress, handleLinkPress } = useLegalLinks();
 
   if (!contact && (!links || links.length === 0)) {
     return null;

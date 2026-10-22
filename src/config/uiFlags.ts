@@ -18,8 +18,8 @@ export const V4_SCREENS = {
   tabBar: true,
   profile: true,
   editProfile: true,
-  paymentHistory: false,
-  policies: false,
+  paymentHistory: true,
+  policies: true,
 } as const;
 
 export type V4Screen = keyof typeof V4_SCREENS;

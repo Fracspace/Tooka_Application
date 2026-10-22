@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   FlatList,
   Image,
@@ -14,14 +14,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useMyBookings } from '../../hooks/useMyBookings';
+import { usePaymentHistoryScreen, type PaymentFilterTab } from '../../hooks/usePaymentHistoryScreen';
+import { isV4 } from '../../config/uiFlags';
+import PaymentHistoryV4 from './v4/PaymentHistoryV4';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import type { BackendBookingListItem } from '../../types/booking';
 import PaymentCard from './components/PaymentCard';
 import PaymentHeader from './components/PaymentHeader';
-import { getBookingPaymentStatus, getPaymentCategory } from './utils/paymentFormatters';
 
-type PaymentFilterTab = 'all' | 'completed' | 'cancelled';
 
 const TABS: Array<{ label: string; key: PaymentFilterTab }> = [
   { label: 'All', key: 'all' },
@@ -46,34 +46,26 @@ const DEFAULT_ILLUSTRATION = {
 };
 
 export const PaymentHistoryScreen: React.FC = () => {
+  const screen = usePaymentHistoryScreen();
+  if (isV4('paymentHistory')) {
+    return <PaymentHistoryV4 {...screen} />;
+  }
+  return <PaymentHistoryLegacy screen={screen} />;
+};
+
+const PaymentHistoryLegacy: React.FC<{ screen: ReturnType<typeof usePaymentHistoryScreen> }> = ({ screen }) => {
   const { width, height } = useWindowDimensions();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const [activeTab, setActiveTab] = useState<PaymentFilterTab>('all');
-
   const {
-    allBookings: allPayments,
+    activeTab,
+    setActiveTab,
+    filteredPayments,
     loading,
     refreshing,
     error,
     refetch,
     onRefresh,
-  } = useMyBookings();
-
-  // Filter by the real payment status. "Cancelled" used to mean "not captured",
-  // so pending and never-paid bookings were listed (and labelled) as cancelled.
-  const filteredPayments = useMemo(() => {
-    const category = (item: BackendBookingListItem) =>
-      getPaymentCategory(getBookingPaymentStatus(item));
-    switch (activeTab) {
-      case 'completed':
-        return allPayments.filter(item => category(item) === 'completed');
-      case 'cancelled':
-        return allPayments.filter(item => category(item) === 'unsuccessful');
-      case 'all':
-      default:
-        return allPayments;
-    }
-  }, [activeTab, allPayments]);
+  } = screen;
 
   const isTablet = Math.min(width, height) >= 600;
   const contentMaxWidth = isTablet ? 720 : width;

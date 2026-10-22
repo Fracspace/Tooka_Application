@@ -10,6 +10,7 @@ import { useProfile } from '../context/ProfileContext';
 import { useMyBookings } from './useMyBookings';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { UserProfile } from '../types/profile';
+import { bookingAmountsPaid } from '../utils/bookingTotals';
 
 type ProfileNavigationProp = NativeStackNavigationProp<RootStackParamList, 'BottomNavigation'>;
 
@@ -37,11 +38,6 @@ const COMPLETION_STEPS: { hint: string; done: (profile: UserProfile) => boolean 
   { hint: 'Add your birthday', done: (p) => !!p.dateOfBirth },
   { hint: 'Add your address', done: (p) => !!p.residentialLocation },
 ];
-
-const toAmount = (value: unknown): number => {
-  const amount = typeof value === 'string' ? Number(value) : value;
-  return typeof amount === 'number' && Number.isFinite(amount) ? amount : 0;
-};
 
 /**
  * Data and actions for the Profile screen, shared by the old and v4 layouts.
@@ -202,17 +198,13 @@ export function useProfileScreen() {
     };
   }, [profile]);
 
-  // Booking totals for the account card. Paid sums amount_paid on upcoming and
-  // completed bookings; cancelled ones are left out because they may be refunded.
+  // Booking totals for the account card.
   const { upcomingBookings, completedBookings, hasFetchedOnce: bookingsLoaded } = useMyBookings();
   const bookingStats = useMemo(() => {
     if (!bookingsLoaded) {
       return null;
     }
-    const paid = [...upcomingBookings, ...completedBookings].reduce(
-      (sum, booking) => sum + toAmount(booking.raw?.amount_paid),
-      0,
-    );
+    const paid = bookingAmountsPaid(upcomingBookings, completedBookings).total;
     return { upcoming: upcomingBookings.length, visits: completedBookings.length, paid };
   }, [bookingsLoaded, completedBookings, upcomingBookings]);
 
