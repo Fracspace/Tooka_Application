@@ -13,7 +13,7 @@ export const V4_SCREENS = {
   reviewAndPay: true,
   booked: true,
   home: true,
-  explore: false,
+  explore: true,
   bookings: false,
   tabBar: false,
   profile: false,

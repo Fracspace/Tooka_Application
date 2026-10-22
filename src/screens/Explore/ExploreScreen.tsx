@@ -35,6 +35,8 @@ import BookingSummarySheet from '../Booking/components/BookingSummarySheet';
 import { slotMinutes } from '../Booking/slotFormat';
 import { useExploreScreen } from '../../hooks/useExploreScreen';
 import { formatRatingLabel } from '../../utils/number';
+import { isV4 } from '../../config/uiFlags';
+import ExploreV4 from './v4/ExploreV4';
 
 const MAP_DELTA = {
   latitudeDelta: 0.018,
@@ -176,6 +178,14 @@ const SpaMarker = memo<SpaMarkerProps>(
   });
 
 const ExploreScreen: React.FC = () => {
+  const screen = useExploreScreen();
+  if (isV4('explore')) {
+    return <ExploreV4 {...screen} />;
+  }
+  return <ExploreLegacy screen={screen} />;
+};
+
+const ExploreLegacy: React.FC<{ screen: ReturnType<typeof useExploreScreen> }> = ({ screen }) => {
   const {
     booking,
     bookingDetails,
@@ -214,7 +224,7 @@ const ExploreScreen: React.FC = () => {
     spaDetailsLoading,
     spas,
     spasError,
-  } = useExploreScreen();
+  } = screen;
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
