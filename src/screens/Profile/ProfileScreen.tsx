@@ -8,12 +8,9 @@
 //  • Keeps delete-account confirmation and TODO placeholder.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useCallback, useMemo, useRef } from 'react';
-import { ActivityIndicator, Alert, Image, Linking, Platform, ScrollView, useWindowDimensions, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { ActivityIndicator, Image, ScrollView, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Toast from 'react-native-toast-message';
 
 import ProfileHeader from './components/ProfileHeader';
 import UserInfoCard from './components/UserInfoCard';
@@ -22,155 +19,41 @@ import MenuList from './components/MenuList';
 import VersionInfo from './components/VersionInfo';
 import type { MenuItemConfig } from './components/MenuItem';
 import { styles } from './styles';
-import { useAuth } from '../../context/AuthContext';
-import { useProfile } from '../../context/ProfileContext';
-import type { RootStackParamList } from '../../navigation/AppNavigator';
-import DeviceInfo from 'react-native-device-info';
-
-type ProfileNavigationProp = NativeStackNavigationProp<RootStackParamList, 'BottomNavigation'>;
-
-// Read from the installed binary. This was the literal '1.0.5', which would have
-// kept saying 1.0.5 after every release.
-const APP_VERSION = `${DeviceInfo.getVersion()} (${DeviceInfo.getBuildNumber()})`;
-const SUPPORT_PHONE = 'tel:+919247952343';
-const SUPPORT_EMAIL = 'mailto:hello@tooka.app';
-
-function normalizePhone(phoneNumber?: string | null): string {
-  const trimmed = phoneNumber?.trim();
-
-  if (!trimmed) {
-    return 'Not provided';
-  }
-
-  return trimmed.startsWith('+') ? trimmed : `+91 ${trimmed}`;
-}
+import ProfileV4 from './v4/ProfileV4';
+import { isV4 } from '../../config/uiFlags';
+import { useProfileScreen } from '../../hooks/useProfileScreen';
 
 const ProfileScreen: React.FC = () => {
+  const screen = useProfileScreen();
+  if (isV4('profile')) {
+    return <ProfileV4 {...screen} />;
+  }
+  return <ProfileLegacy screen={screen} />;
+};
+
+const ProfileLegacy: React.FC<{ screen: ReturnType<typeof useProfileScreen> }> = ({ screen }) => {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
-  const navigation = useNavigation<ProfileNavigationProp>();
-  const { user, logout, deleteAccount } = useAuth();
-  const { profile, loading: profileLoading, clearProfile } = useProfile();
-
-  const isLoggingOut = useRef<boolean>(false);
-  const isDeletingAccount = useRef<boolean>(false);
-
-  const displayName =
-    profile?.fullName?.trim() ||
-    profile?.displayName?.trim() ||
-    profile?.username?.trim() ||
-    user?.userName?.trim() ||
-    user?.fullName?.trim() ||
-    'No Name';
-  const displayEmail = profile?.email?.trim() || user?.email?.trim() || 'Add your email';
-  const displayPhone = normalizePhone(profile?.phone ?? user?.phone ?? user?.phoneNumber);
-  const avatarSource = profile?.avatarUrl ? { uri: profile.avatarUrl } : undefined;
-
-  const showUnavailableToast = useCallback((title: string) => {
-    Toast.show({
-      type: 'info',
-      text1: title,
-      text2: 'This feature will be available soon.',
-    });
-  }, []);
-
-  const openExternalUrl = useCallback(async (url: string, fallbackTitle: string) => {
-    // Open directly: canOpenURL returns false for tel:/mailto: unless the scheme is
-    // declared in Info.plist / the Android manifest, and openURL rejects when
-    // nothing can handle the link, which lands in the catch.
-    try {
-      await Linking.openURL(url);
-    } catch {
-      showUnavailableToast(fallbackTitle);
-    }
-  }, [showUnavailableToast]);
-
-  const handleLogout = useCallback(async () => {
-    if (isLoggingOut.current) {
-      return;
-    }
-
-    isLoggingOut.current = true;
-
-    try {
-      await logout();
-
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'BottomNavigation' }],
-      });
-    } catch {
-      Toast.show({
-        type: 'error',
-        text1: 'Logout failed',
-        text2: 'Please try again.',
-      });
-    } finally {
-      isLoggingOut.current = false;
-    }
-  }, [logout, navigation]);
-
-  const handleDeleteAccount = useCallback(() => {
-    if (isDeletingAccount.current) {
-      return;
-    }
-
-    isDeletingAccount.current = true;
-
-    Alert.alert(
-      'Delete Account',
-      'Are you sure you want to delete your account? This action cannot be undone.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-          onPress: () => {
-            isDeletingAccount.current = false;
-          },
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteAccount();
-              clearProfile();
-
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'BottomNavigation' }],
-              });
-
-              Toast.show({
-                type: 'success',
-                text1: 'Account Deleted',
-                text2: 'Your account has been deleted successfully.',
-              });
-            } catch (error: any) {
-              const errorMessage =
-                error?.response?.data?.message ||
-                error?.message ||
-                'Please try again later.';
-
-              Toast.show({
-                type: 'error',
-                text1: 'Delete failed',
-                text2: errorMessage,
-              });
-            } finally {
-              isDeletingAccount.current = false;
-            }
-          },
-        },
-      ],
-      {
-        cancelable: true,
-        onDismiss: () => {
-          isDeletingAccount.current = false;
-        },
-      },
-    );
-  }, [clearProfile, deleteAccount, navigation]);
+  const {
+    profile,
+    profileLoading,
+    displayName,
+    displayEmail,
+    displayPhone,
+    avatarSource,
+    appVersion,
+    handleLogout,
+    handleDeleteAccount,
+    handleRateApp,
+    handleNotificationPress,
+    openPaymentHistory,
+    openTerms,
+    openPrivacy,
+    openRefund,
+    openEditProfile,
+    callSupport,
+    emailSupport,
+  } = screen;
 
   const menuItems = useMemo<MenuItemConfig[]>(
     () => [
@@ -178,7 +61,7 @@ const ProfileScreen: React.FC = () => {
         id: 'payment-history',
         title: 'Payment History',
         iconName: 'receipt-outline',
-        onPress: () => navigation.navigate('NoPayment'),
+        onPress: openPaymentHistory,
       },
       // {
       //   id: 'saved-spas',
@@ -190,34 +73,25 @@ const ProfileScreen: React.FC = () => {
         id: 'rate-app',
         title: 'Rate our App',
         iconName: 'star-outline',
-        // onPress: () => showUnavailableToast('Rate our App'),
-        onPress: () => {
-          if (Platform.OS === 'ios') {
-            openExternalUrl('https://apps.apple.com/in/app/tooka-near-you/id6784173654', 'Rate our App')
-          } else if (Platform.OS === 'android') {
-            openExternalUrl('https://play.google.com/store/apps/details?id=com.fracspace.tooka', 'Rate our App')
-          } else {
-            showUnavailableToast('Rate our App')
-          }
-        },
+        onPress: handleRateApp,
       },
       {
         id: 'terms',
         title: 'Terms & Conditions',
         iconName: 'information-circle-outline',
-        onPress: () => navigation.navigate('TermsAndConditions'),
+        onPress: openTerms,
       },
       {
         id: 'privacy',
         title: 'Privacy & Policy',
         iconName: 'shield-checkmark-outline',
-        onPress: () => navigation.navigate('PrivacyPolicy'),
+        onPress: openPrivacy,
       },
       {
         id: 'refund',
         title: 'Refund & Cancellation Policy',
         iconName: 'warning-outline',
-        onPress: () => navigation.navigate('RefundPolicy'),
+        onPress: openRefund,
       },
       {
         id: 'logout',
@@ -234,7 +108,7 @@ const ProfileScreen: React.FC = () => {
         onPress: handleDeleteAccount,
       },
     ],
-    [handleDeleteAccount, handleLogout, navigation, openExternalUrl, showUnavailableToast],
+    [handleDeleteAccount, handleLogout, handleRateApp, openPaymentHistory, openPrivacy, openRefund, openTerms],
   );
 
   return (
@@ -244,7 +118,7 @@ const ProfileScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
         bounces
       >
-        <ProfileHeader onNotificationPress={() => showUnavailableToast('Notifications')} />
+        <ProfileHeader onNotificationPress={handleNotificationPress} />
         <View style={styles.root}>
           {profileLoading && !profile ? (
             <View style={styles.loadingProfileBlock}>
@@ -256,7 +130,7 @@ const ProfileScreen: React.FC = () => {
               email={displayEmail}
               phone={displayPhone}
               avatarSource={avatarSource}
-              onEditPress={() => navigation.navigate('EditProfile')}
+              onEditPress={openEditProfile}
             />
           )}
 
@@ -272,18 +146,18 @@ const ProfileScreen: React.FC = () => {
               eyebrow="Need Help?"
               title="Call Support"
               iconName="call-outline"
-              onPress={() => openExternalUrl(SUPPORT_PHONE, 'Call Support')}
+              onPress={callSupport}
             />
             <SupportCard
               eyebrow="Drop a Message"
               title="Email Support"
               iconName="mail-outline"
-              onPress={() => openExternalUrl(SUPPORT_EMAIL, 'Email Support')}
+              onPress={emailSupport}
             />
           </View>
 
           <MenuList items={menuItems} />
-          <VersionInfo appName="TOOKA: Near You" version={APP_VERSION} />
+          <VersionInfo appName="TOOKA: Near You" version={appVersion} />
         </View>
       </ScrollView>
     </SafeAreaView>

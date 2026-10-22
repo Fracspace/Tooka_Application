@@ -16,8 +16,8 @@ export const V4_SCREENS = {
   explore: true,
   bookings: true,
   tabBar: true,
-  profile: false,
-  editProfile: false,
+  profile: true,
+  editProfile: true,
   paymentHistory: false,
   policies: false,
 } as const;
