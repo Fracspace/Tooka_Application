@@ -21,12 +21,10 @@
  *  └──────────────────────────────────────────────────────────┘
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
-  Linking,
   Pressable,
   StyleProp,
   StyleSheet,
@@ -36,21 +34,11 @@ import {
   ViewStyle,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BackendBookingListItem, BookingSection } from '../../../types/booking';
-import type { RootStackParamList } from '../../../navigation/AppNavigator';
-import { getBookingSection, isPaymentPendingStatus } from '../../../utils/getBookingSection';
-import { usePaymentContext } from '../../../context/PaymentContext';
-import { mapPaymentError } from '../../../payment/PaymentMapper';
-import { buildBookingDateAndTime } from '../../../utils/bookingDateTime';
-import { bookingOption } from '../bookingData';
+import { BOOKING_FALLBACK_IMAGE, useBookingCard } from '../../../hooks/useBookingCard';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const FALLBACK_IMAGE = {
-  uri: 'https://d2f15ematxpwp4.cloudfront.net/appImages/bookingPlaceholder.png',
-};
 
 // Tooka brand colours
 const C = {
@@ -78,43 +66,6 @@ export type { BookingSection };
 export type BookingCardProps = {
   booking: BackendBookingListItem;
   style?: StyleProp<ViewStyle>;
-};
-
-// ─── Helper: Date Badge Parser ───────────────────────────────────────────────
-
-const parseDateBadge = (dateStr?: string): { day: string; month: string } => {
-  if (!dateStr || typeof dateStr !== 'string') {
-    return { day: '--', month: '--' };
-  }
-  const clean = dateStr.trim();
-  if (!clean) return { day: '--', month: '--' };
-
-  const parts = clean.split(/[\s,-]+/);
-  if (parts.length >= 2) {
-    if (/^\d{1,2}$/.test(parts[0])) {
-      const day = parts[0];
-      const rawMonth = parts[1];
-      const month = rawMonth.length > 3 ? rawMonth.substring(0, 3) : rawMonth;
-      return { day, month };
-    }
-    if (parts[0].length === 4 && /^\d{4}$/.test(parts[0])) {
-      const dateObj = new Date(clean);
-      if (!isNaN(dateObj.getTime())) {
-        const day = String(dateObj.getDate());
-        const month = dateObj.toLocaleString('en-US', { month: 'short' });
-        return { day, month };
-      }
-    }
-  }
-
-  const dateObj = new Date(clean);
-  if (!isNaN(dateObj.getTime())) {
-    const day = String(dateObj.getDate());
-    const month = dateObj.toLocaleString('en-US', { month: 'short' });
-    return { day, month };
-  }
-
-  return { day: '--', month: clean.substring(0, 3) };
 };
 
 // ─── Sub-component: StatusBadge ───────────────────────────────────────────────
@@ -176,40 +127,17 @@ const PaymentPendingBadge = React.memo(function PaymentPendingBadge({
 // ─── Sub-component: BookingActions ────────────────────────────────────────────
 
 type BookingActionsProps = {
-  booking: BackendBookingListItem;
+  onCall: () => void;
 };
 
-const getSpaId = (booking: BackendBookingListItem): string | undefined =>
-  (booking.raw.spa_id as string | undefined) ||
-  ((booking.raw.spa as { id?: string } | undefined)?.id ?? undefined);
-
-// Only rendered for upcoming, confirmed bookings (see BookingCard).
+// Only rendered for upcoming, confirmed bookings with a spa to call (see BookingCard).
 const BookingActions = React.memo<BookingActionsProps>(function BookingActions({
-  booking,
+  onCall,
 }) {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const spaId = getSpaId(booking);
-
-  const handleFreeCallSpa = useCallback(() => {
-    if (!spaId) return;
-    navigation.navigate('CallScreen', {
-      bookingId: booking.id,
-      spaId,
-      callType: 'voice',
-      spaName: booking.spaName || 'Unknown Spa',
-      spaAvatar: booking.raw?.spa_snapshot?.cover_photo_url || FALLBACK_IMAGE.uri,
-    });
-  }, [navigation, booking, spaId]);
-
-  // No spa id: there is nobody to call (this used to dial the placeholder 'unknown_spa').
-  if (!spaId) {
-    return null;
-  }
-
   return (
     <View style={styles.actionsRow}>
       <Pressable
-        onPress={handleFreeCallSpa}
+        onPress={onCall}
         style={({ pressed }) => [
           styles.actionBtn,
           styles.actionBtnPrimary,
@@ -229,70 +157,18 @@ const BookingActions = React.memo<BookingActionsProps>(function BookingActions({
 
 // ─── Sub-component: PendingPaymentActions ─────────────────────────────────────
 
-/** A payment is mid-flight (e.g. confirming in a UPI app): wait, do not pay again. */
-const isPaymentInFlight = (booking: BackendBookingListItem): boolean =>
-  (booking.paymentStatus ?? '').toString().trim().toLowerCase() === 'processing';
-
 // For pending_payment bookings. Every one of them used to say "Payment processing"
 // forever, even when the user had simply cancelled at the gateway, with no way to pay.
 const PendingPaymentActions = React.memo(function PendingPaymentActions({
-  booking,
+  inFlight,
+  starting,
+  onCompletePayment,
 }: {
-  booking: BackendBookingListItem;
+  inFlight: boolean;
+  starting: boolean;
+  onCompletePayment: () => void;
 }) {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { initiatePayment, setBookingSummary } = usePaymentContext();
-  const [starting, setStarting] = useState(false);
-
-  const handleCompletePayment = useCallback(async () => {
-    if (starting) return;
-    setStarting(true);
-    try {
-      const snapshot = booking.raw?.spa_snapshot;
-      const summary = {
-        spaName: booking.spaName,
-        spaImage: snapshot?.cover_photo_url ?? undefined,
-        location: [snapshot?.locality_name, snapshot?.city_name].filter(Boolean).join(', ') || undefined,
-        serviceName: booking.serviceName ?? bookingOption.title,
-        serviceDurationMinutes: null,
-        appointmentDate: booking.date,
-        appointmentTime: booking.time,
-        bookingDateAndTime: buildBookingDateAndTime({
-          appointmentDate: booking.date,
-          appointmentTime: booking.time,
-        }),
-      };
-      setBookingSummary(summary);
-      const payment = await initiatePayment(
-        booking.id,
-        booking.bookingReference ?? undefined,
-        summary,
-      );
-      navigation.navigate('PaymentScreen', {
-        paymentId: payment.paymentId,
-        bookingId: payment.bookingId,
-        bookingRef: payment.bookingRef,
-        paymentSessionId: payment.paymentSessionId,
-        cashfreeOrderId: payment.cashfreeOrderId,
-        amount: payment.amount,
-        currency: payment.currency,
-        spaName: payment.spaName,
-        spaImage: payment.spaImage,
-        location: payment.location,
-        serviceName: payment.serviceName,
-        serviceDurationMinutes: payment.serviceDurationMinutes,
-        appointmentDate: payment.appointmentDate,
-        appointmentTime: payment.appointmentTime,
-        bookingDateAndTime: payment.bookingDateAndTime,
-      });
-    } catch (error) {
-      Alert.alert("Couldn't start the payment", mapPaymentError(error).userMessage);
-    } finally {
-      setStarting(false);
-    }
-  }, [booking, initiatePayment, navigation, setBookingSummary, starting]);
-
-  if (isPaymentInFlight(booking)) {
+  if (inFlight) {
     return (
       <Text style={styles.pendingNote}>
         We'll confirm this booking as soon as your payment is verified.
@@ -303,7 +179,7 @@ const PendingPaymentActions = React.memo(function PendingPaymentActions({
   return (
     <View style={styles.actionsRow}>
       <Pressable
-        onPress={handleCompletePayment}
+        onPress={onCompletePayment}
         disabled={starting}
         style={({ pressed }) => [
           styles.actionBtn,
@@ -334,45 +210,19 @@ const BookingCard = React.memo<BookingCardProps>(function BookingCard({
   style,
 }) {
   const { width } = useWindowDimensions();
-
-  const section: BookingSection =
-    (getBookingSection(booking.status) as BookingSection | null) ?? 'upcoming';
-  const isPaymentPending = isPaymentPendingStatus(booking.status);
-
-  const bookingCode = booking.bookingReference ?? booking.bookingId ?? 'Pending';
-  const badgeDate = useMemo(() => parseDateBadge(booking.date), [booking.date]);
-
-  const locationText = useMemo(() => {
-    const locality = booking.raw?.spa_snapshot?.locality_name;
-    const city = booking.raw?.spa_snapshot?.city_name;
-    const parts = [locality, city].filter(Boolean);
-    return parts.length > 0 ? parts.join(', ') : 'Location unavailable';
-  }, [booking.raw?.spa_snapshot?.locality_name, booking.raw?.spa_snapshot?.city_name]);
-
-  const handleOpenMaps = useCallback(async () => {
-    const snapshot = booking.raw?.spa_snapshot as any;
-    const mapUrl = snapshot?.google_maps_url;
-    let targetUrl = typeof mapUrl === 'string' && mapUrl.trim() ? mapUrl.trim() : '';
-
-    if (!targetUrl) {
-      const spaName = booking.spaName ?? '';
-      const locality = snapshot?.locality_name ?? '';
-      const city = snapshot?.city_name ?? '';
-      const query = encodeURIComponent(`${spaName} ${locality} ${city}`.trim());
-      targetUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
-    }
-
-    try {
-      const canOpen = await Linking.canOpenURL(targetUrl);
-      if (canOpen) {
-        await Linking.openURL(targetUrl);
-      } else {
-        Alert.alert('Unable to open map', 'No maps application is available to open this link.');
-      }
-    } catch {
-      Alert.alert('Unable to open map', 'An error occurred while opening maps.');
-    }
-  }, [booking]);
+  const {
+    badgeDate,
+    bookingCode,
+    handleCompletePayment,
+    handleFreeCallSpa,
+    handleOpenMaps,
+    isPaymentPending,
+    locationText,
+    paymentInFlight,
+    section,
+    spaId,
+    starting,
+  } = useBookingCard(booking);
 
   const imageWidth = Math.min(Math.floor(width * 0.28), 115);
 
@@ -386,7 +236,7 @@ const BookingCard = React.memo<BookingCardProps>(function BookingCard({
             source={
               booking.raw?.spa_snapshot?.cover_photo_url
                 ? { uri: booking.raw.spa_snapshot.cover_photo_url }
-                : FALLBACK_IMAGE
+                : BOOKING_FALLBACK_IMAGE
             }
             style={styles.spaImage}
             resizeMode="cover"
@@ -409,7 +259,7 @@ const BookingCard = React.memo<BookingCardProps>(function BookingCard({
             </View>
             {isPaymentPending ? (
               <PaymentPendingBadge
-                label={isPaymentInFlight(booking) ? 'Payment processing' : 'Awaiting payment'}
+                label={paymentInFlight ? 'Payment processing' : 'Awaiting payment'}
               />
             ) : (
               <StatusBadge section={section} />
@@ -463,9 +313,14 @@ const BookingCard = React.memo<BookingCardProps>(function BookingCard({
       {/* ── Bottom Actions ── */}
       {/* Not confirmed until the payment clears, so no call action yet. */}
       {isPaymentPending ? (
-        <PendingPaymentActions booking={booking} />
-      ) : section === 'upcoming' ? (
-        <BookingActions booking={booking} />
+        <PendingPaymentActions
+          inFlight={paymentInFlight}
+          starting={starting}
+          onCompletePayment={handleCompletePayment}
+        />
+      ) : section === 'upcoming' && spaId ? (
+        // No spa id: there is nobody to call (this used to dial the placeholder 'unknown_spa').
+        <BookingActions onCall={handleFreeCallSpa} />
       ) : null}
     </View>
   );

@@ -1,6 +1,4 @@
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   FlatList,
   Image,
@@ -17,14 +15,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import FullScreenLoader from '../../components/loaders/FullScreenLoader';
-import { useMyBookings } from '../../hooks/useMyBookings';
-import type { RootStackParamList } from '../../navigation/AppNavigator';
+import { useAllBookingScreen } from '../../hooks/useAllBookingScreen';
+import { isV4 } from '../../config/uiFlags';
 import type { BackendBookingListItem, BookingSection } from '../../types/booking';
 import AllBookingHeader from './components/AllBookingHeader';
 import BookingCard from './components/BookingCard';
-import Toast from 'react-native-toast-message';
-
-type BookingTab = BookingSection;
+import AllBookingV4 from './v4/AllBookingV4';
 
 type TabButtonProps = {
   label: string;
@@ -32,12 +28,6 @@ type TabButtonProps = {
   onPress: () => void;
   style?: StyleProp<ViewStyle>;
 };
-
-const TABS: Array<{ label: string; section: BookingTab }> = [
-  { label: 'Upcoming', section: 'upcoming' },
-  { label: 'Completed', section: 'completed' },
-  { label: 'Cancelled', section: 'cancelled' },
-];
 
 const NO_BOOKINGS_ILLUSTRATION = {
   uri: 'https://d2f15ematxpwp4.cloudfront.net/appImages/nobookings.png',
@@ -70,79 +60,31 @@ const TabButton = React.memo<TabButtonProps>(function RenderTabButton({
 });
 
 const AllBookingScreen: React.FC = () => {
+  const screen = useAllBookingScreen();
+  if (isV4('bookings')) {
+    return <AllBookingV4 {...screen} />;
+  }
+  return <AllBookingLegacy screen={screen} />;
+};
+
+const AllBookingLegacy: React.FC<{ screen: ReturnType<typeof useAllBookingScreen> }> = ({ screen }) => {
   const { width } = useWindowDimensions();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const isTablet = width >= 768;
-  const [activeTab, setActiveTab] = useState<BookingTab>('upcoming');
 
   const {
-    upcomingBookings,
-    completedBookings,
-    cancelledBookings,
-    loading,
-    refreshing,
+    activeBookings,
+    availableTabs,
+    effectiveActiveTab,
     error,
+    handleBack,
+    handleExploreNow,
+    handleTabPress,
     hasFetchedOnce,
-    refetch,
+    loading,
     onRefresh,
-  } = useMyBookings();
-
-  const availableTabs = useMemo(() => {
-    return TABS.filter((tab) => {
-      switch (tab.section) {
-        case 'upcoming':
-          return upcomingBookings.length > 0;
-        case 'completed':
-          return completedBookings.length > 0;
-        case 'cancelled':
-          return cancelledBookings.length > 0;
-        default:
-          return false;
-      }
-    });
-  }, [upcomingBookings.length, completedBookings.length, cancelledBookings.length]);
-
-  const effectiveActiveTab = useMemo(() => {
-    if (availableTabs.length > 0 && !availableTabs.some((t) => t.section === activeTab)) {
-      return availableTabs[0].section;
-    }
-    return activeTab;
-  }, [activeTab, availableTabs]);
-
-  useEffect(() => {
-    if (availableTabs.length > 0 && !availableTabs.some((t) => t.section === activeTab)) {
-      setActiveTab(availableTabs[0].section);
-    }
-  }, [availableTabs, activeTab]);
-
-  const activeBookings = useMemo(() => {
-    switch (effectiveActiveTab) {
-      case 'upcoming':
-        return upcomingBookings;
-      case 'completed':
-        return completedBookings;
-      case 'cancelled':
-        return cancelledBookings;
-      default:
-        return upcomingBookings;
-    }
-  }, [effectiveActiveTab, upcomingBookings, completedBookings, cancelledBookings]);
-
-  const handleTabPress = useCallback((section: BookingTab) => {
-    setActiveTab(section);
-  }, []);
-
-  const handleBack = useCallback(() => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      navigation.navigate('Home');
-    }
-  }, [navigation]);
-
-  const handleExploreNow = useCallback(() => {
-    navigation.navigate('Home');
-  }, [navigation]);
+    refetch,
+    refreshing,
+  } = screen;
 
   const renderBooking = useCallback(
     ({ item, index }: { item: BackendBookingListItem; index: number }) => (
@@ -215,14 +157,6 @@ const AllBookingScreen: React.FC = () => {
       </View>
     );
   }, [effectiveActiveTab, error, refetch]);
-
-  // A failed refresh with bookings already on screen used to just stop the spinner.
-  const hasAnyBookings = availableTabs.length > 0;
-  useEffect(() => {
-    if (error && hasAnyBookings) {
-      Toast.show({ type: 'error', text1: "Couldn't refresh bookings", text2: error });
-    }
-  }, [error, hasAnyBookings]);
 
   if (loading && !hasFetchedOnce) {
     return (

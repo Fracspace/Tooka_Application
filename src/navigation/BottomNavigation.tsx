@@ -27,6 +27,8 @@ import AllBookingScreen from '../screens/Booking/AllBooking';
 import ProfileScreen from '../screens/Profile/ProfileScreen';
 import { useAuth } from '../context/AuthContext';
 import AuthenticationScreen from '../authentication/screens/AuthenticationScreen';
+import { TabBar, type IconName } from '../components/ui';
+import { isV4 } from '../config/uiFlags';
 
 /** Explore can be reopened on a spa (e.g. after logging in to book it). */
 export type ExploreParams =
@@ -136,6 +138,13 @@ function TabItem({ isFocused, label, iconName, onPress }: { isFocused: boolean; 
   );
 }
 
+const V4_ICONS: Record<string, IconName> = {
+  Home: 'home',
+  Explore: 'explore',
+  Bookings: 'bookings',
+  Profile: 'profile',
+};
+
 // ─── Custom Tab Bar ───────────────────────────────────────────────────────────
 
 function CustomTabBar({
@@ -151,6 +160,46 @@ function CustomTabBar({
     return null;
   }
 
+  const labelFor = (route: (typeof state.routes)[number]) => {
+    const rawLabel =
+      descriptors[route.key].options.title ??
+      descriptors[route.key].options.tabBarLabel ??
+      route.name;
+
+    return typeof rawLabel === 'string' ? rawLabel : route.name;
+  };
+
+  const pressTab = (route: (typeof state.routes)[number], isFocused: boolean) => {
+    const event = navigation.emit({
+      type: 'tabPress',
+      target: route.key,
+      canPreventDefault: true,
+    });
+
+    if (!isFocused && !event.defaultPrevented) {
+      navigation.navigate(route.name);
+    }
+  };
+
+  if (isV4('tabBar')) {
+    const activeKey = state.routes[state.index].key;
+    return (
+      <TabBar
+        items={state.routes.map(route => {
+          const label = labelFor(route);
+          return { key: route.key, label, icon: V4_ICONS[label] ?? 'home' };
+        })}
+        activeKey={activeKey}
+        onPress={key => {
+          const route = state.routes.find(r => r.key === key);
+          if (route) {
+            pressTab(route, key === activeKey);
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <View
       pointerEvents="box-none"
@@ -164,27 +213,8 @@ function CustomTabBar({
         {state.routes.map((route, index) => {
           const isFocused = state.index === index;
 
-          const rawLabel =
-            descriptors[route.key].options.title ??
-            descriptors[route.key].options.tabBarLabel ??
-            route.name;
-
-          const label =
-            typeof rawLabel === 'string'
-              ? rawLabel
-              : route.name;
-
-          const onPress = () => {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
-
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
+          const label = labelFor(route);
+          const onPress = () => pressTab(route, isFocused);
 
           return (
             <TabItem
