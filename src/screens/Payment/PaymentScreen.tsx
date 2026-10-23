@@ -241,7 +241,11 @@ function PaymentScreen(): React.ReactElement {
   );
 
   const verifyPayment = useCallback(
-    async (options?: { resetPolling?: boolean; singleCheck?: boolean }) => {
+    async (options?: {
+      resetPolling?: boolean;
+      singleCheck?: boolean;
+      sdkFailureMessage?: string;
+    }) => {
       if (
         verifyingRef.current ||
         navigationLockRef.current ||
@@ -328,6 +332,17 @@ function PaymentScreen(): React.ReactElement {
           return;
         }
 
+        // SDK reported an error and the backend has no capture: the
+        // checkout never completed, so surface the SDK's reason.
+        if (options?.sdkFailureMessage !== undefined) {
+          finalizeAndNavigate({
+            flowState: PaymentFlowState.Failed,
+            resultType: 'failure',
+            message: options.sdkFailureMessage,
+          });
+          return;
+        }
+
         finalizeAndNavigate({
           flowState: PaymentFlowState.Timeout,
           resultType: 'timeout',
@@ -389,12 +404,14 @@ function PaymentScreen(): React.ReactElement {
         return;
       }
 
-      if (sdkResult === SdkPaymentResult.Failed) {
-        verifyPayment({ resetPolling: true });
-        return;
-      }
-
-      verifyPayment({ resetPolling: true, singleCheck: false });
+      // Failed / Unknown: check the backend once, then show the SDK error
+      // instead of polling an order that was never paid.
+      verifyPayment({
+        resetPolling: true,
+        singleCheck: true,
+        sdkFailureMessage:
+          sdkMessage?.trim() || PAYMENT_USER_MESSAGES.verificationFailed,
+      });
     },
     [finalizeAndNavigate, verifyPayment],
   );
