@@ -1,47 +1,10 @@
-import React, { createContext, useContext, useEffect } from 'react';
-import { ScrollView, StyleSheet, View, useWindowDimensions, type DimensionValue, type ViewStyle } from 'react-native';
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-  type SharedValue,
-} from 'react-native-reanimated';
+import React from 'react';
+import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Screen } from '../../../components/ui';
-import { colors, radii, useReduceMotion } from '../../../theme';
+import { Bone, PulseProvider, Screen } from '../../../components/ui';
+import { colors, radii } from '../../../theme';
 import { SIDE_SCALE, spotlightSizes } from './spotlightLayout';
-
-// Every bone pulses together off one shared value.
-const PulseContext = createContext<SharedValue<number> | null>(null);
-
-function PulseProvider({ children }: { children: React.ReactNode }) {
-  const reduceMotion = useReduceMotion();
-  const pulse = useSharedValue(1);
-  useEffect(() => {
-    if (reduceMotion) return;
-    pulse.value = withRepeat(withTiming(0.45, { duration: 900, easing: Easing.inOut(Easing.ease) }), -1, true);
-  }, [reduceMotion, pulse]);
-  return <PulseContext.Provider value={pulse}>{children}</PulseContext.Provider>;
-}
-
-function Bone({
-  w = '100%',
-  h,
-  r = radii.xs,
-  style,
-}: {
-  w?: DimensionValue;
-  h: DimensionValue;
-  r?: number;
-  style?: ViewStyle;
-}) {
-  const pulse = useContext(PulseContext);
-  const animated = useAnimatedStyle(() => ({ opacity: pulse ? pulse.value : 1 }));
-  return <Animated.View style={[styles.bone, { width: w, height: h, borderRadius: r }, style, animated]} />;
-}
 
 function SectionBone() {
   return (
@@ -146,7 +109,6 @@ export function HomeSkeleton() {
 
 // Spacing mirrors HomeV4's styles so nothing jumps when the content arrives.
 const styles = StyleSheet.create({
-  bone: { backgroundColor: colors.s2 },
   abs: { position: 'absolute', top: 8 },
   flex: { flex: 1 },
   gutter: { paddingHorizontal: 16 },

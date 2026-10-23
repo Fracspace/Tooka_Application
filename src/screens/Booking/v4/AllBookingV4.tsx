@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Image,
   Pressable,
@@ -33,6 +32,7 @@ import {
   type as typeStyles,
   useReduceMotion,
 } from '../../../theme';
+import { BookingsSkeleton } from './BookingsSkeleton';
 import type { BackendBookingListItem, BookingSection } from '../../../types/booking';
 
 type Props = ReturnType<typeof useAllBookingScreen>;
@@ -105,9 +105,7 @@ const AllBookingV4: React.FC<Props> = ({
 
   if (loading && !hasFetchedOnce) {
     return (
-      <Screen haze style={styles.center}>
-        <ActivityIndicator size="large" color={colors.brand} />
-      </Screen>
+      <BookingsSkeleton />
     );
   }
 
@@ -487,7 +485,6 @@ function StatusChip({ label, tone }: { label: string; tone: Tone }) {
 export default AllBookingV4;
 
 const styles = StyleSheet.create({
-  center: { alignItems: 'center', justifyContent: 'center' },
   header: { paddingTop: 60, paddingHorizontal: 4 },
   title: { fontSize: 28, lineHeight: 34, letterSpacing: -0.7 },
   subtitle: { marginTop: 4, fontSize: 14 },
