@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -16,7 +16,8 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 import { Haze, Icon, PressableScale, RoundButton, Screen, Text, useTabBarSpace, type IconName } from '../../../components/ui';
 import type { useProfileScreen } from '../../../hooks/useProfileScreen';
-import { colors, fonts, motion, radii, rise, shadows, type as typeStyles, useReduceMotion } from '../../../theme';
+import { colors, fonts, motion, radii, shadows, type as typeStyles, useReduceMotion, useRise } from '../../../theme';
+import { ProfileSkeleton } from './ProfileSkeleton';
 
 type Props = ReturnType<typeof useProfileScreen>;
 
@@ -35,9 +36,7 @@ function initialsOf(name: string): string {
     .join('');
 }
 
-const ProfileV4: React.FC<Props> = ({
-  profile,
-  profileLoading,
+const ProfileContent: React.FC<Props> = ({
   displayName,
   displayEmail,
   displayPhone,
@@ -61,6 +60,11 @@ const ProfileV4: React.FC<Props> = ({
   const bottomSpace = useTabBarSpace();
   const initials = initialsOf(displayName);
 
+  const riseCard = useRise(0);
+  const riseWell = useRise(80);
+  const riseHelp = useRise(140);
+  const riseLists = useRise(200);
+
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: bottomSpace + 24 }}>
@@ -73,47 +77,41 @@ const ProfileV4: React.FC<Props> = ({
             </RoundButton>
           </View>
 
-          <Animated.View entering={rise(0)} style={styles.card} accessibilityLabel="Your account">
-            {profileLoading && !profile ? (
-              <View style={styles.loading}>
-                <ActivityIndicator size="large" color={colors.brand} />
-              </View>
-            ) : (
-              <View style={styles.account}>
-                <View style={styles.avatar}>
-                  <CompletionRing percent={completion?.percent ?? 0} />
-                  <View style={styles.face}>
-                    {avatarSource ? (
-                      <Image source={avatarSource} style={styles.faceImage} />
-                    ) : initials ? (
-                      <Text style={styles.initials}>{initials}</Text>
-                    ) : (
-                      <Icon name="profile" size={30} color={colors.muted} />
-                    )}
-                  </View>
-                  <PressableScale
-                    onPress={openEditProfile}
-                    scaleTo={0.94}
-                    hitSlop={6}
-                    accessibilityRole="button"
-                    accessibilityLabel="Edit profile"
-                    style={styles.editBadge}>
-                    <Icon name="edit" size={13} color={colors.ink} strokeWidth={2.4} />
-                  </PressableScale>
+          <Animated.View style={[styles.card, riseCard]} accessibilityLabel="Your account">
+            <View style={styles.account}>
+              <View style={styles.avatar}>
+                <CompletionRing percent={completion?.percent ?? 0} />
+                <View style={styles.face}>
+                  {avatarSource ? (
+                    <Image source={avatarSource} style={styles.faceImage} />
+                  ) : initials ? (
+                    <Text style={styles.initials}>{initials}</Text>
+                  ) : (
+                    <Icon name="profile" size={30} color={colors.muted} />
+                  )}
                 </View>
-                <View style={styles.accountText}>
-                  <Text style={styles.name} numberOfLines={1}>
-                    {displayName}
-                  </Text>
-                  <Text variant="bodySm" color={colors.muted} style={styles.phone}>
-                    {displayPhone}
-                  </Text>
-                  <Text variant="bodySm" color={colors.muted} numberOfLines={1}>
-                    {displayEmail}
-                  </Text>
-                </View>
+                <PressableScale
+                  onPress={openEditProfile}
+                  scaleTo={0.94}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit profile"
+                  style={styles.editBadge}>
+                  <Icon name="edit" size={13} color={colors.ink} strokeWidth={2.4} />
+                </PressableScale>
               </View>
-            )}
+              <View style={styles.accountText}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {displayName}
+                </Text>
+                <Text variant="bodySm" color={colors.muted} style={styles.phone}>
+                  {displayPhone}
+                </Text>
+                <Text variant="bodySm" color={colors.muted} numberOfLines={1}>
+                  {displayEmail}
+                </Text>
+              </View>
+            </View>
             {completion?.hint ? (
               <PressableScale
                 onPress={openEditProfile}
@@ -140,7 +138,7 @@ const ProfileV4: React.FC<Props> = ({
             ) : null}
           </Animated.View>
 
-          <Animated.View entering={rise(80)} style={styles.well}>
+          <Animated.View style={[styles.well, riseWell]}>
             <Lotus />
             <View>
               <Text variant="cardTitle">Wellness is a happier you</Text>
@@ -151,12 +149,12 @@ const ProfileV4: React.FC<Props> = ({
             <Leaf />
           </Animated.View>
 
-          <Animated.View entering={rise(140)} style={styles.helpRow}>
+          <Animated.View style={[styles.helpRow, riseHelp]}>
             <HelpCard icon="phone" eyebrow="Need help?" title="Call us" onPress={callSupport} />
             <HelpCard icon="mail" eyebrow="Drop a message" title="Email us" onPress={emailSupport} />
           </Animated.View>
 
-          <Animated.View entering={rise(200)}>
+          <Animated.View style={riseLists}>
             <Text style={styles.group}>ACCOUNT</Text>
             <View style={styles.list}>
               <Item icon="card" title="Payment history" subtitle="Receipts and refunds" onPress={openPaymentHistory} />
@@ -367,7 +365,6 @@ const styles = StyleSheet.create({
   title: { fontFamily: fonts.display, fontSize: 28, lineHeight: 34, letterSpacing: -0.7 },
 
   card: { marginTop: 18, padding: 16, borderRadius: radii.card, backgroundColor: colors.s1, boxShadow: shadows.card },
-  loading: { height: 84, alignItems: 'center', justifyContent: 'center' },
   account: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   avatar: { width: 84, height: 84 },
   face: {
@@ -482,5 +479,22 @@ const styles = StyleSheet.create({
   },
   version: { marginTop: 6, textAlign: 'center', fontFamily: fonts.body, fontSize: 11, lineHeight: 13, color: colors.subtle },
 });
+
+/**
+ * Shows the skeleton on the tab's first frame and while the profile loads, then
+ * the page. The skeleton is cheap to draw, so the tab never sits blank.
+ */
+const ProfileV4: React.FC<Props> = (props) => {
+  const [painted, setPainted] = useState(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setPainted(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  if (!painted || (props.profileLoading && !props.profile)) {
+    return <ProfileSkeleton />;
+  }
+  return <ProfileContent {...props} />;
+};
 
 export default ProfileV4;

@@ -29,6 +29,8 @@ import { useAuth } from '../context/AuthContext';
 import AuthenticationScreen from '../authentication/screens/AuthenticationScreen';
 import { TabBar, type IconName } from '../components/ui';
 import { isV4 } from '../config/uiFlags';
+import { ProfileSkeleton } from '../screens/Profile/v4/ProfileSkeleton';
+import { colors } from '../theme';
 
 /** Explore can be reopened on a spa (e.g. after logging in to book it). */
 export type ExploreParams =
@@ -235,6 +237,9 @@ function BookingTabScreen(): React.ReactElement {
   const { isAuthenticated, loading } = useAuth();
 
   if (loading) {
+    if (isV4('profile')) {
+      return <ProfileSkeleton />;
+    }
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#FFB02E" />
@@ -349,7 +354,13 @@ export default function BottomNavigation() {
       {isAuthenticated &&
         <Tab.Screen name="Bookings" component={BookingTabScreen} />
       }
-      <Tab.Screen name="Profile" component={ProfileTabScreen} />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileTabScreen}
+        // The dark page colour behind the tab, so its first visit never flashes
+        // the navigator's default light background before the screen draws.
+        options={isV4('profile') ? { sceneStyle: { backgroundColor: colors.bg } } : undefined}
+      />
     </Tab.Navigator>
   );
 }

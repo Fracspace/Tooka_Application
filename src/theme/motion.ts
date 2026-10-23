@@ -6,6 +6,7 @@ import {
   ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -74,4 +75,31 @@ export function usePressScale(scaleTo: number = motion.pressScale) {
   };
 
   return { style, onPressIn, onPressOut };
+}
+
+/**
+ * The same rise as `rise()`, driven by a style instead of a layout animation.
+ * On Android a layout animation is cut short when the screen re-renders while
+ * it runs (data arriving), which left blocks stuck part-way down and
+ * overlapping the next one. This always finishes at its resting place.
+ * Spread the result onto an Animated.View's style.
+ */
+export function useRise(delay = 0, distance = 16) {
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    // ReduceMotion.System jumps straight to the end when the phone asks for less motion.
+    progress.value = withDelay(
+      delay,
+      withTiming(1, { duration: motion.rise, easing: motion.out, reduceMotion: ReduceMotion.System }),
+      ReduceMotion.System,
+    );
+    // Runs once on mount; later re-renders must not restart it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ translateY: (1 - progress.value) * distance }],
+  }));
 }
