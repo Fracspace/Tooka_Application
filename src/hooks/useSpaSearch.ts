@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios, { type CancelTokenSource } from 'axios';
 import SpaApi from '../api/SpaApi';
+import { getSpaRating } from '../utils/spaRating';
 import type { Spa } from '../types/spa';
 
 export interface SearchSpaItem {
@@ -42,7 +43,7 @@ export const shouldSearchRequest = (value: string): boolean =>
 
 const mapSpaToSearchItem = (spa: Spa): SearchSpaItem => {
   const locality = spa.locality_name ?? spa.city_name ?? 'Location unavailable';
-  const rating = Number(spa.rating_google ?? 0);
+  const rating = getSpaRating(spa).rating ?? 0;
   const safeRating = Number.isFinite(rating) ? rating.toFixed(1) : '0.0';
 
   return {

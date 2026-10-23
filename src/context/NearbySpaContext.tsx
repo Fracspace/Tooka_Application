@@ -14,6 +14,7 @@ import { useLocation } from './LocationContext';
 import type { Spa } from '../types/spa';
 
 import { getSpaDistance } from '../utils/distance';
+import { getSpaRating } from '../utils/spaRating';
 
 const CACHE_KEY = 'TOOKA_NEARBY_SPAS_CACHE';
 const PLACEHOLDER_IMAGE =
@@ -69,8 +70,9 @@ export function mapApiSpaToMappedSpa(
   const lng = parseFloat(spa.lng) || 0;
 
   // Format rating and reviews safely
-  const ratingVal = parseFloat(String(spa.rating_google)) || 4.5;
-  const reviewsCount = parseInt(String(spa.review_count_google), 10) || 0;
+  const spaRating = getSpaRating(spa);
+  const ratingVal = spaRating.rating || 4.5;
+  const reviewsCount = spaRating.count;
 
   // Derive distance preferring backend distance_m
   const { distanceStr, distanceMeters } = getSpaDistance(spa, userLat, userLng);

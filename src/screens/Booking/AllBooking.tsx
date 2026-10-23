@@ -1,4 +1,4 @@
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import FullScreenLoader from '../../components/loaders/FullScreenLoader';
 import { useMyBookings } from '../../hooks/useMyBookings';
+import { useReviewPrompt } from '../../context/ReviewPromptContext';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import type { BackendBookingListItem, BookingSection } from '../../types/booking';
 import AllBookingHeader from './components/AllBookingHeader';
@@ -85,6 +86,13 @@ const AllBookingScreen: React.FC = () => {
     refetch,
     onRefresh,
   } = useMyBookings();
+
+  const { checkPending } = useReviewPrompt();
+  useFocusEffect(
+    useCallback(() => {
+      void checkPending();
+    }, [checkPending]),
+  );
 
   const availableTabs = useMemo(() => {
     return TABS.filter((tab) => {

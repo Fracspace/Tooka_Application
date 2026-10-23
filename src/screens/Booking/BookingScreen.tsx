@@ -35,6 +35,7 @@ import { useProfile } from '../../context/ProfileContext';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import type { BookingScheduleDate, BookingSlot } from '../../types/booking';
 import type { BookingDate, BookingService, TimeSlot } from './types';
+import { getSpaRating } from '../../utils/spaRating';
 import { Analytics, AnalyticsEvents, AnalyticsParams, AnalyticsScreens } from '../../services/firebase/analytics';
 
 type BookingScreenNavigationProp = NativeStackNavigationProp<
@@ -233,7 +234,7 @@ function BookingScreen(): React.ReactElement {
         : FALLBACK_IMAGE,
       spaName: spa?.name ?? route.params.spaName ?? 'Tooka Spa',
       category: selectedService?.category ?? 'Massage',
-      rating: spa?.rating_google ?? '4.8',
+      rating: getSpaRating(spa).rating ?? '4.8',
     }),
     [
       selectedService,
@@ -247,6 +248,8 @@ function BookingScreen(): React.ReactElement {
       spa?.city_name,
       spa?.cover_photo_url,
       spa?.rating_google,
+      spa?.rating_platform,
+      spa?.review_count_platform,
       resolvedServicePrice,
     ],
   );

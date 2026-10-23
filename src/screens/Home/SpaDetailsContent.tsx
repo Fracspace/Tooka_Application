@@ -24,6 +24,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import SpaDetailsSkeleton from '../../components/loaders/SpaDetailsSkeleton';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
+import ReviewCard from '../../components/ReviewCard';
+import { getSpaRating } from '../../utils/spaRating';
 import type { SpaDetails } from '../../types/spaDetails';
 import type { BookingDate, BookingOption, TimeSlot } from '../Booking/types';
 
@@ -226,9 +228,8 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
     });
   }, [spa?.opening_hours, spa?.timings]);
 
-  const ratingVal = spa?.rating_google != null ? Number(spa.rating_google) : null;
-  const reviewCountVal =
-    spa?.review_count_google != null ? Number(spa.review_count_google) : 0;
+  const { rating: ratingVal, count: reviewCountVal } = getSpaRating(spa);
+  const recentReviews = spa?.recent_reviews ?? [];
 
   const ratingDisplay = useMemo(() => {
     if (
@@ -751,6 +752,27 @@ const SpaDetailsContent = memo(function SpaDetailsContentInner({
             </View>
           </View>
         )}
+
+        {/* 6b. GUEST REVIEWS */}
+        {/* {recentReviews.length > 0 && spa && (
+          <View style={styles.bookingSectionBlock}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Guest reviews</Text>
+              <Pressable
+                onPress={() =>
+                  navigation.navigate('SpaReviews', { spaId: spa.id, spaName: spa.name })
+                }
+                hitSlop={8}
+                accessibilityRole="button"
+              >
+                <Text style={styles.seeAllReviews}>See all</Text>
+              </Pressable>
+            </View>
+            {recentReviews.map(review => (
+              <ReviewCard key={review.id} review={review} />
+            ))}
+          </View>
+        )} */}
       </View>
 
       {/* 7. STICKY BOTTOM CTA & IS_BOOKABLE NOTICE */}
@@ -1042,6 +1064,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Sora-SemiBold',
     fontSize: 18,
     color: '#2D2B28',
+  },
+  seeAllReviews: {
+    fontFamily: 'WorkSans-SemiBold',
+    fontSize: 14,
+    color: '#FFB02E',
   },
   handpickedBanner: {
     backgroundColor: '#FFFFFF',

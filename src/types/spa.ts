@@ -9,6 +9,9 @@ export interface Spa {
   // API may return these as numeric strings (e.g. "5.0") rather than numbers.
   rating_google: number | string | null;
   review_count_google: number | string | null;
+  // Tooka rating: average of public feedback (decimal string), null when there is none.
+  rating_platform?: number | string | null;
+  review_count_platform?: number | string | null;
   ranking_score: string;
   is_verified: boolean;
   is_bookable: boolean;

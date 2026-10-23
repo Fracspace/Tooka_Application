@@ -14,7 +14,7 @@ import {
   type ListRenderItemInfo,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 
@@ -43,6 +43,8 @@ import StateMessage from '../../components/common/StateMessage';
 
 import type { Spa } from '../../types/spa';
 import { getSpaDistance } from '../../utils/distance';
+import { getSpaRating } from '../../utils/spaRating';
+import { useReviewPrompt } from '../../context/ReviewPromptContext';
 import { getLocationDisplayParts } from '../../services/locationAddress';
 import { useProfile } from '../../context/ProfileContext';
 import { Analytics, AnalyticsEvents, AnalyticsScreens } from '../../services/firebase/analytics';
@@ -123,6 +125,9 @@ const HomeScreen: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('spa');
   const isTablet = width >= 768;
   const { profile, loading: profileLoading } = useProfile();
+
+  const { checkPendingOnAppOpen } = useReviewPrompt();
+  useFocusEffect(checkPendingOnAppOpen);
 
   const categories = categoriesData as CategoryItem[];
   const { location, loading: locationLoading, refreshLocation } = useLocation();
@@ -225,8 +230,8 @@ const HomeScreen: React.FC = () => {
           name: spa.name ?? 'Untitled Spa',
           location: spa.city_name ?? DEFAULT_LOCATION,
           distance: distanceStr,
-          rating: String(spa.rating_google ?? DEFAULT_RATING),
-          reviews: `${spa.review_count_google ?? 0} reviews`,
+          rating: String(getSpaRating(spa).rating ?? DEFAULT_RATING),
+          reviews: `${getSpaRating(spa).count} reviews`,
           price: `₹ ${spa.starting_price ?? DEFAULT_PRICE}`,
           oldPrice: '',
           badge: DEFAULT_BADGE,

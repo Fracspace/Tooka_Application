@@ -41,6 +41,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BackendBookingListItem, BookingSection } from '../../../types/booking';
 import type { RootStackParamList } from '../../../navigation/AppNavigator';
 import { getBookingSection } from '../../../utils/getBookingSection';
+import BookingReviewStatus from './BookingReviewStatus';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -439,6 +440,7 @@ const BookingCard = React.memo<BookingCardProps>(function BookingCard({
       {section === 'upcoming' &&
         <BookingActions section={section} booking={booking} />
       }
+      {section === 'completed' && <BookingReviewStatus booking={booking} />}
     </View>
   );
 });

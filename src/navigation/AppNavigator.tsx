@@ -34,6 +34,7 @@ import CallScreen from '../screens/Call/CallScreen';
 import IncomingCallScreen from '../screens/Call/IncomingCallScreen';
 
 import LocationSelectionScreen from '../screens/Home/LocationSelectionScreen';
+import SpaReviewsScreen from '../screens/Home/SpaReviewsScreen';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RootStackParamList — single source of navigation type truth.
@@ -60,6 +61,10 @@ export type RootStackParamList = {
     selectedSlotId?: string;
     fromLogin?: boolean;
     fromScreen?: 'Home' | 'Explore' | string;
+  };
+  SpaReviews: {
+    spaId: string;
+    spaName?: string;
   };
   AllBooking: undefined;
   BookingScreen: {
@@ -224,6 +229,8 @@ const AppNavigator = () => {
         />
 
         <Stack.Screen name="SpaDetails" component={SpaDetailsScreen} />
+
+        <Stack.Screen name="SpaReviews" component={SpaReviewsScreen} />
 
         <Stack.Screen name="AllBooking" component={AllBookingScreen} />
 

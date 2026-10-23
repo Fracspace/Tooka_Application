@@ -12,6 +12,7 @@ import { NearbySpaProvider } from './src/context/NearbySpaContext';
 import { ProfileProvider } from './src/context/ProfileContext';
 import { PaymentProvider } from './src/context/PaymentContext';
 import { CallProvider } from './src/context/CallContext';
+import { ReviewPromptProvider } from './src/context/ReviewPromptContext';
 
 function App() {
   const { isRestartRequired, currentlyRunningBundle, newReleaseBundle } = useStallionUpdate();
@@ -54,7 +55,9 @@ function App() {
               <NearbySpaProvider>
                 <PaymentProvider>
                   <CallProvider>
-                    <AppNavigator />
+                    <ReviewPromptProvider>
+                      <AppNavigator />
+                    </ReviewPromptProvider>
                   </CallProvider>
                 </PaymentProvider>
               </NearbySpaProvider>
