@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Image,
@@ -31,6 +30,8 @@ import { Button, Card, Chip, FitImage, Icon, PressableScale, Screen, Text } from
 import { onSpotlightSpa } from './spotlightSync';
 import { brandAlpha, colors, fadeIn, fonts, motion, radii, rise, useReduceMotion } from '../../../theme';
 import { TypeIcon, type TypeIconName } from './typeIcons';
+import { SIDE_SCALE, spotlightSizes } from './spotlightLayout';
+import { HomeSkeleton, SpotlightSkeleton } from './HomeSkeleton';
 import type {
   FeaturedSpaItem,
   NearbyListItem,
@@ -207,19 +208,6 @@ function NextVisitCard({ booking }: { booking: BackendBookingListItem }) {
 
 type PosterItem = FeaturedSpaItem & { tag?: string };
 
-// Sizes from District's spotlight: the middle card is ~61% of the screen wide,
-// side cards are 80% of its size and sit 18pt away, partly off screen.
-const SIDE_SCALE = 0.8;
-const CARD_GAP = 18;
-const spotlightSizes = (screenWidth: number) => {
-  const cardW = Math.round(screenWidth * 0.607);
-  return {
-    cardW,
-    cardH: Math.round(cardW * 1.34),
-    interval: cardW * ((1 + SIDE_SCALE) / 2) + CARD_GAP,
-  };
-};
-
 function SpotlightCard({
   item,
   index,
@@ -361,27 +349,19 @@ function StageMessage({
   body,
   action,
   onAction,
-  loading,
 }: {
-  title?: string;
+  title: string;
   body?: string;
   action?: string;
   onAction?: () => void;
-  loading?: boolean;
 }) {
   return (
     <View style={styles.stageMsg}>
-      {loading ? (
-        <ActivityIndicator color={colors.brand} />
-      ) : (
-        <>
-          <Text style={styles.stageTitle}>{title}</Text>
-          {body ? <Text variant="bodySm" color={colors.muted} style={styles.center}>{body}</Text> : null}
-          {action && onAction ? (
-            <Button label={action} onPress={onAction} size="sm" variant="secondary" style={styles.stageBtn} />
-          ) : null}
-        </>
-      )}
+      <Text style={styles.stageTitle}>{title}</Text>
+      {body ? <Text variant="bodySm" color={colors.muted} style={styles.center}>{body}</Text> : null}
+      {action && onAction ? (
+        <Button label={action} onPress={onAction} size="sm" variant="secondary" style={styles.stageBtn} />
+      ) : null}
     </View>
   );
 }
@@ -474,11 +454,7 @@ export default function HomeV4(props: Props) {
   const showSearch = searchOpen || searchQuery.length > 0;
 
   if (isInitialLoading) {
-    return (
-      <Screen haze style={styles.loading}>
-        <ActivityIndicator color={colors.brand} />
-      </Screen>
-    );
+    return <HomeSkeleton />;
   }
 
   // Bring the results into view; the tiles sit above them.
@@ -502,7 +478,7 @@ export default function HomeV4(props: Props) {
   const avatar = profile?.displayName?.trim()?.[0]?.toUpperCase() ?? '';
 
   const renderStage = () => {
-    if (shouldShowSearchLoading) return <StageMessage loading />;
+    if (shouldShowSearchLoading) return <SpotlightSkeleton />;
     if (shouldShowSearchEmptyState) {
       return <StageMessage title="No spas found" body="Try another spa name or city." action="Clear search" onAction={closeSearch} />;
     }
@@ -725,7 +701,6 @@ export default function HomeV4(props: Props) {
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   center: { textAlign: 'center' },
-  loading: { alignItems: 'center', justifyContent: 'center' },
   gutter: { paddingHorizontal: 16 },
   // Room for the current floating tab bar.
   content: { paddingBottom: 130 },
