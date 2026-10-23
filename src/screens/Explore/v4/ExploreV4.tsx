@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
+import React, { forwardRef, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -8,18 +8,27 @@ import {
   View,
   type ListRenderItemInfo,
 } from 'react-native';
-import Animated from 'react-native-reanimated';
-import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from '@gorhom/bottom-sheet';
-import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
+import Animated, {
+  type SharedValue,
+  useAnimatedReaction,
+  useSharedValue,
+} from 'react-native-reanimated';
+import BottomSheet, {
+  BottomSheetBackdrop,
+  BottomSheetScrollView,
+  useBottomSheetTimingConfigs,
+  useScrollEventsHandlersDefault,
+} from '@gorhom/bottom-sheet';
+import type { BottomSheetBackdropProps, ScrollEventsHandlersHookType } from '@gorhom/bottom-sheet';
 import Svg, { Circle, Path } from 'react-native-svg';
 import MapView, { Marker, PROVIDER_GOOGLE, type MapMarker } from 'react-native-maps';
 
 import { BackButton, Button, FitImage, PressableScale, RoundButton, Text } from '../../../components/ui';
-import { brandAlpha, colors, fadeIn, fonts, radii, rise, shadows } from '../../../theme';
+import { brandAlpha, colors, fadeIn, fonts, motion, radii, rise, shadows } from '../../../theme';
 import type { ExploreSpa } from '../../../types/explore';
 import type { useExploreScreen } from '../../../hooks/useExploreScreen';
 import { bookingOption } from '../../Booking/bookingData';
-import SpaDetailsContent from '../../Home/SpaDetailsContent';
+import SpaDetailsV4, { type SpaDetailsSheet } from '../../Home/v4/SpaDetailsV4';
 import BookingSummarySheet from '../../Booking/components/BookingSummarySheet';
 import { slotMinutes } from '../../Booking/slotFormat';
 import { formatRatingLabel } from '../../../utils/number';
@@ -35,6 +44,29 @@ const CARD_HEIGHT = 160;
 
 const GLASS = 'rgba(29,25,21,0.88)';
 const GLASS_SHADOW = `${shadows.ringHi}, 0 8px 20px rgba(0,0,0,0.4)`;
+
+/**
+ * The sheet's scroll view for v4 Spa Details. It keeps the sheet's own scroll
+ * handling (so drags pass between sheet and content) and also writes the
+ * offset into `scrollY`, on the UI thread, for the page's fading header bar.
+ */
+const makeSheetScroll = (scrollY: SharedValue<number>) => {
+  const useHandlers: ScrollEventsHandlersHookType = (ref, contentOffsetY) => {
+    const handlers = useScrollEventsHandlersDefault(ref, contentOffsetY);
+    const { handleOnScroll } = handlers;
+    return {
+      ...handlers,
+      handleOnScroll: (event, context) => {
+        'worklet';
+        handleOnScroll?.(event, context);
+        scrollY.value = event.contentOffset.y;
+      },
+    };
+  };
+  return forwardRef<React.ComponentRef<typeof BottomSheetScrollView>, React.ComponentProps<typeof BottomSheetScrollView>>(
+    (props, ref) => <BottomSheetScrollView ref={ref} {...props} scrollEventsHandlersHook={useHandlers} />,
+  ) as unknown as NonNullable<SpaDetailsSheet['ScrollComponent']>;
+};
 
 const CardSeparator: React.FC = () => <View style={styles.cardSeparator} />;
 
@@ -126,7 +158,27 @@ export default function ExploreV4({
   spaDetailsLoading,
   spas,
   spasError,
+  width,
 }: Props) {
+  // v4 Spa Details in the sheet: its header follows the sheet's scroll and
+  // slides below the status bar as the sheet goes from 75% to full screen.
+  const detailsScrollY = useSharedValue(0);
+  const sheetIndexValue = useSharedValue(-1);
+  const detailsExpand = useSharedValue(0);
+  useAnimatedReaction(
+    () => sheetIndexValue.value,
+    (index) => {
+      detailsExpand.value = Math.min(Math.max(index - 1, 0), 1);
+    },
+  );
+  const SheetScroll = useMemo(() => makeSheetScroll(detailsScrollY), [detailsScrollY]);
+  const closeSheet = useCallback(() => sheetRef.current?.close(), [sheetRef]);
+  const detailsSheet = useMemo<SpaDetailsSheet>(
+    () => ({ scrollY: detailsScrollY, expand: detailsExpand, onClose: closeSheet, ScrollComponent: SheetScroll }),
+    [detailsScrollY, detailsExpand, closeSheet, SheetScroll],
+  );
+  const sheetAnimation = useBottomSheetTimingConfigs({ duration: 420, easing: motion.out });
+
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
       <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.55} pressBehavior="close" />
@@ -310,36 +362,34 @@ export default function ExploreV4({
         enableOverDrag
         enableContentPanningGesture
         enableHandlePanningGesture
-        animationConfigs={{ duration: 320 }}
+        animationConfigs={sheetAnimation}
+        animatedIndex={sheetIndexValue}
         enableDynamicSizing={false}
         backdropComponent={renderBackdrop}
+        style={styles.sheet}
+        handleStyle={styles.sheetHandleArea}
         handleIndicatorStyle={styles.sheetHandle}
         backgroundStyle={styles.sheetBackground}>
-        {selectedSpa && (
-          <BottomSheetScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
-            <SpaDetailsContent
-              key={selectedSpa.id}
-              spa={spaDetails}
-              loading={spaDetailsLoading}
-              error={spaDetailsError}
-              onRetry={handleRetryDetails}
-              onBack={() => sheetRef.current?.close()}
-              showBackButton={false}
-              dates={booking.scheduleDates}
-              selectedDateId={booking.selectedDateId}
-              onSelectDate={booking.selectDate}
-              slots={booking.timeSlots}
-              selectedSlotId={booking.selectedSlotId}
-              onSelectSlot={booking.selectSlot}
-              loadingSlots={booking.loadingSlots}
-              availabilityError={booking.availabilityError}
-              bookingOption={bookingOption}
-              onProceedBooking={handleProceedBooking}
-              proceedLoading={booking.submitting}
-              proceedDisabled={!booking.selectedSlot}
-            />
-          </BottomSheetScrollView>
-        )}
+        {selectedSpa ? (
+          <SpaDetailsV4
+            // Remount per spa so the photo, scroll and "show all" start fresh.
+            key={selectedSpa.id}
+            isTablet={width >= 768}
+            spa={spaDetails}
+            loading={spaDetailsLoading}
+            refreshing={false}
+            error={spaDetailsError}
+            refetch={async () => handleRetryDetails()}
+            // Pull-to-refresh is off in sheet mode; the sheet's drag closes it instead.
+            handleRefresh={async () => handleRetryDetails()}
+            handleBack={closeSheet}
+            handleProceedBooking={handleProceedBooking}
+            booking={booking}
+            bookingOption={bookingOption}
+            bookingFeeText={bookingFeeText}
+            sheet={detailsSheet}
+          />
+        ) : null}
       </BottomSheet>
 
       <BookingSummarySheet
@@ -489,7 +539,9 @@ const styles = StyleSheet.create({
   },
   emptyAction: { marginTop: 4 },
 
-  sheetBackground: { borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: '#FFF8EF' },
-  sheetHandle: { width: 72, height: 5, borderRadius: 3, backgroundColor: '#858585' },
-  sheetContent: { paddingHorizontal: 0, paddingTop: 14, paddingBottom: 50 },
+  sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
+  sheetBackground: { borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: colors.bg },
+  // Floats over the photo instead of taking a strip above it.
+  sheetHandleArea: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20, paddingTop: 8 },
+  sheetHandle: { width: 40, height: 5, borderRadius: 3, backgroundColor: 'rgba(251,243,232,0.7)' },
 });

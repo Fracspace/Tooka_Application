@@ -40,6 +40,12 @@ export type SpaDetailsSheet = {
   /** 0 while the card is small, 1 once it fills the screen. */
   expand: SharedValue<number>;
   onClose: () => void;
+  /**
+   * Set when the page sits inside a gorhom BottomSheet (Explore): its own
+   * scroll view, which must report the offset into `scrollY` itself, since the
+   * sheet needs the scroll events to hand drags between sheet and content.
+   */
+  ScrollComponent?: React.ComponentType<React.ComponentProps<typeof Animated.ScrollView>>;
 };
 
 /** How far past the top a pull has to go to close the card. */
@@ -157,7 +163,9 @@ function SpaDetailsV4({
   const stripStyle = useAnimatedStyle(() => ({ transform: [{ translateX: stripX.value }] }));
 
   // The header gets a solid bar and the spa's name once the photo scrolls away.
-  const scrollY = useSharedValue(0);
+  const ownScrollY = useSharedValue(0);
+  const SheetScroll = sheet?.ScrollComponent;
+  const scrollY = SheetScroll && sheet ? sheet.scrollY : ownScrollY;
   const sheetScrollY = sheet?.scrollY;
   const sheetClose = sheet?.onClose;
   const onScroll = useAnimatedScrollHandler({
@@ -216,10 +224,12 @@ function SpaDetailsV4({
   if (!isBookable) dockTitle = 'Booking unavailable';
   else if (selectedSlot) dockTitle = selectedDate ? `${selectedDate.label}, ${selectedSlot.label}` : selectedSlot.label;
 
+  const Scroller = SheetScroll ?? Animated.ScrollView;
+
   return (
     <Screen>
-      <Animated.ScrollView
-        onScroll={onScroll}
+      <Scroller
+        onScroll={SheetScroll ? undefined : onScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 150 + insets.bottom }}
@@ -632,7 +642,7 @@ function SpaDetailsV4({
             </Card>
           </View>
         ) : null}
-      </Animated.ScrollView>
+      </Scroller>
 
       {/* Header */}
       <Animated.View style={[styles.header, { paddingTop: headerTop }, headerShift]} pointerEvents="box-none">
