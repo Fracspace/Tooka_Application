@@ -434,6 +434,8 @@ export default function HomeV4(props: Props) {
     isRefreshing,
     handleRefresh,
     isInitialLoading,
+    loading,
+    locationLoading,
     shouldRenderEmptyState,
     nextVisit,
     onboardingPicksLabel,
@@ -453,7 +455,11 @@ export default function HomeV4(props: Props) {
   const curatedY = useRef(0);
   const showSearch = searchOpen || searchQuery.length > 0;
 
-  if (isInitialLoading) {
+  // The full-page skeleton is only for a cold start with nothing to show. Once
+  // the cached nearby spas are on screen, a later load (the curated list
+  // starting when location arrives) only puts a skeleton in the spotlight, so
+  // the page no longer flips from content to skeleton and back.
+  if (isInitialLoading && nearbyClosestFirst.length === 0) {
     return <HomeSkeleton />;
   }
 
@@ -486,6 +492,8 @@ export default function HomeV4(props: Props) {
       return <StageMessage title="Couldn't search spas" body="Please try again." action="Retry" onAction={retrySearch} />;
     }
     if (isSearchActive) return <Spotlight items={curatedList} onOpen={handleOpenSpotlight} />;
+    // Location or the curated list still loading: not an empty city yet.
+    if ((loading || locationLoading) && spas.length === 0) return <SpotlightSkeleton />;
     if (error && spas.length === 0) {
       return <StageMessage title="Something went wrong" body="Please try again." action="Retry" onAction={refetch} />;
     }
