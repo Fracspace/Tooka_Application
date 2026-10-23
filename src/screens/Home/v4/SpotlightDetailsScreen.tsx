@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Platform,
   StyleSheet,
@@ -28,6 +27,7 @@ import type { RootStackParamList } from '../../../navigation/AppNavigator';
 import { useSpaDetailsScreen } from '../../../hooks/useSpaDetailsScreen';
 import { SpaDetailsSummarySheet } from '../SpaDetailsScreen';
 import SpaDetailsV4 from './SpaDetailsV4';
+import { SpaBodyBones } from './SpaDetailsSkeleton';
 import { FitImage, Text } from '../../../components/ui';
 import { reportSpotlightSpa } from './spotlightSync';
 import { colors, motion, radii, useReduceMotion } from '../../../theme';
@@ -60,9 +60,10 @@ function ActivePage({
   // Keep the card's photo and name up while the details load.
   if (!screen.spa && !screen.error) {
     return (
-      <View style={styles.preview}>
-        <PreviewPage spa={spa} />
-        <ActivityIndicator color={colors.brand} style={styles.loading} />
+      <View style={styles.preview} accessibilityLabel="Loading spa details">
+        {spa.image ? <FitImage uri={spa.image} style={styles.previewImage} /> : null}
+        <Text variant="h1" numberOfLines={2} style={styles.previewName}>{spa.name}</Text>
+        <SpaBodyBones withName={false} />
       </View>
     );
   }
@@ -280,5 +281,4 @@ const styles = StyleSheet.create({
   preview: { flex: 1, backgroundColor: colors.bg },
   previewImage: { width: '100%', height: 468 },
   previewName: { margin: 20 },
-  loading: { position: 'absolute', top: 468 + 90, alignSelf: 'center' },
 });

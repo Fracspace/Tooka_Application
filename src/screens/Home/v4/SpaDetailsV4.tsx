@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Image,
   Linking,
@@ -28,6 +27,7 @@ import { brandAlpha, colors, fonts, gradients, motion, radii, rise, useReduceMot
 import { useSpaDetailsContentState } from '../../../hooks/useSpaDetailsContentState';
 import type { useSpaDetailsScreen } from '../../../hooks/useSpaDetailsScreen';
 import type { TimeSlot } from '../../Booking/types';
+import SpaDetailsSkeleton, { SlotBones } from './SpaDetailsSkeleton';
 import { formatDateSubLabel, formatServicePrice } from '../spaDetailsFormat';
 
 /**
@@ -192,6 +192,8 @@ function SpaDetailsV4({
   const hasSlot = Boolean(booking.selectedSlot);
   const ctaDisabled = !isBookable || !hasSlot || booking.submitting;
 
+  if (!spa && !(error && !loading)) return <SpaDetailsSkeleton heroHeight={HERO_HEIGHT} />;
+
   if (!spa) {
     return (
       <Screen style={styles.center}>
@@ -202,9 +204,7 @@ function SpaDetailsV4({
             <Button label="Try again" variant="secondary" onPress={refetch} style={styles.stateBtn} />
             <Button label="Go back" variant="ghost" onPress={handleBack} />
           </View>
-        ) : (
-          <ActivityIndicator color={colors.brand} />
-        )}
+        ) : null}
       </Screen>
     );
   }
@@ -308,9 +308,8 @@ function SpaDetailsV4({
               </View>
 
               {booking.loadingSlots ? (
-                <View style={styles.slotState}>
-                  <ActivityIndicator color={colors.brand} />
-                  <Text variant="bodySm" color={colors.muted}>Checking availability…</Text>
+                <View accessibilityLabel="Checking availability">
+                  <SlotBones />
                 </View>
               ) : booking.availabilityError ? (
                 <View style={styles.slotState}>
