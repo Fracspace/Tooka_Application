@@ -279,6 +279,6 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 0,
   },
   preview: { flex: 1, backgroundColor: colors.bg },
-  previewImage: { width: '100%', height: 468 },
+  previewImage: { width: '100%', height: 420 },
   previewName: { margin: 20 },
 });
