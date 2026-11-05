@@ -2,6 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { Crashlytics, CrashlyticsKeys } from '../firebase/crashlytics';
 
+/** How long after a call's last line its follow-up lines still carry its id. */
+const RECENT_SESSION_MS = 3000;
+
 /**
  * Verbose console output and the on-screen CallInspectorOverlay. Dev only.
  *
@@ -74,6 +77,11 @@ class CallLogger {
 
   // For visual overlay live rendering
   private activeSessionId: string | null = null;
+  // When a line last carried a real session id. Cleanup clears the session first
+  // and then leaves the Agora channel and emits call_end, so those last few lines
+  // have no session of their own; within this window they are filed under the
+  // call that just ended instead of the shared NO_SESSION bucket.
+  private lastSessionSeenAt = 0;
   private onLogCallbacks: Set<(log: string) => void> = new Set();
   private onAudioUpdateCallbacks: Set<(snapshot: AudioStateSnapshot) => void> = new Set();
   private currentCallState: string = 'IDLE';
@@ -225,7 +233,13 @@ class CallLogger {
     if (level === LogLevel.DEBUG && !ENABLE_CALL_DIAGNOSTICS) return;
 
     const time = this.formatTime();
-    const sessionId = ctx?.sessionId || 'NO_SESSION';
+    const now = Date.now();
+    if (ctx?.sessionId) {
+      this.lastSessionSeenAt = now;
+    }
+    const recentSessionId =
+      this.activeSessionId && now - this.lastSessionSeenAt < RECENT_SESSION_MS ? this.activeSessionId : null;
+    const sessionId = ctx?.sessionId || recentSessionId || 'NO_SESSION';
     if (ctx?.sessionId && this.activeSessionId !== ctx.sessionId) {
       this.activeSessionId = ctx.sessionId;
       // Stamp the crash report so a crash mid-call names the session.
@@ -283,7 +297,8 @@ class CallLogger {
     // where tokens, payloads and profile data live. The prefix carries session id,
     // call state, category and level; the message carries timings and status codes.
     if (level !== LogLevel.DEBUG) {
-      Crashlytics.log(`${prefix} ${message}`);
+      // The console line above already shows it; don't print it a second time.
+      Crashlytics.log(`${prefix} ${message}`, { echoInDev: false });
 
       if (level === LogLevel.ERROR) {
         Crashlytics.recordError(

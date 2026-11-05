@@ -3,9 +3,13 @@ import crashlytics from '@react-native-firebase/crashlytics';
 import { CrashlyticsKey } from './crashlyticsKeys';
 
 class CrashlyticsService {
-  async log(message: string) {
+  /**
+   * `echoInDev: false` skips the development console copy, for callers that
+   * already print the same line themselves (the call logger).
+   */
+  async log(message: string, { echoInDev = true }: { echoInDev?: boolean } = {}) {
     try {
-      if (__DEV__) {
+      if (__DEV__ && echoInDev) {
         console.log('[Crashlytics]', message);
       }
 

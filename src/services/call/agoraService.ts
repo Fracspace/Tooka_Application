@@ -243,7 +243,7 @@ class AgoraService {
       onAudioVolumeIndication: (connection, speakers, speakerNumber, totalVolume) => {
         const ctx = getLogContext();
         const { callLogger } = require('./callLogger');
-        callLogger.debug('AGORA', `Callback: onAudioVolumeIndication - count=${speakerNumber}, totalVolume=${totalVolume}`, ctx, { speakers, speakerNumber, totalVolume });
+        callLogger.debug('AGORA', `Callback: onAudioVolumeIndication - count=${speakerNumber}, totalVolume=${totalVolume}`, ctx);
         
         callLogger.updateAudioSnapshot(ctx?.sessionId, {
           volume: totalVolume,

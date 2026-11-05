@@ -33,10 +33,15 @@ const getLogContext = (): any => {
   }
 };
 
+/** While reconnecting, note progress on every Nth failed try (about once a minute). */
+const CONNECT_ERROR_LOG_EVERY = 12;
+
 class SocketService {
   private socket: Socket | null = null;
   private listeners: Record<string, Set<SocketEventListener>> = {};
   private isConnecting = false;
+  /** Failed connection tries in the current outage; reset on connect. */
+  private failedConnectAttempts = 0;
 
   /**
    * PR-3: opens the shared connection.
@@ -94,6 +99,10 @@ class SocketService {
       this.socket.on('connect', () => {
         const connDuration = Date.now() - startTime;
         const freshCtx = getLogContext();
+        if (this.failedConnectAttempts > 0) {
+          callLogger.info('SOCKET', `Reconnected after ${this.failedConnectAttempts} failed attempts`, freshCtx);
+          this.failedConnectAttempts = 0;
+        }
         callLogger.info('SOCKET', `Socket connected successfully. ID: ${this.socket?.id}, Duration from start: ${connDuration}ms`, freshCtx);
         this.rebindListeners();
       });
@@ -108,9 +117,19 @@ class SocketService {
         callLogger.warn('SOCKET', `Socket disconnected: ${reason}`, freshCtx);
       });
 
+      // Socket.IO retries about every 5s while the server is unreachable. Logging
+      // each try as an error filled the console and sent Crashlytics a non-fatal
+      // every 5s. Report the first failure of an outage, then a short note about
+      // once a minute until it reconnects.
       this.socket.on('connect_error', (error) => {
         const freshCtx = getLogContext();
-        callLogger.error('SOCKET', `Socket connection error`, freshCtx, error);
+        this.failedConnectAttempts += 1;
+        const attempts = this.failedConnectAttempts;
+        if (attempts === 1) {
+          callLogger.error('SOCKET', `Socket connection error`, freshCtx, error);
+        } else if (attempts % CONNECT_ERROR_LOG_EVERY === 0) {
+          callLogger.info('SOCKET', `Still reconnecting: ${attempts} failed attempts`, freshCtx);
+        }
       });
 
       const duration = Date.now() - startTime;
