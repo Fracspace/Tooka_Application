@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import axios from 'axios';
-import { useNavigation } from '@react-navigation/native';
+import { StackActions, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import BookingApi from '../api/BookingApi';
@@ -411,7 +411,17 @@ export function useSlotBooking({
       const paymentContext = await initiatePayment(bookingId, bookingReference, bookingSummary);
 
       await closeSummaryAndWait();
-      navigation.navigate('PaymentScreen', {
+      // From the Home spotlight the booking runs inside SpotlightDetails, a see-through
+      // modal over Home. Opened on top of it, Cashfree's checkout was drawn into that
+      // layer and Home showed through. Replace the spotlight instead, so the payment
+      // screen sits directly on the tabs (results reset the stack afterwards anyway).
+      const state = navigation.getState?.();
+      const fromSpotlight = state?.routes[state.index]?.name === 'SpotlightDetails';
+      const goToPayment = fromSpotlight
+        ? (params: RootStackParamList['PaymentScreen']) =>
+            navigation.dispatch(StackActions.replace('PaymentScreen', params))
+        : (params: RootStackParamList['PaymentScreen']) => navigation.navigate('PaymentScreen', params);
+      goToPayment({
         paymentId: paymentContext.paymentId,
         bookingId: paymentContext.bookingId,
         bookingRef: paymentContext.bookingRef,
