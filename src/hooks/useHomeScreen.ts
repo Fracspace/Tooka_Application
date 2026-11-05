@@ -146,7 +146,11 @@ export function useHomeScreen() {
     normalizedQuery,
     retrySearch,
     clearSearch,
-  } = useSpaSearch();
+    searchTotal,
+    searchHasMore,
+    searchLoadingMore,
+    loadMoreSearch,
+  } = useSpaSearch(location);
   // console.log("Context spa: ", contextSpas, "Search Results: ", searchResults);
 
   const nearbySpas = useMemo<NearbySpaItem[]>(
@@ -537,5 +541,9 @@ export function useHomeScreen() {
     setCouplesOnly,
     hasCoupleRooms,
     nearbyClosestFirst,
+    searchTotal,
+    searchHasMore,
+    searchLoadingMore,
+    loadMoreSearch,
   };
 }

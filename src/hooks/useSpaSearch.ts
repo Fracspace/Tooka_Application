@@ -21,11 +21,21 @@ export interface SearchSpaItem {
   starting_price?: string | null;
 }
 
+/** Where the user is, so the backend can return the nearest spas first. */
+export type SearchOrigin = { latitude?: number | null; longitude?: number | null } | null | undefined;
+
 export interface UseSpaSearchResult {
   searchQuery: string;
   setSearchQuery: (value: string) => void;
   debouncedQuery: string;
   searchResults: SearchSpaItem[];
+  /** The same results as the API returned them, for screens that map spas themselves. */
+  searchSpas: Spa[];
+  /** How many spas match in all, across every page. */
+  searchTotal: number;
+  searchHasMore: boolean;
+  searchLoadingMore: boolean;
+  loadMoreSearch: () => void;
   isSearching: boolean;
   searchLoading: boolean;
   searchError: string | null;
@@ -63,17 +73,48 @@ const mapSpaToSearchItem = (spa: Spa): SearchSpaItem => {
   };
 };
 
-export const useSpaSearch = (): UseSpaSearchResult => {
+/** Appends a page, dropping spas already shown (pages can overlap as data changes). */
+const mergeUnique = (current: Spa[], next: Spa[]): Spa[] => {
+  const seen = new Set(current.map((spa) => spa.id));
+  const merged = [...current];
+  for (const spa of next) {
+    if (!seen.has(spa.id)) {
+      seen.add(spa.id);
+      merged.push(spa);
+    }
+  }
+  return merged;
+};
+
+export const useSpaSearch = (origin?: SearchOrigin): UseSpaSearchResult => {
   const [searchQuery, setSearchQueryState] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<SearchSpaItem[]>([]);
+  const [rawResults, setRawResults] = useState<Spa[]>([]);
+  const [searchTotal, setSearchTotal] = useState(0);
+  const [searchHasMore, setSearchHasMore] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [searchLoadingMore, setSearchLoadingMore] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchHasSearched, setSearchHasSearched] = useState(false);
 
   const cancelSourceRef = useRef<CancelTokenSource | null>(null);
   const requestSequenceRef = useRef(0);
   const latestQueryRef = useRef('');
+  const pageRef = useRef(1);
+  const loadingMoreRef = useRef(false);
+
+  // Read at request time, so a location update does not rebuild the callbacks.
+  const lat = origin?.latitude ?? null;
+  const lng = origin?.longitude ?? null;
+  const originRef = useRef({ lat, lng });
+  originRef.current = { lat, lng };
+
+  const resetResults = useCallback(() => {
+    setRawResults([]);
+    setSearchTotal(0);
+    setSearchHasMore(false);
+    pageRef.current = 1;
+  }, []);
 
   const cancelActiveRequest = useCallback(() => {
     if (cancelSourceRef.current) {
@@ -81,16 +122,18 @@ export const useSpaSearch = (): UseSpaSearchResult => {
       cancelSourceRef.current = null;
     }
     requestSequenceRef.current += 1;
+    loadingMoreRef.current = false;
+    setSearchLoadingMore(false);
   }, []);
 
   const executeSearch = useCallback(
-    async (query: string) => {
+    async (query: string, { quiet = false }: { quiet?: boolean } = {}) => {
       const normalizedQuery = normalizeSearchQuery(query);
 
       if (!shouldSearchRequest(normalizedQuery)) {
         cancelActiveRequest();
         latestQueryRef.current = '';
-        setSearchResults([]);
+        resetResults();
         setSearchLoading(false);
         setSearchError(null);
         setSearchHasSearched(false);
@@ -100,7 +143,10 @@ export const useSpaSearch = (): UseSpaSearchResult => {
       latestQueryRef.current = normalizedQuery;
       setSearchHasSearched(true);
       setSearchError(null);
-      setSearchLoading(true);
+      // A quiet refresh (the location moved) keeps the current list on screen.
+      if (!quiet) {
+        setSearchLoading(true);
+      }
 
       cancelActiveRequest();
 
@@ -111,37 +157,77 @@ export const useSpaSearch = (): UseSpaSearchResult => {
       cancelSourceRef.current = source;
 
       try {
-        const data = await SpaApi.searchSpas(normalizedQuery, source.token);
+        const result = await SpaApi.searchSpas(
+          normalizedQuery,
+          { lat: originRef.current.lat, lng: originRef.current.lng, page: 1 },
+          source.token,
+        );
 
         if (requestId !== requestSequenceRef.current) {
           return;
         }
 
-        const nextResults = Array.isArray(data)
-          ? data.map(mapSpaToSearchItem)
-          : [];
-
-        const uniqueResults = nextResults.filter(
-          (item, index, array) => array.findIndex((candidate) => candidate.id === item.id) === index,
-        );
-
-        setSearchResults(uniqueResults);
+        pageRef.current = result.page;
+        setRawResults(mergeUnique([], result.spas));
+        setSearchTotal(result.total);
+        setSearchHasMore(result.hasMore);
         setSearchError(null);
       } catch (error: any) {
         if (axios.isCancel(error) || requestId !== requestSequenceRef.current) {
           return;
         }
 
-        setSearchResults((current) => current);
-        setSearchError("Couldn't search spas.");
+        if (!quiet) {
+          setSearchError("Couldn't search spas.");
+        }
       } finally {
         if (requestId === requestSequenceRef.current) {
           setSearchLoading(false);
         }
       }
     },
-    [cancelActiveRequest],
+    [cancelActiveRequest, resetResults],
   );
+
+  /** Fetches the next page of the current search and appends it. */
+  const loadMoreSearch = useCallback(async () => {
+    const query = latestQueryRef.current;
+    if (!query || !searchHasMore || searchLoading || loadingMoreRef.current) {
+      return;
+    }
+
+    loadingMoreRef.current = true;
+    setSearchLoadingMore(true);
+    const requestId = requestSequenceRef.current;
+    const source = axios.CancelToken.source();
+    cancelSourceRef.current = source;
+
+    try {
+      const result = await SpaApi.searchSpas(
+        query,
+        { lat: originRef.current.lat, lng: originRef.current.lng, page: pageRef.current + 1 },
+        source.token,
+      );
+      // A new search started meanwhile: this page belongs to the old one.
+      if (requestId !== requestSequenceRef.current || query !== latestQueryRef.current) {
+        return;
+      }
+      pageRef.current = result.page;
+      setRawResults((current) => mergeUnique(current, result.spas));
+      setSearchTotal(result.total);
+      setSearchHasMore(result.hasMore);
+    } catch (error: any) {
+      if (!axios.isCancel(error) && requestId === requestSequenceRef.current) {
+        // Keep what is shown; the button stays so the user can try again.
+        setSearchError(null);
+      }
+    } finally {
+      if (requestId === requestSequenceRef.current) {
+        loadingMoreRef.current = false;
+        setSearchLoadingMore(false);
+      }
+    }
+  }, [searchHasMore, searchLoading]);
 
   useEffect(() => {
     const normalized = normalizeSearchQuery(searchQuery);
@@ -149,7 +235,7 @@ export const useSpaSearch = (): UseSpaSearchResult => {
     if (!normalized) {
       cancelActiveRequest();
       setDebouncedQuery('');
-      setSearchResults([]);
+      resetResults();
       setSearchLoading(false);
       setSearchError(null);
       setSearchHasSearched(false);
@@ -163,7 +249,7 @@ export const useSpaSearch = (): UseSpaSearchResult => {
       setSearchLoading(false);
       setSearchError(null);
       setSearchHasSearched(false);
-      setSearchResults([]);
+      resetResults();
       return;
     }
 
@@ -172,7 +258,7 @@ export const useSpaSearch = (): UseSpaSearchResult => {
     }, DEBOUNCE_MS);
 
     return () => clearTimeout(timeoutId);
-  }, [cancelActiveRequest, searchQuery]);
+  }, [cancelActiveRequest, resetResults, searchQuery]);
 
   useEffect(() => {
     if (!debouncedQuery) {
@@ -182,6 +268,21 @@ export const useSpaSearch = (): UseSpaSearchResult => {
     void executeSearch(debouncedQuery);
   }, [debouncedQuery, executeSearch]);
 
+  // The location arrived (or really moved, ~1 km) after a search: refresh it
+  // quietly so the order is nearest first. A location that is briefly cleared
+  // while it refreshes is ignored, and so is GPS jitter.
+  const originKey = lat != null && lng != null ? `${lat.toFixed(2)},${lng.toFixed(2)}` : '';
+  const lastOriginKeyRef = useRef(originKey);
+  useEffect(() => {
+    if (!originKey || originKey === lastOriginKeyRef.current) {
+      return;
+    }
+    lastOriginKeyRef.current = originKey;
+    if (latestQueryRef.current) {
+      executeSearch(latestQueryRef.current, { quiet: true });
+    }
+  }, [executeSearch, originKey]);
+
   useEffect(() => () => {
     cancelActiveRequest();
   }, [cancelActiveRequest]);
@@ -190,12 +291,12 @@ export const useSpaSearch = (): UseSpaSearchResult => {
     setSearchQueryState('');
     setDebouncedQuery('');
     latestQueryRef.current = '';
-    setSearchResults([]);
+    resetResults();
     setSearchLoading(false);
     setSearchError(null);
     setSearchHasSearched(false);
     cancelActiveRequest();
-  }, [cancelActiveRequest]);
+  }, [cancelActiveRequest, resetResults]);
 
   const retrySearch = useCallback(() => {
     if (latestQueryRef.current) {
@@ -204,12 +305,20 @@ export const useSpaSearch = (): UseSpaSearchResult => {
   }, [executeSearch]);
 
   const normalizedQuery = useMemo(() => normalizeSearchQuery(searchQuery), [searchQuery]);
+  const searchResults = useMemo(() => rawResults.map(mapSpaToSearchItem), [rawResults]);
 
   return {
     searchQuery,
     setSearchQuery: setSearchQueryState,
     debouncedQuery,
     searchResults,
+    searchSpas: rawResults,
+    searchTotal,
+    searchHasMore,
+    searchLoadingMore,
+    loadMoreSearch: () => {
+      loadMoreSearch();
+    },
     isSearching: searchLoading && searchHasSearched,
     searchLoading,
     searchError,

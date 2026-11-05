@@ -25,6 +25,13 @@ interface ApiResponse<T> {
   data: T;
 }
 
+/** Spas per search page. */
+export const SEARCH_PAGE_SIZE = 20;
+
+export type SearchSpasOptions = { lat?: number | null; lng?: number | null; page?: number; limit?: number };
+type SearchSpasMeta = { page: number; limit: number; total: number; hasMore: boolean };
+export type SearchSpasPage = { spas: Spa[]; page: number; total: number; hasMore: boolean };
+
 const filterVisibleSpas = (spas?: Spa[] | null): Spa[] => {
   if (!Array.isArray(spas)) {
     return [];
@@ -123,19 +130,42 @@ export const SpaApi = {
   /**
    * Search spas by query and city
    */
-  searchSpas: async (query: string, cancelToken?: any): Promise<Spa[]> => {
-    const response = await authAxiosClient.get<ApiResponse<Spa[]>>(
+  /**
+   * Text search (also used by the Home type tiles). With the user's location the
+   * backend returns the spas nearest first; without it the same spas come back in
+   * relevance order. One page at a time: read `total` / `hasMore` and ask for the
+   * next page.
+   */
+  searchSpas: async (
+    query: string,
+    { lat, lng, page = 1, limit = SEARCH_PAGE_SIZE }: SearchSpasOptions = {},
+    cancelToken?: any,
+  ): Promise<SearchSpasPage> => {
+    const response = await authAxiosClient.get<ApiResponse<Spa[]> & { meta?: Partial<SearchSpasMeta> }>(
       '/spas/search',
       {
         params: {
           q: query,
-          // city_id: query,
+          ...(lat != null && lng != null ? { lat, lng } : {}),
+          page,
+          limit,
         },
         cancelToken,
       },
     );
 
-    return filterVisibleSpas(response.data?.data);
+    const raw = Array.isArray(response.data?.data) ? response.data.data : [];
+    const meta = response.data?.meta ?? {};
+    const total = typeof meta.total === 'number' ? meta.total : raw.length;
+    const pageNo = typeof meta.page === 'number' ? meta.page : page;
+    const pageLimit = typeof meta.limit === 'number' ? meta.limit : limit;
+    return {
+      spas: filterVisibleSpas(raw),
+      page: pageNo,
+      total,
+      // Count what the server sent (hidden spas included) so paging never stalls.
+      hasMore: typeof meta.hasMore === 'boolean' ? meta.hasMore : pageNo * pageLimit < total,
+    };
   },
 };
 

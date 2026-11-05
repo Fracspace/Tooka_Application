@@ -256,7 +256,24 @@ function SpotlightCard({
 }
 
 /** Swipe-only carousel; tapping the middle card opens the spotlight pager. */
-function Spotlight({ items, onOpen }: { items: PosterItem[]; onOpen: (items: PosterItem[], index: number) => void }) {
+/** At most MAX_DOTS indexes, sliding with the active card (search can return hundreds). */
+const MAX_DOTS = 12;
+function dotWindow(n: number, active: number): number[] {
+  const count = Math.min(n, MAX_DOTS);
+  const start = Math.min(Math.max(0, active - Math.floor(count / 2)), n - count);
+  return Array.from({ length: count }, (_, k) => start + k);
+}
+
+function Spotlight({
+  items,
+  onOpen,
+  onEndReached,
+}: {
+  items: PosterItem[];
+  onOpen: (items: PosterItem[], index: number) => void;
+  /** Swiped near the last card: load the next page (search results). */
+  onEndReached?: () => void;
+}) {
   const { width } = useWindowDimensions();
   const sizes = useMemo(() => spotlightSizes(width), [width]);
   const { interval } = sizes;
@@ -265,8 +282,9 @@ function Spotlight({ items, onOpen }: { items: PosterItem[]; onOpen: (items: Pos
   const [active, setActive] = useState(0);
   const n = items.length;
 
-  // Back to the first (best-matching) card whenever the list changes.
-  const key = items.map((i) => i.id).join(',');
+  // Back to the first (best-matching) card when a new list comes in. Keyed on the
+  // first card only, so appending the next page of results does not jump back.
+  const key = items[0]?.id ?? '';
   useEffect(() => {
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
     setActive(0);
@@ -315,6 +333,8 @@ function Spotlight({ items, onOpen }: { items: PosterItem[]; onOpen: (items: Pos
         getItemLayout={(_, i) => ({ length: interval, offset: interval * i, index: i })}
         initialNumToRender={4}
         windowSize={5}
+        onEndReached={onEndReached}
+        onEndReachedThreshold={1.5}
         renderItem={({ item, index }) => (
           <SpotlightCard
             item={item}
@@ -336,8 +356,8 @@ function Spotlight({ items, onOpen }: { items: PosterItem[]; onOpen: (items: Pos
         </Animated.View>
       ) : null}
       <View style={styles.dots}>
-        {items.map((item, i) => (
-          <View key={item.id} style={[styles.dot, i === active && styles.dotOn]} />
+        {dotWindow(n, active).map((i) => (
+          <View key={items[i].id} style={[styles.dot, i === active && styles.dotOn]} />
         ))}
       </View>
     </View>
@@ -448,6 +468,8 @@ export default function HomeV4(props: Props) {
     setCouplesOnly,
     hasCoupleRooms,
     nearbyClosestFirst,
+    searchHasMore,
+    loadMoreSearch,
   } = props;
   const insets = useSafeAreaInsets();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -491,7 +513,9 @@ export default function HomeV4(props: Props) {
     if (shouldShowSearchError) {
       return <StageMessage title="Couldn't search spas" body="Please try again." action="Retry" onAction={retrySearch} />;
     }
-    if (isSearchActive) return <Spotlight items={curatedList} onOpen={handleOpenSpotlight} />;
+    if (isSearchActive) {
+      return <Spotlight items={curatedList} onOpen={handleOpenSpotlight} onEndReached={searchHasMore ? loadMoreSearch : undefined} />;
+    }
     // Location or the curated list still loading: not an empty city yet.
     if ((loading || locationLoading) && spas.length === 0) return <SpotlightSkeleton />;
     if (error && spas.length === 0) {
