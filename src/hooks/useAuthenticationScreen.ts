@@ -17,6 +17,7 @@ import { useAuth } from '../context/AuthContext';
 import { useProfile } from '../context/ProfileContext';
 import AuthApi from '../api/AuthApi';
 import ProfileApi from '../api/ProfileApi';
+import { retrieveVerificationCode, startSmsHandling } from '@eabdullazyanov/react-native-sms-user-consent';
 
 export type AuthStep = 'phone' | 'name' | 'otp' | 'success';
 
@@ -65,6 +66,13 @@ export function useAuthenticationScreen({ isEmbedded = false }: { isEmbedded?: b
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The number the last OTP was sent to, to honour the resend cooldown.
   const lastOtpPhoneRef = useRef<string | null>(null);
+  // The last code sent for verification, so auto-submit fires once per code.
+  const lastAutoSubmittedRef = useRef<string | null>(null);
+  // True while a verify request runs, so auto-submit and a button tap in the
+  // same moment cannot send the code twice (the loading state lags a render).
+  const submittingRef = useRef(false);
+  // Bumped on resend so Android starts listening for the new SMS.
+  const [smsListenKey, setSmsListenKey] = useState(0);
 
   // Clean up any pending requests on unmount
   useEffect(() => {
@@ -209,10 +217,12 @@ export function useAuthenticationScreen({ isEmbedded = false }: { isEmbedded?: b
 
   // Step 2: Verify OTP and Register/Login
   const handleOtpSubmit = useCallback(async () => {
-    if (otpDigits.length !== AUTH_CONFIG.otpLength || loading) {
+    if (otpDigits.length !== AUTH_CONFIG.otpLength || loading || submittingRef.current) {
       return;
     }
 
+    submittingRef.current = true;
+    lastAutoSubmittedRef.current = otpDigits;
     setLoading(true);
     setError('');
     setSuccessMessage('');
@@ -299,9 +309,52 @@ export function useAuthenticationScreen({ isEmbedded = false }: { isEmbedded?: b
     } catch (err: any) {
       handleApiError(err);
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   }, [phone, otpDigits, isRegistered, name, loading, spaId, serviceId, serviceName, selectedDateId, selectedSlotId, fromScreen, isEmbedded, login, register, navigation, setProfile, transitionToStep]);
+
+  // Verify as soon as all 6 digits are in (SMS autofill, paste or typing), so
+  // the user never has to tap. A code that already failed is not resent until
+  // the user changes it; the button still works for a manual retry.
+  useEffect(() => {
+    if (otpDigits.length < AUTH_CONFIG.otpLength) {
+      lastAutoSubmittedRef.current = null;
+      return;
+    }
+    if (
+      step === 'otp' &&
+      !loading &&
+      otpDigits.length === AUTH_CONFIG.otpLength &&
+      otpDigits !== lastAutoSubmittedRef.current
+    ) {
+      handleOtpSubmit();
+    }
+  }, [step, loading, otpDigits, handleOtpSubmit]);
+
+  // v4 types the code into one field instead of six boxes. Same state, same rules.
+  const setOtpCode = useCallback((value: string) => {
+    const digits = value.replace(/[^0-9]/g, '').slice(0, AUTH_CONFIG.otpLength);
+    setOtpDigits(digits);
+    setOtp(Array.from({ length: AUTH_CONFIG.otpLength }, (_, i) => digits[i] ?? ''));
+  }, []);
+
+  // Android: while the OTP step is open, the SMS User Consent API shows a
+  // one-tap "Allow" sheet when the code SMS arrives, then fills the boxes (and
+  // the effect above logs in). iOS gets the code from the keyboard suggestion
+  // via textContentType="oneTimeCode"; Apple doesn't let apps read SMS.
+  useEffect(() => {
+    if (Platform.OS !== 'android' || step !== 'otp') {
+      return;
+    }
+    const stop = startSmsHandling((event) => {
+      const code = event?.sms ? retrieveVerificationCode(event.sms, AUTH_CONFIG.otpLength) : null;
+      if (code) {
+        setOtpCode(code);
+      }
+    });
+    return stop;
+  }, [step, smsListenKey, setOtpCode]);
 
   // Android back steps back through the flow (OTP -> name/phone, name -> phone)
   // instead of closing the whole login screen.
@@ -417,6 +470,7 @@ export function useAuthenticationScreen({ isEmbedded = false }: { isEmbedded?: b
       if (response.success) {
         setSuccessMessage('OTP resent successfully');
         reset();
+        setSmsListenKey((k) => k + 1);
       }
     } catch (err: any) {
       handleApiError(err);
@@ -424,13 +478,6 @@ export function useAuthenticationScreen({ isEmbedded = false }: { isEmbedded?: b
       setLoading(false);
     }
   }, [phone, loading, reset]);
-
-  // v4 types the code into one field instead of six boxes. Same state, same rules.
-  const setOtpCode = useCallback((value: string) => {
-    const digits = value.replace(/[^0-9]/g, '').slice(0, AUTH_CONFIG.otpLength);
-    setOtpDigits(digits);
-    setOtp(Array.from({ length: AUTH_CONFIG.otpLength }, (_, i) => digits[i] ?? ''));
-  }, []);
 
   const currentTitle = useMemo(() => {
     if (step === 'phone') return AUTH_TEXT.title;
