@@ -18,8 +18,9 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { Button, Icon, Screen, Text, useTabBarSpace } from '../../../components/ui';
+import { Button, Icon, PressableScale, Screen, Text, useTabBarSpace } from '../../../components/ui';
 import { BOOKING_FALLBACK_IMAGE, useBookingCard } from '../../../hooks/useBookingCard';
+import { useBookingReview } from '../../../hooks/useBookingReview';
 import type { useAllBookingScreen } from '../../../hooks/useAllBookingScreen';
 import {
   brandAlpha,
@@ -410,6 +411,7 @@ const PastRow = React.memo(function PastRowView({
   cancelled: boolean;
 }) {
   const { badgeDate, coverPhoto, locationText } = useBookingCard(booking);
+  const { canRate, rate } = useBookingReview(booking);
 
   return (
     <View style={styles.row}>
@@ -441,6 +443,21 @@ const PastRow = React.memo(function PastRowView({
         <Text variant="caption" color={colors.muted} numberOfLines={1}>
           {[locationText, booking.date].filter(Boolean).join(' · ')}
         </Text>
+        {canRate && !cancelled ? (
+          <Animated.View entering={rise(0, 8)}>
+            <PressableScale
+              onPress={rate}
+              style={styles.rate}
+              accessibilityRole="button"
+              accessibilityLabel={`Rate your visit to ${booking.spaName}`}>
+              <Icon name="star" size={14} color={colors.brand} />
+              <Text variant="label" color={colors.cream}>
+                Rate your visit
+              </Text>
+              <Icon name="chevronRight" size={14} color={colors.subtle} />
+            </PressableScale>
+          </Animated.View>
+        ) : null}
       </View>
     </View>
   );
@@ -603,6 +620,19 @@ const styles = StyleSheet.create({
   rowBody: { flex: 1, minWidth: 0 },
   rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   rowName: { marginTop: 8 },
+  rate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginTop: 10,
+    paddingVertical: 7,
+    paddingLeft: 10,
+    paddingRight: 8,
+    borderRadius: radii.pill,
+    backgroundColor: colors.soft,
+    boxShadow: shadows.brandRing,
+  },
 
   chip: {
     alignSelf: 'flex-start',

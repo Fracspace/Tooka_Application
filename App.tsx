@@ -6,6 +6,7 @@ import Toast from 'react-native-toast-message';
 import { sync, useStallionUpdate, withStallion } from 'react-native-stallion';
 
 import AppNavigator from './src/navigation/AppNavigator';
+import { ReviewPromptProvider } from './src/context/ReviewPromptContext';
 import { AuthProvider } from './src/context/AuthContext';
 import { LocationProvider } from './src/context/LocationContext';
 import { NearbySpaProvider } from './src/context/NearbySpaContext';
@@ -44,7 +45,13 @@ function App() {
                       {/* PR-5: a minimised call is always reachable again. The bar
                           sits above the navigator only while a call is live. */}
                       <ActiveCallBar>
-                        {__DEV__ && SHOW_V4_GALLERY ? <UiGallery /> : <AppNavigator />}
+                        {__DEV__ && SHOW_V4_GALLERY ? (
+                          <UiGallery />
+                        ) : (
+                          <ReviewPromptProvider>
+                            <AppNavigator />
+                          </ReviewPromptProvider>
+                        )}
                       </ActiveCallBar>
                     </CallProvider>
                   </PaymentProvider>

@@ -26,6 +26,7 @@ export const V4_SCREENS = {
   incomingCall: true,
   wellnessArticle: true,
   payment: true,
+  reviewPrompt: true,
 } as const;
 
 export type V4Screen = keyof typeof V4_SCREENS;

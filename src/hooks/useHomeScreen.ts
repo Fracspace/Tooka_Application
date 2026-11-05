@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useWindowDimensions } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type MapView from 'react-native-maps';
 
@@ -11,6 +11,7 @@ import { useLocation } from '../context/LocationContext';
 import { useNearbySpas } from '../context/NearbySpaContext';
 import { useSpaSearch } from './useSpaSearch';
 import { useMyBookings } from './useMyBookings';
+import { useReviewPrompt } from '../context/ReviewPromptContext';
 import { isPaymentPendingStatus } from '../utils/getBookingSection';
 import { getOnboarding } from '../utils/onboardingStorage';
 import { onboardingData } from '../screens/Onboarding/onboardingData';
@@ -123,6 +124,10 @@ export function useHomeScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
   const { profile } = useProfile();
+
+  // Spec: check for visits to rate on app open (first Home focus per launch).
+  const { checkPendingOnAppOpen } = useReviewPrompt();
+  useFocusEffect(checkPendingOnAppOpen);
 
   const { location, loading: locationLoading } = useLocation();
   // console.log("User locartionL ", location);

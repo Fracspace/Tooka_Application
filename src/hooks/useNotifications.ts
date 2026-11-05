@@ -7,10 +7,20 @@ import {
   NotificationPermission,
 } from '../services/firebase/messaging';
 import { toNotificationPayload } from '../services/firebase/messaging/notificationNavigation';
+import { requestReviewForBooking } from '../services/reviewRequestBus';
 import { saveFcmToken } from '../utils/fcmStorage';
 import { syncProfileMetadata } from '../services/profile/profileSync';
 import { useAuth } from '../context/AuthContext';
 import { useProfile } from '../context/ProfileContext';
+
+/** review_request pushes open the feedback popup (ReviewPromptContext), not a screen. */
+function openTappedNotification(data?: Record<string, unknown> | null) {
+  if (data?.type === 'review_request' && typeof data.booking_id === 'string') {
+    requestReviewForBooking(data.booking_id);
+    return;
+  }
+  NotificationNavigation.navigate(toNotificationPayload(data));
+}
 
 export default function useNotifications() {
   const { setProfile } = useProfile();
@@ -69,11 +79,11 @@ export default function useNotifications() {
     // Taps: from the background, and the one that launched a killed app. Both used
     // to just open the app on whatever screen it started on.
     const unsubscribeOpened = FirebaseMessaging.onNotificationOpenedApp((message) => {
-      NotificationNavigation.navigate(toNotificationPayload(message?.data));
+      openTappedNotification(message?.data);
     });
     FirebaseMessaging.getInitialNotification().then((message) => {
       if (message) {
-        NotificationNavigation.navigate(toNotificationPayload(message.data));
+        openTappedNotification(message.data);
       }
     });
 

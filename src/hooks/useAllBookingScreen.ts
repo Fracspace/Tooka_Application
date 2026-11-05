@@ -1,9 +1,10 @@
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Toast from 'react-native-toast-message';
 
 import { useMyBookings } from './useMyBookings';
+import { useReviewPrompt } from '../context/ReviewPromptContext';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { BookingSection } from '../types/booking';
 
@@ -17,6 +18,15 @@ export const BOOKING_TABS: Array<{ label: string; section: BookingSection }> = [
 export function useAllBookingScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [activeTab, setActiveTab] = useState<BookingSection>('upcoming');
+
+  // Spec: check GET /reviews/pending when Bookings opens. Also feeds the
+  // Completed rows' "Rate your visit" button.
+  const { checkPending } = useReviewPrompt();
+  useFocusEffect(
+    useCallback(() => {
+      checkPending();
+    }, [checkPending]),
+  );
 
   const {
     upcomingBookings,
