@@ -235,11 +235,14 @@ const AppNavigator = () => {
         <Stack.Screen name="BookingResult" component={BookingResultScreen} />
 
         {/* The Android back button is already blocked inside the screen; this stops
-            the iOS swipe-back from leaving a payment that is in progress. */}
+            the iOS swipe-back from leaving a payment that is in progress.
+            fullScreenModal: booking from the Home spotlight happens inside a
+            transparentModal, and a plain push would land *underneath* it, leaving
+            Cashfree to open on top of the spotlight instead of this screen. */}
         <Stack.Screen
           name="PaymentScreen"
           component={PaymentScreen}
-          options={{ gestureEnabled: false }}
+          options={{ presentation: 'fullScreenModal', gestureEnabled: false }}
         />
 
         <Stack.Screen name="EditProfile" component={EditProfileScreen} />

@@ -10,6 +10,7 @@ import {
   Animated,
   AppState,
   BackHandler,
+  InteractionManager,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -89,6 +90,18 @@ const isPendingBackendStatus = (status: BackendPaymentStatus): boolean =>
 /** What the Cashfree SDK told us. A hint only - the backend status is the truth. */
 type SdkOutcome = 'success' | 'failed' | 'cancelled' | 'unknown';
 
+/**
+ * Fallback for when PaymentScreen's push transition never reports its end. The
+ * gateway must not open before the stack has settled (see the launch effect).
+ */
+const SETTLE_FALLBACK_MS = 1200;
+/**
+ * How long the gateway has to be "open" before we offer to reopen or cancel it.
+ * While Cashfree is really open it covers this screen, so the offer is only ever
+ * seen when the window has gone away without reporting a result.
+ */
+const GATEWAY_HELP_AFTER_MS = 6000;
+
 const VERIFICATION_UNAVAILABLE_MESSAGE =
   "We couldn't confirm your payment yet. If money was deducted, your booking will update shortly - please check My Bookings.";
 
@@ -118,11 +131,17 @@ function PaymentScreen(): React.ReactElement {
     appointmentTime: route.params.appointmentTime,
   });
 
+  // True once this screen's own open transition has finished (see the launch effect).
+  const [screenSettled, setScreenSettled] = useState(false);
+  // Shown when the gateway closed without telling us anything.
+  const [gatewayHelp, setGatewayHelp] = useState(false);
+
   const {
     context,
     hydrateSession,
     launchSdk,
     resetPaymentFlow,
+    resetSdkLocks,
     markVerifying,
     markTerminalState,
   } = usePayment({
@@ -532,9 +551,34 @@ function PaymentScreen(): React.ReactElement {
     };
   }, [spin]);
 
+  // Wait for this screen's open transition to finish before launching Cashfree.
+  //
+  // Why: on iOS Cashfree presents its checkout on top of whatever is on screen at
+  // that moment, as a view controller react-native-screens does not own. Whenever
+  // the native stack next updates (and the end of a push/modal transition is such
+  // an update), react-native-screens dismisses any foreign controller sitting above
+  // its screens (react-native-screens #2048). Launched during the transition, the
+  // checkout flashed and vanished, no SDK callback ever came, and this screen
+  // waited forever. The earlier fix only covered the booking summary closing; this
+  // covers every way in (Spa Details, Explore, the Home spotlight, My Bookings).
+  useEffect(() => {
+    const settle = () => setScreenSettled(true);
+    const unsubscribe = navigation.addListener('transitionEnd', event => {
+      if (!event.data.closing) {
+        settle();
+      }
+    });
+    const fallback = setTimeout(settle, SETTLE_FALLBACK_MS);
+    return () => {
+      unsubscribe();
+      clearTimeout(fallback);
+    };
+  }, [navigation]);
+
   useEffect(() => {
     if (
       launchAttemptedRef.current ||
+      !screenSettled ||
       context.flowState !== PaymentFlowState.Ready ||
       !context.paymentSessionId ||
       !context.cashfreeOrderId
@@ -545,24 +589,70 @@ function PaymentScreen(): React.ReactElement {
     launchAttemptedRef.current = true;
     setMessage('Opening secure payment gateway...');
     paymentLogger.debug('SDK Opening');
-    const launched = launchSdk();
+    // Let any remaining animations and layout settle for one more frame.
+    InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        if (!mountedRef.current || navigationLockRef.current) {
+          return;
+        }
+        const launched = launchSdk();
 
-    if (!launched && mountedRef.current) {
-      finalizeAndNavigate({
-        flowState: PaymentFlowState.Error,
-        resultType: 'failure',
-        message: PAYMENT_USER_MESSAGES.sdkLaunchFailed,
+        if (!launched && mountedRef.current) {
+          finalizeAndNavigate({
+            flowState: PaymentFlowState.Error,
+            resultType: 'failure',
+            message: PAYMENT_USER_MESSAGES.sdkLaunchFailed,
+          });
+        } else {
+          setMessage('Complete your payment in the secure Cashfree window.');
+          paymentLogger.debug('SDK Opened');
+        }
       });
-    } else {
-      paymentLogger.debug('SDK Opened');
-    }
+    });
   }, [
+    screenSettled,
     context.cashfreeOrderId,
     context.flowState,
     context.paymentSessionId,
     finalizeAndNavigate,
     launchSdk,
   ]);
+
+  // No endless spinner: if the gateway is "open" but this screen is what the user
+  // sees, the checkout went away without a result. Offer to reopen or cancel.
+  useEffect(() => {
+    if (context.flowState !== PaymentFlowState.SdkOpen) {
+      setGatewayHelp(false);
+      return;
+    }
+    const timer = setTimeout(() => setGatewayHelp(true), GATEWAY_HELP_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [context.flowState]);
+
+  const handleReopenGateway = useCallback(() => {
+    if (navigationLockRef.current) {
+      return;
+    }
+    setGatewayHelp(false);
+    paymentLogger.debug('SDK Reopen');
+    // Same order and session as before, so the order can still be paid only once.
+    resetSdkLocks();
+    const launched = launchSdk();
+    if (!launched && mountedRef.current) {
+      finalizeAndNavigate({
+        flowState: PaymentFlowState.Error,
+        resultType: 'failure',
+        message: PAYMENT_USER_MESSAGES.sdkLaunchFailed,
+      });
+    }
+  }, [finalizeAndNavigate, launchSdk, resetSdkLocks]);
+
+  const handleCancelGateway = useCallback(() => {
+    setGatewayHelp(false);
+    // The backend decides: if it was paid after all this shows success, otherwise
+    // the booking is shown as cancelled (with the usual retry / release).
+    verifyPayment({ resetPolling: true, sdkOutcome: 'cancelled' });
+  }, [verifyPayment]);
 
   useFocusEffect(
     useCallback(() => {
@@ -644,6 +734,20 @@ function PaymentScreen(): React.ReactElement {
             </Text>
           ) : null}
 
+          {gatewayHelp ? (
+            <View style={styles.helpBox} accessibilityLiveRegion="polite">
+              <Text style={styles.helpTitle}>Payment window closed?</Text>
+              <Text style={styles.helpText}>
+                If the Cashfree window closed before you finished, open it again or
+                cancel this payment. Your slot is held while you decide.
+              </Text>
+              <View style={styles.helpActions}>
+                <RetryPaymentButton label="Open payment again" onPress={handleReopenGateway} />
+                <RetryPaymentButton label="Cancel payment" onPress={handleCancelGateway} />
+              </View>
+            </View>
+          ) : null}
+
           <View style={styles.actions}>
             <RetryPaymentButton
               label="Back To Home"
@@ -658,6 +762,29 @@ function PaymentScreen(): React.ReactElement {
 }
 
 const styles = StyleSheet.create({
+  helpBox: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#F0E2CF',
+  },
+  helpTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  helpText: {
+    marginTop: 6,
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#5C5C5C',
+  },
+  helpActions: {
+    marginTop: 12,
+    gap: 10,
+  },
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
