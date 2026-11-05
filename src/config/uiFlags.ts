@@ -20,6 +20,11 @@ export const V4_SCREENS = {
   editProfile: true,
   paymentHistory: true,
   policies: true,
+  login: true,
+  onboarding: true,
+  locationPicker: true,
+  incomingCall: true,
+  wellnessArticle: true,
 } as const;
 
 export type V4Screen = keyof typeof V4_SCREENS;

@@ -1,8 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, ScrollView, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -14,44 +12,34 @@ import { HeroSection } from './components/HeroSection';
 import { OptionGrid } from './components/OptionGrid';
 import { ProgressIndicator } from './components/ProgressIndicator';
 import { ContinueButton } from './components/ContinueButton';
-import { onboardingData } from './onboardingData';
 import { styles } from './styles';
-import { OnboardingAnswers } from './types';
-import { saveOnboarding } from '../../utils/onboardingStorage';
-import { RootStackParamList } from '../../navigation/AppNavigator';
-
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+import OnboardingV4 from './v4/OnboardingV4';
+import { isV4 } from '../../config/uiFlags';
+import { useOnboardingScreen } from '../../hooks/useOnboardingScreen';
 
 export const OnboardingScreen: React.FC = () => {
-  const navigation = useNavigation<NavigationProp>();
-  const { width } = useWindowDimensions();
+  const screen = useOnboardingScreen();
+  if (isV4('onboarding')) {
+    return <OnboardingV4 {...screen} />;
+  }
+  return <OnboardingLegacy screen={screen} />;
+};
 
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [answers, setAnswers] = useState<OnboardingAnswers>({
-    goals: [],
-    preferences: [],
-  });
+function OnboardingLegacy({ screen }: { screen: ReturnType<typeof useOnboardingScreen> }): React.ReactElement {
+  const { width } = useWindowDimensions();
+  const {
+    currentStepIndex,
+    setCurrentStepIndex,
+    currentStep,
+    selectedOptions,
+    totalSteps,
+    isLastStep,
+    isContinueDisabled,
+    handleToggleOption,
+    finish,
+  } = screen;
 
   const slideOffset = useSharedValue(0);
-
-  const currentStep = onboardingData[currentStepIndex];
-  const selectedOptions = answers[currentStep.key];
-
-  const handleToggleOption = (optionId: string) => {
-    if (selectedOptions.includes(optionId)) {
-      setAnswers((prev) => ({
-        ...prev,
-        [currentStep.key]: prev[currentStep.key].filter((id) => id !== optionId),
-      }));
-    } else {
-      if (selectedOptions.length < 3) {
-        setAnswers((prev) => ({
-          ...prev,
-          [currentStep.key]: [...prev[currentStep.key], optionId],
-        }));
-      }
-    }
-  };
 
   const animatedSlideStyle = useAnimatedStyle(() => {
     return {
@@ -60,15 +48,9 @@ export const OnboardingScreen: React.FC = () => {
   });
 
   const handleContinue = async () => {
-    const isLastStep = currentStepIndex === onboardingData.length - 1;
-
     if (isLastStep) {
       // Save data to AsyncStorage and replace route
-      await saveOnboarding(answers);
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'BottomNavigation' }],
-      });
+      await finish();
     } else {
       // Slide current screen out to left
       slideOffset.value = withTiming(-width, { duration: 250 }, (finished) => {
@@ -86,8 +68,6 @@ export const OnboardingScreen: React.FC = () => {
       slideOffset.value = withTiming(0, { duration: 250 });
     }
   }, [currentStepIndex, width, slideOffset]);
-
-  const isContinueDisabled = selectedOptions.length === 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -117,17 +97,17 @@ export const OnboardingScreen: React.FC = () => {
         <View style={styles.footerRow}>
           <ProgressIndicator
             currentStep={currentStepIndex}
-            totalSteps={onboardingData.length}
+            totalSteps={totalSteps}
           />
           <ContinueButton
             onPress={handleContinue}
             disabled={isContinueDisabled}
-            text={currentStepIndex === onboardingData.length - 1 ? 'Finish' : 'Continue'}
+            text={isLastStep ? 'Finish' : 'Continue'}
           />
         </View>
       </SafeAreaView>
     </SafeAreaView>
   );
-};
+}
 
 export default OnboardingScreen;

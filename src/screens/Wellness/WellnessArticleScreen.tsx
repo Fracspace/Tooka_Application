@@ -1,34 +1,24 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { View, Text, ScrollView, StatusBar } from 'react-native';
-import { RouteProp, useRoute } from '@react-navigation/native';
 import { Header } from './components/Header';
 import { HeroImage } from './components/HeroImage';
 import { CategoryPill } from './components/CategoryPill';
 import { BenefitCard } from './components/BenefitCard';
 import { DidYouKnowCard } from './components/DidYouKnowCard';
 import { ArticleSection } from './components/ArticleSection';
-import { SAMPLE_ARTICLES } from './data';
-import { WellnessArticle } from './types';
+import WellnessArticleV4 from './v4/WellnessArticleV4';
+import { isV4 } from '../../config/uiFlags';
+import { useWellnessArticle } from '../../hooks/useWellnessArticle';
 import { styles } from './styles';
 
-type RouteParams = {
-  params: {
-    articleId?: string;
-    article?: WellnessArticle;
-  };
-};
-
 export const WellnessArticleScreen: React.FC = () => {
-  const route = useRoute<RouteProp<RouteParams, 'params'>>();
-  
-  // Resolve article from either passed object or id
-  const article = useMemo(() => {
-    if (route.params?.article) return route.params.article;
-    const id = route.params?.articleId || '1'; // Defaulting to 1 for demo
-    return SAMPLE_ARTICLES.find(a => a.id === id) || SAMPLE_ARTICLES[0];
-  }, [route.params]);
+  const article = useWellnessArticle();
 
   if (!article) return null; // Or a loading/error state
+
+  if (isV4('wellnessArticle')) {
+    return <WellnessArticleV4 article={article} />;
+  }
 
   return (
     <View style={styles.container}>

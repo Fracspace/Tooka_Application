@@ -1,16 +1,21 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, SafeAreaView, BackHandler } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { TERMINAL_CALL_STATES, isPlaceholderPartyName } from '../../types/call';
-import { useCallContext } from '../../context/CallContext';
-import { callManager } from '../../services/call/callManager';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, SafeAreaView } from 'react-native';
 import { CallInspectorOverlay } from './components/CallInspectorOverlay';
 import { ENABLE_CALL_DIAGNOSTICS } from '../../services/call/callLogger';
+import IncomingCallV4 from './v4/IncomingCallV4';
+import { isV4 } from '../../config/uiFlags';
+import { useIncomingCallScreen } from '../../hooks/useIncomingCallScreen';
 
 const IncomingCallScreen: React.FC = () => {
-  const { session, callState } = useCallContext();
-  const navigation = useNavigation();
+  const screen = useIncomingCallScreen();
+  if (isV4('incomingCall')) {
+    return <IncomingCallV4 {...screen} />;
+  }
+  return <IncomingCallLegacy screen={screen} />;
+};
 
+function IncomingCallLegacy({ screen }: { screen: ReturnType<typeof useIncomingCallScreen> }): React.ReactElement {
+  const { session, callState, accepting, callerName, handleAccept, handleReject, handleCancelAccept } = screen;
   // Pulse animation for the caller avatar
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -33,54 +38,6 @@ const IncomingCallScreen: React.FC = () => {
     pulse.start();
     return () => pulse.stop();
   }, [pulseAnim]);
-
-  // Only go back if the call reached a terminal state while this screen is active.
-  // PR-4: MISSED and NO_ANSWER added - MISSED is now reachable via the ring timeout,
-  // and without it this screen would stay up after the ringtone stopped.
-  useEffect(() => {
-    if (TERMINAL_CALL_STATES.has(callState)) {
-      if (navigation.isFocused() && navigation.canGoBack()) {
-        navigation.goBack();
-      }
-    }
-  }, [callState, navigation]);
-
-  // PR-4: block the Android hardware back button. Backing out used to dismiss this
-  // screen while the ringtone kept looping and the state stayed INCOMING - leaving no
-  // way to answer or reject, and no UI to get back to.
-  useFocusEffect(
-    useCallback(() => {
-      const subscription = BackHandler.addEventListener('hardwareBackPress', () => true);
-      return () => subscription.remove();
-    }, []),
-  );
-
-  // True from the Accept tap until the call connects or fails. Accepting can take
-  // a while (mic prompt, server accept, Agora join), and the buttons used to stay
-  // live with Reject silently doing nothing.
-  const [accepting, setAccepting] = useState(false);
-
-  const handleAccept = async () => {
-    setAccepting(true);
-    try {
-      await callManager.acceptCall();
-    } finally {
-      setAccepting(false);
-    }
-  };
-
-  const handleReject = async () => {
-    await callManager.rejectCall();
-  };
-
-  const handleCancelAccept = () => {
-    callManager.cancelAccept();
-  };
-
-  // Until the spa lookup resolves, the backend only sends a role ("Spa Owner").
-  const rawCallerName = session?.caller?.name;
-  const callerName =
-    rawCallerName && !isPlaceholderPartyName(rawCallerName) ? rawCallerName : 'Your spa';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -124,7 +81,7 @@ const IncomingCallScreen: React.FC = () => {
       )}
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
