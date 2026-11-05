@@ -11,6 +11,7 @@ import { useLocation } from '../context/LocationContext';
 import { useNearbySpas } from '../context/NearbySpaContext';
 import { useSpaSearch } from './useSpaSearch';
 import { useMyBookings } from './useMyBookings';
+import { isPaymentPendingStatus } from '../utils/getBookingSection';
 import { getOnboarding } from '../utils/onboardingStorage';
 import { onboardingData } from '../screens/Onboarding/onboardingData';
 import type { OnboardingAnswers } from '../screens/Onboarding/types';
@@ -390,7 +391,10 @@ export function useHomeScreen() {
   // v4 Home: next visit, spotlight ranked by the saved onboarding answers, and
   // the nearby list closest first.
   const { upcomingBookings } = useMyBookings();
-  const nextVisit = upcomingBookings[0] ?? null;
+  // Only a booking that is actually confirmed is a visit. Upcoming also holds
+  // "pending payment" bookings (a checkout left without paying) so My Bookings can
+  // offer to finish paying; those must not show as the next visit.
+  const nextVisit = upcomingBookings.find(booking => !isPaymentPendingStatus(booking.status)) ?? null;
 
   const [onboardingAnswers, setOnboardingAnswers] = useState<OnboardingAnswers | null>(null);
   useEffect(() => {
