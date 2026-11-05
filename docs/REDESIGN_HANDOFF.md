@@ -20,6 +20,11 @@ Read this file first, and keep token use low: read only the lines you need, keep
 - No new native libraries. There is no blur library, so the glass effects are near-solid fills, and there are no haptics.
 - After each step, run `npx jest`, `npx tsc --noEmit` and `npx eslint src App.tsx`, then stop for the user to test on the iPad (Metro plus a device). Commit and push only when the user says so.
 
+## Running Metro (several worktrees)
+- Each checkout runs its own Metro: `npm run metro` (gets a fixed port, 8082+). Never run plain `react-native start` on 8081.
+- Port 8081 is a small forwarder. Point the phone and simulator at a checkout with `npm run use-metro <part of folder or branch name>`: it reconnects Android (`adb reverse`) and relaunches the app on both.
+- `npm run metro-list` shows every Metro and which one the app uses. Details: `scripts/metro.js`.
+
 ## What's next
 1. **Phase 5:** Login, Onboarding, Splash, Location picker, the call screens and the Wellness article have no v4 designs yet. Ask the user whether to design them on the canvas first or just recolour them for the dark theme.
 2. **Final device test** with every switch on: book, pay (iOS Cashfree), leave checkout so the hold is released, log in mid-booking and return to it, use Directions and Call spa on Booked, and place a call.
