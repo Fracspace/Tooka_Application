@@ -18,6 +18,7 @@ import { onboardingData } from '../screens/Onboarding/onboardingData';
 import type { OnboardingAnswers } from '../screens/Onboarding/types';
 import type { Spa } from '../types/spa';
 import { getSpaDistance } from '../utils/distance';
+import { nearestCity } from '../utils/nearestCity';
 import {
   formatPrice,
   formatRatingLabel,
@@ -199,10 +200,13 @@ export function useHomeScreen() {
   // "curated" city for users with no location at all).
   const resolvedCity = useMemo(() => {
     if (locationLoading) return null;
+    // Nearest listed city first: Google calls Secunderabad its own city, which
+    // left Home with only Secunderabad's spas instead of all of Hyderabad's.
+    const near = nearestCity(location?.latitude, location?.longitude);
     const pCity = profile?.city?.trim();
     const lCity = location?.city?.trim();
-    return lCity || pCity || null;
-  }, [profile?.city, location?.city, locationLoading]);
+    return near || lCity || pCity || null;
+  }, [profile?.city, location?.city, location?.latitude, location?.longitude, locationLoading]);
 
   const { spas, loading, error, refreshing, refetch, onRefresh } = useSpaDiscovery(resolvedCity);
 

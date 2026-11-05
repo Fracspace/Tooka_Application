@@ -17,13 +17,9 @@ import type { StoredLocation } from '../types/location';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'LocationSelection'>;
 
-export const POPULAR_CITIES = [
-  { name: 'Hyderabad', state: 'Telangana', lat: 17.3850, lng: 78.4867 },
-  { name: 'Bangalore', state: 'Karnataka', lat: 12.9716, lng: 77.5946 },
-  { name: 'Mumbai', state: 'Maharashtra', lat: 19.0760, lng: 72.8777 },
-  { name: 'Delhi', state: 'Delhi', lat: 28.6139, lng: 77.2090 },
-  { name: 'Chennai', state: 'Tamil Nadu', lat: 13.0827, lng: 80.2707 },
-];
+import { POPULAR_CITIES } from '../data/cities';
+
+export { POPULAR_CITIES };
 
 const DEBOUNCE_MS = 350;
 
