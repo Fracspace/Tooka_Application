@@ -4,7 +4,7 @@ import {
   View,
   StatusBar,
 } from 'react-native';
-import Video from 'react-native-video';
+import { AmbientVideo } from '../../components/ui/AmbientVideo';
 import BootSplash from 'react-native-bootsplash';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
@@ -69,12 +69,11 @@ const SplashScreen: React.FC = () => {
         barStyle="light-content"
       />
 
-      <Video
+      <AmbientVideo
         source={require('../../assets/videos/splash.mp4')}
         style={styles.video}
         resizeMode="cover"
         repeat={false}
-        muted={false}
         playInBackground={false}
         playWhenInactive={false}
         preventsDisplaySleepDuringVideoPlayback={false}
@@ -86,7 +85,6 @@ const SplashScreen: React.FC = () => {
           bufferForPlaybackMs: 250,
           bufferForPlaybackAfterRebufferMs: 500,
         }}
-        ignoreSilentSwitch="ignore"
         onEnd={navigateToApp}
         onError={(error) => {
           console.log(

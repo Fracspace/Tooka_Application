@@ -10,3 +10,4 @@ export { Screen } from './Screen';
 export { TAB_BAR_HEIGHT, TabBar, useTabBarSpace, type TabBarItem } from './TabBar';
 export { Bone, PulseProvider } from './Skeleton';
 export { Text } from './Text';
+export { AmbientVideo } from './AmbientVideo';
