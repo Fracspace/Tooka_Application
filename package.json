@@ -7,9 +7,6 @@
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
-    "metro": "node scripts/metro.js start",
-    "use-metro": "node scripts/metro.js use",
-    "metro-list": "node scripts/metro.js list",
     "test": "jest"
   },
   "dependencies": {
