@@ -53,6 +53,8 @@ import PaymentProcessingScreen from './PaymentProcessingScreen';
 import PaymentStatusBadge from './components/PaymentStatusBadge';
 import PaymentSummary from './components/PaymentSummary';
 import RetryPaymentButton from './components/RetryPaymentButton';
+import PaymentV4 from './v4/PaymentV4';
+import { isV4 } from '../../config/uiFlags';
 import { buildBookingDateAndTime } from '../../utils/bookingDateTime';
 import { Analytics, AnalyticsEvents, AnalyticsParams } from '../../services/firebase/analytics';
 
@@ -685,6 +687,30 @@ function PaymentScreen(): React.ReactElement {
       }),
     );
   }, [navigation, resetPaymentFlow, stopVerification]);
+
+  if (isV4('payment')) {
+    return (
+      <PaymentV4
+        flowState={context.flowState}
+        message={message}
+        userMessage={context.userMessage}
+        isBusy={isBusy}
+        gatewayHelp={gatewayHelp}
+        amount={route.params.amount}
+        currency={route.params.currency}
+        bookingRef={route.params.bookingRef}
+        spaName={route.params.spaName}
+        spaImage={route.params.spaImage}
+        location={route.params.location}
+        serviceName={route.params.serviceName}
+        serviceDurationMinutes={route.params.serviceDurationMinutes}
+        dateTime={bookingDateAndTime}
+        onReopenGateway={handleReopenGateway}
+        onCancelGateway={handleCancelGateway}
+        onBackToHome={handleBackToHome}
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>

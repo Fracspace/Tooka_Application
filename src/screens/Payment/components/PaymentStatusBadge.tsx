@@ -21,7 +21,7 @@ const STATUS_COLORS: Record<string, { background: string; text: string }> = {
   unknown: { background: '#F3F3F3', text: '#666666' },
 };
 
-const FLOW_LABELS: Record<PaymentFlowState, string> = {
+export const FLOW_LABELS: Record<PaymentFlowState, string> = {
   [PaymentFlowState.Idle]: 'Ready',
   [PaymentFlowState.Ready]: 'Ready',
   [PaymentFlowState.SdkOpening]: 'Opening Payment Gateway',
