@@ -79,6 +79,8 @@ export interface UpdateProfilePayload {
   lng?: number;
   lati?: number;
   lang?: number;
+  /** Home address. Left out = server keeps the saved one; null = cleared. */
+  residentialLocation?: ResidentialLocation | null;
   pushToken?: string;
   pushTokenPlatform?: 'ios' | 'android';
   preferredCategories?: string[];

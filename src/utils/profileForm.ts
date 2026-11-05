@@ -87,6 +87,9 @@ export const buildUpdateProfilePayload = async (
     lng: form.residentialLocation?.longitude,
     lati: currentLocation?.latitude,
     lang: currentLocation?.longitude,
+    // The address text. Only lat/lng used to be sent, so the server had no
+    // address to return and it vanished after a reload (profile stuck at 80%).
+    residentialLocation: form.residentialLocation ?? undefined,
     // Only send these when this device has them. Empty values overwrote the server:
     // after a logout on this device the onboarding answers are cleared, so the next
     // user's save wiped their categories, and a missing FCM token wiped the push token.
