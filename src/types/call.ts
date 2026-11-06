@@ -74,6 +74,8 @@ export interface CallSession {
     caller: CallParticipant;
     receiver: CallParticipant;
     createdAt: string;
+    /** Incoming calls: when the server's ring window closes (ISO). */
+    expiresAt?: string;
 }
 
 export interface CallApiResponse {

@@ -96,7 +96,19 @@ class CallManager {
     return true;
   }
 
-  async handleIncomingCall(payload: any): Promise<boolean> {
+  /**
+   * `silent`: present the call (session, state, IncomingCall screen) without the in-app
+   * ringtone, because the OS is already ringing it (CallKit / the Android call
+   * notification) while the app is in the background.
+   * `answering`: the user already tapped Answer on the OS call UI; open CallScreen
+   * (showing "Connecting") instead of the IncomingCall screen, so nothing asks again.
+   * `noScreen`: set the call up without opening any screen - iOS with the app open,
+   * where the CallKit banner is the ringing UI.
+   */
+  async handleIncomingCall(
+    payload: any,
+    options: { silent?: boolean; answering?: boolean; noScreen?: boolean } = {},
+  ): Promise<boolean> {
     const startTime = Date.now();
     const { callLogger } = require('./callLogger');
     const ctx = getLogContext();
@@ -126,6 +138,13 @@ class CallManager {
     ) {
       callLogger.info('CALL', 'EXIT: handleIncomingCall - IGNORED (ringing echo for our own outgoing call).', ctx, { payload });
       return false;
+    }
+
+    // The same call arriving twice (socket call_ringing + push) is not a second call:
+    // without this the duplicate reached the busy branch and auto-rejected it.
+    if (callService.getPendingSession()?.sessionId === payload.callSessionId) {
+      callLogger.info('CALL', 'EXIT: handleIncomingCall - already presenting this call.', ctx);
+      return true;
     }
 
     // A finished call still showing its result for ~2s is not "busy": finish tearing
@@ -163,8 +182,8 @@ class CallManager {
       token: '',
       uid: 0,
       status: 'ringing',
-      bookingId: '',
-      spaId: '',
+      bookingId: payload.bookingId || '',
+      spaId: payload.spaId || '',
       conversationId: '',
       // PR-5: pinned app-centric, not payload.direction (which is spa-centric). This
       // is what tells CallScreen and ActiveCallBar that the caller is the remote party.
@@ -187,6 +206,7 @@ class CallManager {
         // the DB column name; the events-guide confirms the wire format.
         avatarUrl:
           payload.spaPhotoUrl ||
+          payload.spaAvatarUrl ||
           payload.cover_photo_url ||
           payload.coverPhotoUrl ||
           '',
@@ -198,6 +218,7 @@ class CallManager {
         role: 'receiver',
       },
       createdAt: new Date().toISOString(),
+      expiresAt: payload.expiresAt || undefined,
     };
 
     callConsole.log(`[IncomingCall] Received ringing, starting ringtone`);
@@ -210,7 +231,7 @@ class CallManager {
     callLogger.info('STATE', `Transition state set to INCOMING. Duration: ${Date.now() - stateStart}ms`, ctx);
     
     const ringtoneStart = Date.now();
-    ringtoneService.playIncoming().then(() => {
+    if (!options.silent) ringtoneService.playIncoming().then(() => {
       callLogger.info('AUDIO', `Ringtone playback started successfully. Duration to trigger: ${Date.now() - ringtoneStart}ms`, ctx);
     }).catch(e => {
       callLogger.error('AUDIO', 'Ringtone playback failed', ctx, e);
@@ -218,7 +239,22 @@ class CallManager {
 
     callConsole.log(`[Navigation] Showing IncomingCallScreen globally`);
     const navStart = Date.now();
-    if (navigationRef.isReady()) {
+    const answeringSession = options.answering ? callService.getPendingSession() : null;
+    if (options.noScreen) {
+      callLogger.info('NAVIGATION', 'Ringing on the CallKit banner: no in-app screen.', ctx);
+    } else if (answeringSession && navigationRef.isReady()) {
+      // @ts-ignore
+      navigationRef.navigate('CallScreen', {
+        bookingId: answeringSession.bookingId,
+        spaId: answeringSession.spaId,
+        callType: answeringSession.callType,
+        spaName: answeringSession.caller.name,
+        spaAvatar: answeringSession.caller.avatarUrl || '',
+        isIncoming: true,
+        answering: true,
+      });
+      callLogger.info('NAVIGATION', `Answered from the OS call UI: opened CallScreen. Duration: ${Date.now() - navStart}ms`, ctx);
+    } else if (navigationRef.isReady()) {
       // @ts-ignore
       navigationRef.navigate('IncomingCall');
       callLogger.info('NAVIGATION', `Navigated to IncomingCallScreen. Duration: ${Date.now() - navStart}ms`, ctx);
@@ -477,6 +513,15 @@ class CallManager {
       if (this.acceptCancelled) {
         // The user hung up mid-accept; the failure (e.g. an aborted join) is expected.
         await this.abortIfAcceptCancelled(acceptedOnServer ? pending : null);
+        return;
+      }
+      // The call ended before this accept reached the server (another phone answered,
+      // the spa hung up, the ring window closed): close the call UI, it did not fail.
+      const code = (error as any)?.response?.data?.error?.code || (error as any)?.response?.data?.code;
+      if (code === 'CALL_EXPIRED' || code === 'CALL_NOT_RINGING' || code === 'CALL_ANSWERED_ELSEWHERE') {
+        callLogger.info('CALL', `EXIT: acceptCall - call no longer ringing (${code})`, ctx);
+        this.contextActions.setCallState(code === 'CALL_EXPIRED' ? CallState.MISSED : CallState.ENDED);
+        this.contextActions.scheduleTerminalCleanup(`accept_${String(code).toLowerCase()}`);
         return;
       }
       callConsole.error('[IncomingCall] Failed to accept call:', error);

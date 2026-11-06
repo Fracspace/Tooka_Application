@@ -8,6 +8,9 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Incoming calls while the app is closed: ring full-screen over the lock screen. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
       android:name=".MainApplication"
@@ -43,5 +46,28 @@
         android:name=".call.CallForegroundService"
         android:exported="false"
         android:foregroundServiceType="microphone" />
+      <activity
+        android:name=".call.IncomingCallActivity"
+        android:exported="false"
+        android:excludeFromRecents="true"
+        android:launchMode="singleTop"
+        android:taskAffinity="com.fracspace.tooka.call"
+        android:showWhenLocked="true"
+        android:turnScreenOn="true"
+        android:theme="@style/Theme.AppCompat.NoActionBar" />
+      <receiver
+        android:name=".call.CallPushReceiver"
+        android:exported="true"
+        android:permission="com.google.android.c2dm.permission.SEND">
+        <intent-filter>
+          <action android:name="com.google.android.c2dm.intent.RECEIVE" />
+        </intent-filter>
+      </receiver>
+      <receiver
+        android:name=".call.CallActionReceiver"
+        android:exported="false" />
+      <service
+        android:name=".call.CallActionTaskService"
+        android:exported="false" />
     </application>
 </manifest>

@@ -20,7 +20,8 @@ export default function CallScreen() {
   const route = useRoute();
   
   // Extract request params if starting a new call
-  const { bookingId, spaId, callType, spaName, spaAvatar, isIncoming } = (route.params as any) || {};
+  const { bookingId, spaId, callType, spaName, spaAvatar, isIncoming, answering } =
+    (route.params as any) || {};
 
   const {
     callState,
@@ -140,6 +141,10 @@ export default function CallScreen() {
   const displayName =
     (isPlaceholderPartyName(remoteName) ? spaName : remoteName) || spaName || 'Your spa';
   const displayAvatar = remoteParty?.avatarUrl || spaAvatar;
+  // Answered on the OS call UI: the accept is already on its way, so show "Connecting"
+  // rather than a second Answer/Decline.
+  const shownState =
+    answering && callState === CallState.INCOMING ? CallState.CONNECTING : callState;
 
   return (
     <View style={styles.container}>
@@ -150,9 +155,9 @@ export default function CallScreen() {
       <View style={styles.content}>
         <View style={styles.spacer} />
         
-        <CallAvatar name={displayName} avatarUrl={displayAvatar} state={callState} />
+        <CallAvatar name={displayName} avatarUrl={displayAvatar} state={shownState} />
         <Text style={styles.nameLabel}>{displayName}</Text>
-        <CallStatus state={callState} duration={duration} />
+        <CallStatus state={shownState} duration={duration} />
         {errorMessage ? (
           <Text style={styles.errorText}>{errorMessage}</Text>
         ) : null}
@@ -161,12 +166,12 @@ export default function CallScreen() {
       </View>
 
       <View style={styles.bottomContainer}>
-        {callState === CallState.INCOMING ? (
+        {shownState === CallState.INCOMING ? (
           <IncomingActions onAccept={acceptIncomingCall} onDecline={declineIncomingCall} />
         ) : (
           <>
             <CallControls
-              state={callState}
+              state={shownState}
               isMuted={isMuted}
               isSpeaker={isSpeaker}
               onMuteToggle={toggleMute}
@@ -175,7 +180,7 @@ export default function CallScreen() {
               onCancelCall={endCall}
             />
             <CallFooter
-              state={callState}
+              state={shownState}
               onRetry={handleRetry}
               onMessage={handleMessage}
               onClose={handleMinimize}

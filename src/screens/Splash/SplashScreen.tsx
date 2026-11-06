@@ -7,10 +7,11 @@ import {
 import { AmbientVideo } from '../../components/ui/AmbientVideo';
 import BootSplash from 'react-native-bootsplash';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useNavigation } from '@react-navigation/native';
+import { CommonActions, useNavigation } from '@react-navigation/native';
 
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { getOnboarding } from '../../utils/onboardingStorage';
+import { androidCallNotification } from '../../services/call/callPush';
 
 type SplashScreenNavigationProp =
   NativeStackNavigationProp<
@@ -19,12 +20,41 @@ type SplashScreenNavigationProp =
   >;
 
 const SPLASH_FALLBACK_TIMEOUT_MS = 5000;
+// Opened by answering a call: no splash video; the call screen opens on top, and the app
+// is set up underneath it so the call ending lands on home.
+const CALL_LAUNCH_NAVIGATE_MS = 1200;
 
 const SplashScreen: React.FC = () => {
   const navigation =
     useNavigation<SplashScreenNavigationProp>();
 
   const hasNavigated = useRef(false);
+  const openedForCall = useRef(androidCallNotification?.wasOpenedForCall?.() === true).current;
+
+  /**
+   * Leave the splash for `name`. When a call screen already sits on top (the app was
+   * opened by answering a call), swap only the splash underneath it: replace() would
+   * replace the call screen, flashing home before the call screen came back.
+   */
+  const leaveSplashFor = useCallback(
+    (name: 'BottomNavigation' | 'Onboarding') => {
+      const state = navigation.getState();
+      const top = state.routes[state.index];
+      if (top?.name === 'Splash') {
+        navigation.replace(name);
+        return;
+      }
+      navigation.dispatch(
+        CommonActions.reset({
+          ...state,
+          routes: state.routes.map(route =>
+            route.name === 'Splash' ? { name } : route,
+          ),
+        } as any),
+      );
+    },
+    [navigation],
+  );
 
   const navigateToApp = useCallback(async () => {
     if (hasNavigated.current) {
@@ -36,17 +66,17 @@ const SplashScreen: React.FC = () => {
     try {
       const onboarding = await getOnboarding();
       if (onboarding && onboarding.completed) {
-        navigation.replace('BottomNavigation');
+        leaveSplashFor('BottomNavigation');
       } else {
-        navigation.replace('Onboarding');
+        leaveSplashFor('Onboarding');
       }
     } catch (error) {
       if (__DEV__) {
         console.warn('Splash onboarding check failed:', error);
       }
-      navigation.replace('Onboarding');
+      leaveSplashFor('Onboarding');
     }
-  }, [navigation]);
+  }, [leaveSplashFor]);
 
   useEffect(() => {
     BootSplash.hide({
@@ -55,11 +85,11 @@ const SplashScreen: React.FC = () => {
 
     const fallbackTimer = setTimeout(
       navigateToApp,
-      SPLASH_FALLBACK_TIMEOUT_MS,
+      openedForCall ? CALL_LAUNCH_NAVIGATE_MS : SPLASH_FALLBACK_TIMEOUT_MS,
     );
 
     return () => clearTimeout(fallbackTimer);
-  }, [navigateToApp]);
+  }, [navigateToApp, openedForCall]);
 
   return (
     <View style={styles.container}>
@@ -69,32 +99,34 @@ const SplashScreen: React.FC = () => {
         barStyle="light-content"
       />
 
-      <AmbientVideo
-        source={require('../../assets/videos/splash.mp4')}
-        style={styles.video}
-        resizeMode="cover"
-        repeat={false}
-        playInBackground={false}
-        playWhenInactive={false}
-        preventsDisplaySleepDuringVideoPlayback={false}
-        hideShutterView
-        minLoadRetryCount={0}
-        bufferConfig={{
-          minBufferMs: 500,
-          maxBufferMs: 1500,
-          bufferForPlaybackMs: 250,
-          bufferForPlaybackAfterRebufferMs: 500,
-        }}
-        onEnd={navigateToApp}
-        onError={(error) => {
-          console.log(
-            'Splash Video Error =>',
-            error,
-          );
-
-          navigateToApp();
-        }}
-      />
+      {!openedForCall && (
+        <AmbientVideo
+          source={require('../../assets/videos/splash.mp4')}
+          style={styles.video}
+          resizeMode="cover"
+          repeat={false}
+          playInBackground={false}
+          playWhenInactive={false}
+          preventsDisplaySleepDuringVideoPlayback={false}
+          hideShutterView
+          minLoadRetryCount={0}
+          bufferConfig={{
+            minBufferMs: 500,
+            maxBufferMs: 1500,
+            bufferForPlaybackMs: 250,
+            bufferForPlaybackAfterRebufferMs: 500,
+          }}
+          onEnd={navigateToApp}
+          onError={(error) => {
+            console.log(
+              'Splash Video Error =>',
+              error,
+            );
+  
+            navigateToApp();
+          }}
+        />
+      )}
     </View>
   );
 };

@@ -19,6 +19,9 @@ import { callManager } from '../services/call/callManager';
 import { ringtoneService } from '../services/call/ringtoneService';
 import { AGORA_CONFIG } from '../config/agora';
 import { callLogger, callConsole } from '../services/call/callLogger';
+import { deviceRegistration } from '../services/call/deviceRegistration';
+import { deferToCallKit, shouldDeferToCallKit } from '../services/call/callPush';
+import { useNativeCallUi } from '../hooks/useNativeCallUi';
 import { promptForMicrophoneSettings } from '../utils/microphonePermission';
 
 interface CallContextType {
@@ -41,7 +44,14 @@ interface CallContextType {
 const CallContext = createContext<CallContextType | undefined>(undefined);
 
 // PR-4
-const INCOMING_TIMEOUT_MS = 45_000;   // ring this long, then MISSED
+const INCOMING_TIMEOUT_MS = 45_000;   // ring this long, then MISSED (when the server gives no expiresAt)
+
+/** Ring until the server's ring window closes; a pushed call may be 10-20s into it already. */
+const incomingRingMs = (expiresAt?: string): number => {
+  const at = expiresAt ? Date.parse(expiresAt) : NaN;
+  if (Number.isNaN(at)) return INCOMING_TIMEOUT_MS;
+  return Math.min(Math.max(at - Date.now(), 3_000), 60_000);
+};
 const OUTGOING_TIMEOUT_MS = 60_000;   // dial this long, then NO_ANSWER
 const TERMINAL_DISPLAY_MS = 2_000;    // how long a terminal state stays on screen
 
@@ -421,7 +431,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Marking it MISSED here sent a reject while the accept went on to join Agora.
           if (callManager.isAcceptInProgress()) return;
 
-          callConsole.warn(`[CallContext] Incoming call timed out after ${INCOMING_TIMEOUT_MS / 1000}s`);
+          callConsole.warn('[CallContext] Incoming call timed out');
           ringtoneService.stop();
           setCallState(CallState.MISSED);
 
@@ -434,7 +444,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
 
           scheduleTerminalCleanup('missed_no_answer');
-        }, INCOMING_TIMEOUT_MS);
+        }, incomingRingMs(sessionRef.current?.expiresAt));
       }
     } else if (incomingTimeoutRef.current) {
       clearTimeout(incomingTimeoutRef.current);
@@ -759,7 +769,18 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // A genuinely different call: presented when IDLE, auto-rejected when busy.
-      callManager.handleIncomingCall(payload);
+      // In the background the push already rings it (CallKit / call notification), so
+      // the in-app ringtone stays off unless this phone is not registered for pushes.
+      const ring = () =>
+        callManager.handleIncomingCall(payload, {
+          silent: AppState.currentState !== 'active' && deviceRegistration.isRegistered(),
+        });
+      // iOS with the app open: the VoIP push's CallKit banner rings this call.
+      if (shouldDeferToCallKit()) {
+        deferToCallKit(incomingSessionId, ring);
+        return;
+      }
+      ring();
     };
 
 
@@ -1123,6 +1144,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     callService.toggleSpeaker(nextSpeaker).catch(callConsole.error);
     setIsSpeaker(nextSpeaker);
   }, []);
+
+  // Calls pushed while the app is backgrounded/killed: CallKit (iOS) / call notification (Android).
+  useNativeCallUi({ callState, session, acceptIncomingCall, declineIncomingCall, endCall });
 
   const value = useMemo<CallContextType>(
     () => ({

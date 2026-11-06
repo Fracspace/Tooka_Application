@@ -8,6 +8,7 @@ import React, {
   useState,
 } from 'react';
 import { DeviceEventEmitter } from 'react-native';
+import { deviceRegistration } from '../services/call/deviceRegistration';
 import Toast from 'react-native-toast-message';
 import AuthApi from '../api/AuthApi';
 import ProfileApi from '../api/ProfileApi';
@@ -136,6 +137,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Logout handler
   const logout = useCallback(async (): Promise<void> => {
     try {
+      // Stop calls ringing this phone for the old account (needs the JWT, so first).
+      await deviceRegistration.unregister();
       setUser(null);
       setToken(null);
       setIsLoggedIn(false);

@@ -9,6 +9,7 @@ import {
 import { toNotificationPayload } from '../services/firebase/messaging/notificationNavigation';
 import { requestReviewForBooking } from '../services/reviewRequestBus';
 import { saveFcmToken } from '../utils/fcmStorage';
+import { deviceRegistration } from '../services/call/deviceRegistration';
 import { syncProfileMetadata } from '../services/profile/profileSync';
 import { useAuth } from '../context/AuthContext';
 import { useProfile } from '../context/ProfileContext';
@@ -51,6 +52,9 @@ export default function useNotifications() {
         if (!isLoggedIn) {
           return;
         }
+        // Incoming calls ring this phone only once the backend has its push token.
+        deviceRegistration.setLoggedIn(true);
+        deviceRegistration.setFcmToken(token);
         // syncProfileMetadata dedupes onto an in-flight sync, which may have read
         // storage before the token above was saved. Let that one finish, then sync
         // again so the token is definitely sent.
@@ -91,6 +95,7 @@ export default function useNotifications() {
       FirebaseMessaging.onTokenRefresh(async (token) => {
         if (token) {
           await saveFcmToken(token);
+          deviceRegistration.setFcmToken(token);
         }
 
         try {

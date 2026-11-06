@@ -149,6 +149,7 @@ export type RootStackParamList = {
     spaName: string;
     spaAvatar: string;
     isIncoming?: boolean;
+    answering?: boolean;
   };
   IncomingCall: undefined;
 };

@@ -8,6 +8,7 @@ import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.stallion.Stallion
 import com.fracspace.tooka.call.CallForegroundPackage
+import com.fracspace.tooka.call.IncomingCallPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -17,6 +18,7 @@ class MainApplication : Application(), ReactApplication {
           packageList = PackageList(this).packages.apply {
               // Packages that cannot be autolinked yet can be added manually here.
               add(CallForegroundPackage())
+              add(IncomingCallPackage())
           },
           jsBundleFilePath = Stallion.getJSBundleFile(applicationContext)
       )

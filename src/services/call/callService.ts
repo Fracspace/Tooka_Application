@@ -1,4 +1,5 @@
 import { agoraService } from './agoraService';
+import { getDeviceId } from './deviceRegistration';
 import { socketService } from './socketService';
 import { ringtoneService } from './ringtoneService';
 import { CallSession, CallRequest } from '../../types/call';
@@ -22,6 +23,9 @@ export const callActionBody = (
   const body: Record<string, string> = { call_session_id: session.sessionId };
   if (session.spaId) body.spa_id = session.spaId;
   if (reason) body.reason = reason;
+  // Tells the backend which phone acted: it stops the user's other phones ringing and
+  // refuses a second Accept with CALL_ANSWERED_ELSEWHERE.
+  body.deviceId = getDeviceId();
   return body;
 };
 
