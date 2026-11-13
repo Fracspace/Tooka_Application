@@ -195,7 +195,6 @@ function SpaDetailsV4({
   const amenityCount = trustBadges.length + amenitiesList.length;
   const photoCount = hasRealPhotos ? mediaItems.length : 0;
   const hasLocation = spaLocation !== 'Location unavailable';
-  const phone = spa?.phone?.replace(/[^\d+]/g, '') ?? '';
   const selectedDate = booking.scheduleDates.find((d) => d.id === booking.selectedDateId);
   const hasSlot = Boolean(booking.selectedSlot);
   const ctaDisabled = !isBookable || !hasSlot || booking.submitting;
@@ -626,17 +625,6 @@ function SpaDetailsV4({
                     }
                     accessibilityLabel={`Directions to ${spaName}`}
                   />
-                  {phone ? (
-                    <Button
-                      label="Call spa"
-                      variant="secondary"
-                      size="md"
-                      style={styles.flex}
-                      iconLeft={<Icon name="phone" size={17} color={colors.text} />}
-                      onPress={() => openLink(`tel:${phone}`, 'Unable to call', `Please call ${spa.phone} from your phone.`)}
-                      accessibilityLabel={`Call ${spaName}`}
-                    />
-                  ) : null}
                 </View>
               </View>
             </Card>
