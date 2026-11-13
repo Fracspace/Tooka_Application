@@ -54,6 +54,18 @@ class IncomingCallModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod(isBlockingSynchronousMethod = true)
     fun wasOpenedForCall(): Boolean = openedForCall
 
+    /** Logged in: pushes ring. Logged out: they do not, even if the backend still sends them. */
+    @ReactMethod
+    fun setCallsEnabled(enabled: Boolean) {
+        IncomingCallNotification.setCallsEnabled(reactContext, enabled)
+    }
+
+    /** On a Tooka call: a second pushed call does not ring natively (the app rejects it as busy). */
+    @ReactMethod
+    fun setInCall(inCall: Boolean) {
+        IncomingCallNotification.inCall = inCall
+    }
+
     /** After a call: MainActivity stops showing over the lock screen (set when a call opened it). */
     @ReactMethod
     fun releaseLockScreen() {

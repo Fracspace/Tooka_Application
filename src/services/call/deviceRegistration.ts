@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
 
 import authAxiosClient from '../../api/authAxiosClient';
@@ -56,6 +56,11 @@ async function register(): Promise<void> {
   }
 }
 
+/** Android: logged out, a call push still addressed to this phone does not ring. */
+function setNativeCallsEnabled(enabled: boolean) {
+  if (Platform.OS === 'android') NativeModules.IncomingCallNotification?.setCallsEnabled(enabled);
+}
+
 export const deviceRegistration = {
   /** True once the backend has this install's push token(s), i.e. it will be pushed for calls. */
   isRegistered: () => registered,
@@ -76,6 +81,7 @@ export const deviceRegistration = {
   /** Registration only runs while logged in (the endpoint needs the user's JWT). */
   setLoggedIn(value: boolean) {
     loggedIn = value;
+    setNativeCallsEnabled(value);
     if (!value) return Promise.resolve();
     lastSent = '';
     return register();
@@ -83,11 +89,13 @@ export const deviceRegistration = {
 
   /** Call on logout, BEFORE the auth token is cleared. */
   async unregister(): Promise<void> {
-    const wasRegistered = registered;
     registered = false;
     loggedIn = false;
     lastSent = '';
-    if (!wasRegistered) return;
+    // Stops the native ring at once, even if the DELETE below fails (offline, or the
+    // session already expired - a 401 logout).
+    setNativeCallsEnabled(false);
+    // Always tried: this launch's register may have failed while an earlier one worked.
     try {
       await authAxiosClient.delete(`/users/me/devices/${encodeURIComponent(getDeviceId())}`);
     } catch (error: any) {

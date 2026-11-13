@@ -72,7 +72,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate, PKPushRegistryDelegate {
     RNVoipPushNotificationManager.didReceiveIncomingPush(with: payload, forType: type.rawValue)
 
     // Report EVERY VoIP push to CallKit (duplicates and stale calls too), or iOS stops
-    // delivering them. A call whose ring window already closed is ended straight away.
+    // delivering them. Whether the call is still ringing is checked against the server in
+    // JS (not this phone's clock, which can be off), and a dead call is ended there.
     RNCallKeep.reportNewIncomingCall(
       uuid,
       handle: name,
@@ -87,22 +88,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate, PKPushRegistryDelegate {
       payload: data,
       withCompletionHandler: nil
     )
-    if let expiresAt = data["expiresAt"] as? String,
-       let expiry = ISO8601DateFormatter.withFractionalSeconds.date(from: expiresAt)
-         ?? ISO8601DateFormatter().date(from: expiresAt),
-       expiry < Date() {
-      RNCallKeep.endCall(withUUID: uuid, reason: 3) // CXCallEndedReason.unanswered
-    }
     completion()
   }
-}
-
-private extension ISO8601DateFormatter {
-  static let withFractionalSeconds: ISO8601DateFormatter = {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formatter
-  }()
 }
 
 class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {

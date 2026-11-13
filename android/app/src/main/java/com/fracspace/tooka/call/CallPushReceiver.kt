@@ -31,5 +31,10 @@ class CallPushReceiver : BroadcastReceiver() {
             if (key.startsWith("google.") || key.startsWith("gcm.") || key == "from" || key == "collapse_key") continue
             extras.getString(key)?.let { putString(key, it) }
         }
+        // Ring window measured on the server's clocks (expiresAt vs FCM send time), so it
+        // does not depend on this phone's clock being right.
+        val sentAt = extras.get("google.sent_time")?.toString()?.toLongOrNull()
+        val expiresAt = IncomingCallNotification.parseExpiry(extras.getString("expiresAt"))
+        if (sentAt != null && expiresAt != null) putString("ringMs", (expiresAt - sentAt).toString())
     }
 }

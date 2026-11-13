@@ -119,6 +119,8 @@ interface AndroidCallNotification {
   wasOpenedForCall(): boolean;
   /** After a call: Tooka no longer shows over the lock screen. */
   releaseLockScreen(): void;
+  setInCall(inCall: boolean): void;
+  setCallsEnabled(enabled: boolean): void;
 }
 
 export const androidCallNotification: AndroidCallNotification | undefined =

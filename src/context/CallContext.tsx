@@ -50,7 +50,11 @@ const INCOMING_TIMEOUT_MS = 45_000;   // ring this long, then MISSED (when the s
 const incomingRingMs = (expiresAt?: string): number => {
   const at = expiresAt ? Date.parse(expiresAt) : NaN;
   if (Number.isNaN(at)) return INCOMING_TIMEOUT_MS;
-  return Math.min(Math.max(at - Date.now(), 3_000), 60_000);
+  const left = at - Date.now();
+  // Outside the server's 60s ring window means this phone's clock is off: the default
+  // timeout instead (the server still ends the call on time).
+  if (left <= 0 || left > 60_000) return INCOMING_TIMEOUT_MS;
+  return Math.max(left, 3_000);
 };
 const OUTGOING_TIMEOUT_MS = 60_000;   // dial this long, then NO_ANSWER
 const TERMINAL_DISPLAY_MS = 2_000;    // how long a terminal state stays on screen
@@ -1146,7 +1150,15 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // Calls pushed while the app is backgrounded/killed: CallKit (iOS) / call notification (Android).
-  useNativeCallUi({ callState, session, acceptIncomingCall, declineIncomingCall, endCall });
+  useNativeCallUi({
+    callState,
+    session,
+    isMuted,
+    acceptIncomingCall,
+    declineIncomingCall,
+    endCall,
+    toggleMute,
+  });
 
   const value = useMemo<CallContextType>(
     () => ({

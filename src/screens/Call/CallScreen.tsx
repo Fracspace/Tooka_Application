@@ -51,6 +51,9 @@ export default function CallScreen() {
       const hasPerm = await requestPermission();
       if (!hasPerm) {
         Alert.alert('Permission Denied', 'Microphone permission is required for calls.');
+        // An answered or ringing call must not carry on with no screen and no mic.
+        if (callState === CallState.INCOMING) await declineIncomingCall();
+        else if (callState !== CallState.IDLE) await endCall();
         navigation.goBack();
         return;
       }
@@ -67,7 +70,7 @@ export default function CallScreen() {
       }
     };
     start();
-  }, [callState, bookingId, spaId, callType, spaName, spaAvatar, isIncoming, initiateCall, requestPermission, navigation]);
+  }, [callState, bookingId, spaId, callType, spaName, spaAvatar, isIncoming, initiateCall, requestPermission, navigation, declineIncomingCall, endCall]);
 
   // PR-4: close once the call is over.
   // The old guard was `callState === IDLE && !bookingId && !isIncoming`, but bookingId

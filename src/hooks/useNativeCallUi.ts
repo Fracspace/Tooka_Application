@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Alert, AppState, DeviceEventEmitter, Platform } from 'react-native';
+import { Alert, AppState, DeviceEventEmitter, Linking, PermissionsAndroid, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import messaging from '@react-native-firebase/messaging';
 import RNCallKeep from 'react-native-callkeep';
@@ -38,9 +38,11 @@ import { CallSession, CallState } from '../types/call';
 interface Params {
   callState: CallState;
   session: CallSession | null;
+  isMuted: boolean;
   acceptIncomingCall: () => Promise<void>;
   declineIncomingCall: () => Promise<void>;
   endCall: () => Promise<void>;
+  toggleMute: () => void;
 }
 
 const RINGING_OR_LIVE = new Set([
@@ -55,9 +57,28 @@ const IOS_END_REMOTE = 2;
 const IOS_END_UNANSWERED = 3;
 const IOS_END_ANSWERED_ELSEWHERE = 4;
 
-export function useNativeCallUi({ callState, session, acceptIncomingCall, declineIncomingCall, endCall }: Params) {
-  const actionsRef = useRef({ acceptIncomingCall, declineIncomingCall, endCall });
-  actionsRef.current = { acceptIncomingCall, declineIncomingCall, endCall };
+// On a call already: a second call is rejected as busy, never rung over this one.
+const BUSY = new Set([
+  CallState.OUTGOING,
+  CallState.RINGING,
+  CallState.CONNECTING,
+  CallState.CONNECTED,
+  CallState.RECONNECTING,
+]);
+
+export function useNativeCallUi({
+  callState,
+  session,
+  isMuted,
+  acceptIncomingCall,
+  declineIncomingCall,
+  endCall,
+  toggleMute,
+}: Params) {
+  const actionsRef = useRef({ acceptIncomingCall, declineIncomingCall, endCall, toggleMute });
+  actionsRef.current = { acceptIncomingCall, declineIncomingCall, endCall, toggleMute };
+  const isMutedRef = useRef(isMuted);
+  isMutedRef.current = isMuted;
   const callStateRef = useRef(callState);
   callStateRef.current = callState;
   const sessionIdRef = useRef(session?.sessionId);
@@ -135,6 +156,16 @@ export function useNativeCallUi({ callState, session, acceptIncomingCall, declin
         if (!push) return;
         pushesRef.current.set(push.callSessionId, { uuid: callUUID.toLowerCase(), push });
         callKitShown.add(push.callSessionId);
+        if (
+          BUSY.has(callStateRef.current) &&
+          callService.getPendingSession()?.sessionId !== push.callSessionId
+        ) {
+          // On a call already: Apple makes every VoIP push show, so end it at once and
+          // let the app reject it as busy.
+          RNCallKeep.reportEndCallWithUUID(callUUID, IOS_END_ANSWERED_ELSEWHERE);
+          isForLoggedInUser(push).then(ok => ok && callManager.handleIncomingCall(push));
+          return;
+        }
         if (AppState.currentState === 'active') {
           const id = push.callSessionId;
           if (
@@ -176,6 +207,12 @@ export function useNativeCallUi({ callState, session, acceptIncomingCall, declin
       RNCallKeep.addEventListener('didDisplayIncomingCall', e => onDisplayed(e.callUUID, e.payload));
       RNCallKeep.addEventListener('answerCall', e => onAnswer(e.callUUID));
       RNCallKeep.addEventListener('endCall', e => onEnd(e.callUUID));
+      // Mute on the CallKit / lock-screen call screen mutes the app's call.
+      RNCallKeep.addEventListener('didPerformSetMutedCallAction', ({ muted, callUUID }) => {
+        const entry = byUuid(callUUID);
+        if (!entry || nativeCallIdRef.current !== entry.push.callSessionId) return;
+        if (muted !== isMutedRef.current) actionsRef.current.toggleMute();
+      });
 
       // Events CallKit fired before JS loaded (app launched by the VoIP push).
       RNCallKeep.getInitialEvents().then(events => {
@@ -205,6 +242,7 @@ export function useNativeCallUi({ callState, session, acceptIncomingCall, declin
           RNCallKeep.removeEventListener('didDisplayIncomingCall');
           RNCallKeep.removeEventListener('answerCall');
           RNCallKeep.removeEventListener('endCall');
+          RNCallKeep.removeEventListener('didPerformSetMutedCallAction');
           VoipPushNotification.removeEventListener('register');
           VoipPushNotification.removeEventListener('didLoadWithEvents');
         },
@@ -225,14 +263,18 @@ export function useNativeCallUi({ callState, session, acceptIncomingCall, declin
       };
 
       takeLaunchAction().catch(e => callConsole.warn('[NativeCallUi] launch action failed', e));
-      askForFullScreenCalls(notification).catch(() => undefined);
+      // Later than launch, so it never lands on top of the system notification prompt.
+      const askTimer = setTimeout(
+        () => askForCallPermissions(notification).catch(() => undefined),
+        ASK_DELAY_MS,
+      );
+      subscriptions.push({ remove: () => clearTimeout(askTimer) });
       subscriptions.push(
         DeviceEventEmitter.addListener('TookaCallAction', (event: { action: string; data: any }) => {
           if (event.action === 'decline') {
             decline(event.data).catch(() => undefined);
           } else {
             takeLaunchAction().catch(e => callConsole.warn('[NativeCallUi] launch action failed', e));
-      askForFullScreenCalls(notification).catch(() => undefined);
           }
         }),
       );
@@ -296,6 +338,19 @@ export function useNativeCallUi({ callState, session, acceptIncomingCall, declin
     }
   }, [callState, session]);
 
+  // iOS: the app's mute shows on the CallKit call screen too.
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    const id = nativeCallIdRef.current;
+    const entry = id ? pushesRef.current.get(id) : undefined;
+    if (entry && RINGING_OR_LIVE.has(callState)) RNCallKeep.setMutedCall(entry.uuid, isMuted);
+  }, [isMuted, callState]);
+
+  // Android: on a call, a second pushed call does not ring natively over it.
+  useEffect(() => {
+    if (Platform.OS === 'android') androidCallNotification?.setInCall(BUSY.has(callState));
+  }, [callState]);
+
   // Android: answering lets Tooka show over the lock screen; once the call is over the
   // app must go back behind the lock screen, or anyone could use it on a locked phone.
   const wasInCallRef = useRef(false);
@@ -342,18 +397,44 @@ export function useNativeCallUi({ callState, session, acceptIncomingCall, declin
   }, [callState, session]);
 }
 
-const FULL_SCREEN_ASKED_KEY = 'tooka_full_screen_call_asked';
+const ASK_DELAY_MS = 10_000;
+const ASK_AGAIN_MS = 7 * 24 * 60 * 60 * 1000;
+const NOTIFICATIONS_ASKED_KEY = 'tooka_call_notifications_asked_at';
+const FULL_SCREEN_ASKED_KEY = 'tooka_full_screen_call_asked_at';
+
+/** At most once a week per key, so the user is reminded but not nagged. */
+async function dueToAsk(key: string): Promise<boolean> {
+  const last = Number(await AsyncStorage.getItem(key));
+  if (last && Date.now() - last < ASK_AGAIN_MS) return false;
+  await AsyncStorage.setItem(key, String(Date.now()));
+  return true;
+}
 
 /**
- * Android 14+ blocks full-screen call screens until the user allows them for Tooka;
- * without it a call on a locked phone is only a notification. Asked once per install.
+ * Android: calls only ring if notifications are allowed (Android 13+), and only show
+ * full screen on a locked phone if that is allowed too (Android 14+). Asks the
+ * logged-in user to turn on whichever is off, at most once a week each.
  */
-async function askForFullScreenCalls(notification: NonNullable<typeof androidCallNotification>) {
-  if (await notification.canUseFullScreenIntent()) return;
-  // Only someone who can receive calls (logged in) is asked.
+async function askForCallPermissions(notification: NonNullable<typeof androidCallNotification>) {
   if (!(await isForLoggedInUser({}))) return;
-  if (await AsyncStorage.getItem(FULL_SCREEN_ASKED_KEY)) return;
-  await AsyncStorage.setItem(FULL_SCREEN_ASKED_KEY, '1');
+  if (Number(Platform.Version) >= 33) {
+    const allowed = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+    if (!allowed) {
+      if (await dueToAsk(NOTIFICATIONS_ASKED_KEY)) {
+        Alert.alert(
+          'Spa calls cannot ring',
+          'Notifications are off for Tooka, so you will miss calls from your spa. Turn them on in Settings.',
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ],
+        );
+      }
+      return;
+    }
+  }
+  if (await notification.canUseFullScreenIntent()) return;
+  if (!(await dueToAsk(FULL_SCREEN_ASKED_KEY))) return;
   Alert.alert(
     'Show spa calls on your lock screen',
     'Allow Tooka to show incoming calls full screen, so you can answer a spa even when your phone is locked.',

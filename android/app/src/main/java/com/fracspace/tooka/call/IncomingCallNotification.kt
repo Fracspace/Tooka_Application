@@ -41,6 +41,23 @@ object IncomingCallNotification {
     @Volatile
     var appVisible = false
 
+    /** Set from JS: on a Tooka call already, so a second call must not ring over it (the app rejects it as busy). */
+    @Volatile
+    var inCall = false
+
+    private const val PREFS = "tooka_calls"
+    private const val KEY_ENABLED = "calls_enabled"
+
+    /** Off after logout: a push still addressed to the old account must not ring (logout's unregister can fail). */
+    fun setCallsEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_ENABLED, enabled).apply()
+    }
+
+    private fun callsEnabled(context: Context) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ENABLED, true)
+
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
     fun callerName(data: Bundle): String =
         data.getString("spaName")?.takeIf { it.isNotBlank() }
             ?: data.getString("callerName")?.takeIf { it.isNotBlank() }
@@ -48,8 +65,9 @@ object IncomingCallNotification {
 
     fun show(context: Context, data: Bundle) {
         val callSessionId = data.getString("callSessionId") ?: return
-        if (stopped.contains(callSessionId)) return
-        if (remainingMs(data) == null) return
+        if (stopped.contains(callSessionId) || ringing.contains(callSessionId)) return
+        if (inCall || !callsEnabled(context)) return
+        val ringMs = remainingMs(data)
         ensureChannel(context)
 
         val name = callerName(data)
@@ -89,12 +107,16 @@ object IncomingCallNotification {
             .setFullScreenIntent(openIntent, true)
             .setStyle(NotificationCompat.CallStyle.forIncomingCall(caller, declineIntent, answerIntent))
 
-        remainingMs(data)?.let { builder.setTimeoutAfter(it) }
+        builder.setTimeoutAfter(ringMs)
 
         val notification = builder.build().apply { flags = flags or Notification.FLAG_INSISTENT }
         try {
             ringing.add(callSessionId)
             NotificationManagerCompat.from(context).notify(TAG, code, notification)
+            // The notification times out on its own; the ringing screen must go with it.
+            mainHandler.postDelayed({
+                if (ringing.remove(callSessionId)) IncomingCallActivity.close(callSessionId)
+            }, ringMs)
         } catch (e: SecurityException) {
             // POST_NOTIFICATIONS not granted: nothing we can show.
         }
@@ -124,14 +146,21 @@ object IncomingCallNotification {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-    /** Ring until the server's ring window closes (expiresAt), never past 60s; null once it has closed. */
-    private fun remainingMs(data: Bundle): Long? {
+    /**
+     * How long to ring: the server's ring window (expiresAt), at most 60s. CallPushReceiver
+     * measures it against FCM's send time ("ringMs"), so a phone whose clock is off still
+     * rings. Without that, the phone's clock is used, and a result outside 0-60s means the
+     * clock is off: ring the full 60s and let the server-side checks end it.
+     */
+    private fun remainingMs(data: Bundle): Long {
+        data.getString("ringMs")?.toLongOrNull()?.let { return it.coerceIn(1_000L, 60_000L) }
         val expiresAt = data.getString("expiresAt") ?: return 60_000L
         val at = parseIso(expiresAt) ?: return 60_000L
         val left = at - System.currentTimeMillis()
-        if (left <= 0) return null
-        return left.coerceAtMost(60_000L)
+        return if (left in 1_000L..60_000L) left else 60_000L
     }
+
+    fun parseExpiry(value: String?): Long? = value?.let { parseIso(it) }
 
     // java.time needs API 26; minSdk is 24.
     private fun parseIso(value: String): Long? {
