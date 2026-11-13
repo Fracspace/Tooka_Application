@@ -24,6 +24,7 @@
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		76979B59E3A04BCA951A835F /* Poppins-Italic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 770A523E887C4650A80A5957 /* Poppins-Italic.ttf */; };
 		77C649AE87004E1E8D08D811 /* Poppins-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 6BB3FD5662754BDAA4135BB1 /* Poppins-Medium.ttf */; };
+		811591A0AF96455368A80ECC /* TookaPushEnvironment.m in Sources */ = {isa = PBXBuildFile; fileRef = CF7F139A2EA88BE2D0327C9A /* TookaPushEnvironment.m */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		8DF394C32F6A466E9B9B858A /* WorkSans-Italic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 11433081AE5D487B949FA8B2 /* WorkSans-Italic.ttf */; };
 		A09355FEA27F44458C63661F /* Montserrat-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 49D56F8D61694396864D1CBA /* Montserrat-Medium.ttf */; };
@@ -62,6 +63,7 @@
 		A8546983D81F4458953C6A73 /* Sora-Medium.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Sora-Medium.ttf"; path = "../src/assets/fonts/Sora-Medium.ttf"; sourceTree = "<group>"; };
 		B646AAE8E7DD4003BBA5E194 /* Poppins-Bold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Poppins-Bold.ttf"; path = "../src/assets/fonts/Poppins-Bold.ttf"; sourceTree = "<group>"; };
 		BD43FF5FB2D14F7F94224449 /* WorkSans-Medium.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "WorkSans-Medium.ttf"; path = "../src/assets/fonts/WorkSans-Medium.ttf"; sourceTree = "<group>"; };
+		CF7F139A2EA88BE2D0327C9A /* TookaPushEnvironment.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = TookaPushEnvironment.m; path = Tooka/TookaPushEnvironment.m; sourceTree = "<group>"; };
 		D9F63EF13004C6AA00A4B178 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		D9FA2C3E3008E0DE00374B0C /* Tooka.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = Tooka.entitlements; path = Tooka/Tooka.entitlements; sourceTree = "<group>"; };
 		DA36952B13C24CC09180A41E /* Montserrat-SemiBold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Montserrat-SemiBold.ttf"; path = "../src/assets/fonts/Montserrat-SemiBold.ttf"; sourceTree = "<group>"; };
@@ -96,6 +98,7 @@
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
+				CF7F139A2EA88BE2D0327C9A /* TookaPushEnvironment.m */,
 			);
 			name = Tooka;
 			sourceTree = "<group>";
@@ -390,6 +393,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
+				811591A0AF96455368A80ECC /* TookaPushEnvironment.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

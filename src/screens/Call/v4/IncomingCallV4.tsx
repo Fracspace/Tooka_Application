@@ -2,13 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated as RNAnimated,
-  PanResponder,
   Pressable,
   StyleSheet,
   View,
   type LayoutChangeEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -116,6 +116,10 @@ const IncomingCallV4: React.FC<Props> = ({
 /**
  * Drag the green knob to the end to answer. A plain tap on the knob answers too,
  * as does the screen reader's activate action, so nobody is stuck.
+ *
+ * Uses react-native-gesture-handler, not PanResponder: the app root is a
+ * GestureHandlerRootView, which took the drag away from a PanResponder (taps still got
+ * through, drags never moved the knob).
  */
 function SlideToAnswer({ onAnswer }: { onAnswer: () => void }) {
   const [trackWidth, setTrackWidth] = useState(0);
@@ -135,30 +139,28 @@ function SlideToAnswer({ onAnswer }: { onAnswer: () => void }) {
     answerRef.current();
   };
 
-  const responder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderTerminationRequest: () => false,
-        onPanResponderMove: (_, g) => {
-          x.setValue(Math.min(maxRef.current, Math.max(0, g.dx)));
-        },
-        onPanResponderRelease: (_, g) => {
-          const isTap = Math.abs(g.dx) < 6 && Math.abs(g.dy) < 6;
-          if (isTap || (maxRef.current > 0 && g.dx >= maxRef.current * ANSWER_AT)) {
-            RNAnimated.timing(x, { toValue: maxRef.current, duration: 150, useNativeDriver: true }).start();
-            answer();
-            return;
-          }
-          RNAnimated.spring(x, { toValue: 0, useNativeDriver: true, bounciness: 8 }).start();
-        },
-        onPanResponderTerminate: () => {
-          RNAnimated.spring(x, { toValue: 0, useNativeDriver: true }).start();
-        },
-      }),
-    [x],
-  );
+  const gesture = useMemo(() => {
+    const finish = () => {
+      RNAnimated.timing(x, { toValue: maxRef.current, duration: 150, useNativeDriver: true }).start();
+      answer();
+    };
+    const snapBack = () => RNAnimated.spring(x, { toValue: 0, useNativeDriver: true, bounciness: 8 }).start();
+    const pan = Gesture.Pan()
+      .runOnJS(true)
+      .activeOffsetX([-6, 6])
+      .onUpdate(e => {
+        x.setValue(Math.min(maxRef.current, Math.max(0, e.translationX)));
+      })
+      .onEnd(e => {
+        if (maxRef.current > 0 && e.translationX >= maxRef.current * ANSWER_AT) finish();
+        else snapBack();
+      })
+      .onFinalize((_, success) => {
+        if (!success) snapBack();
+      });
+    const tap = Gesture.Tap().runOnJS(true).onEnd(finish);
+    return Gesture.Race(pan, tap);
+  }, [x]);
 
   const hintOpacity = x.interpolate({ inputRange: [0, 120], outputRange: [1, 0], extrapolate: 'clamp' });
   // The green fill sits off the left edge and slides in behind the knob.
@@ -180,9 +182,11 @@ function SlideToAnswer({ onAnswer }: { onAnswer: () => void }) {
         />
       ) : null}
       <RNAnimated.Text style={[styles.hint, { opacity: hintOpacity }]}>Slide to answer</RNAnimated.Text>
-      <RNAnimated.View {...responder.panHandlers} style={[styles.knob, { transform: [{ translateX: x }] }]}>
-        <Icon name="phone" size={26} color={colors.onBrand} />
-      </RNAnimated.View>
+      <GestureDetector gesture={gesture}>
+        <RNAnimated.View style={[styles.knob, { transform: [{ translateX: x }] }]}>
+          <Icon name="phone" size={26} color={colors.onBrand} />
+        </RNAnimated.View>
+      </GestureDetector>
     </View>
   );
 }

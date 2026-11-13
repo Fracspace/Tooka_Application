@@ -121,6 +121,8 @@ interface AndroidCallNotification {
   releaseLockScreen(): void;
   setInCall(inCall: boolean): void;
   setCallsEnabled(enabled: boolean): void;
+  isIgnoringBatteryOptimizations(): Promise<boolean>;
+  openBackgroundSettings(): void;
 }
 
 export const androidCallNotification: AndroidCallNotification | undefined =

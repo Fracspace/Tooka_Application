@@ -56,6 +56,26 @@ object IncomingCallNotification {
     private fun callsEnabled(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ENABLED, true)
 
+    // Stopped calls are also kept on disk for a few minutes: if Android kills the app and
+    // FCM delivers the same push again, a declined call must not ring a second time.
+    private const val KEY_STOPPED = "stopped_calls"
+    private const val STOPPED_KEEP_MS = 10 * 60_000L
+
+    private fun rememberStopped(context: Context, callSessionId: String) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val kept = (prefs.getStringSet(KEY_STOPPED, emptySet()) ?: emptySet()).filter {
+            val at = it.substringAfterLast(':').toLongOrNull() ?: return@filter false
+            now - at in 0..STOPPED_KEEP_MS
+        }.toMutableSet()
+        kept.add("$callSessionId:$now")
+        prefs.edit().putStringSet(KEY_STOPPED, kept).apply()
+    }
+
+    private fun wasStopped(context: Context, callSessionId: String): Boolean =
+        (context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getStringSet(KEY_STOPPED, emptySet()) ?: emptySet())
+            .any { it.substringBeforeLast(':') == callSessionId }
+
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
     fun callerName(data: Bundle): String =
@@ -66,6 +86,7 @@ object IncomingCallNotification {
     fun show(context: Context, data: Bundle) {
         val callSessionId = data.getString("callSessionId") ?: return
         if (stopped.contains(callSessionId) || ringing.contains(callSessionId)) return
+        if (wasStopped(context, callSessionId)) return
         if (inCall || !callsEnabled(context)) return
         val ringMs = remainingMs(data)
         ensureChannel(context)
@@ -124,6 +145,7 @@ object IncomingCallNotification {
 
     fun cancel(context: Context, callSessionId: String) {
         stopped.add(callSessionId)
+        rememberStopped(context, callSessionId)
         while (stopped.size > 50) stopped.remove(stopped.first())
         ringing.remove(callSessionId)
         NotificationManagerCompat.from(context).cancel(TAG, callSessionId.hashCode())

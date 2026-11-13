@@ -78,6 +78,48 @@ class IncomingCallModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
+    /** True once the user lets Tooka run in the background without battery limits. */
+    @ReactMethod
+    fun isIgnoringBatteryOptimizations(promise: Promise) {
+        val power = reactContext.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+        promise.resolve(power?.isIgnoringBatteryOptimizations(reactContext.packageName) ?: true)
+    }
+
+    /**
+     * Opens the setting that lets Tooka start in the background, so calls ring after it was
+     * swiped away: the maker's auto-start page where there is one (Xiaomi, Oppo, Vivo,
+     * Huawei...), else Android's battery-optimisation list.
+     */
+    @ReactMethod
+    fun openBackgroundSettings() {
+        val autoStartPages = listOf(
+            "com.miui.securitycenter" to "com.miui.permcenter.autostart.AutoStartManagementActivity",
+            "com.coloros.safecenter" to "com.coloros.safecenter.permission.startup.StartupAppListActivity",
+            "com.coloros.safecenter" to "com.coloros.safecenter.startupapp.StartupAppListActivity",
+            "com.oplus.safecenter" to "com.oplus.safecenter.permission.startup.StartupAppListActivity",
+            "com.vivo.permissionmanager" to "com.vivo.permissionmanager.activity.BgStartUpManagerActivity",
+            "com.iqoo.secure" to "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity",
+            "com.huawei.systemmanager" to "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
+            "com.hihonor.systemmanager" to "com.hihonor.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
+        )
+        val pm = reactContext.packageManager
+        for ((pkg, cls) in autoStartPages) {
+            val intent = Intent().setClassName(pkg, cls).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (intent.resolveActivity(pm) != null) {
+                try {
+                    reactContext.startActivity(intent)
+                    return
+                } catch (e: Exception) {
+                    // not exported on this build; try the next one
+                }
+            }
+        }
+        reactContext.startActivity(
+            Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+
     /** False on Android 14+ when the user has not allowed full-screen call screens for Tooka. */
     @ReactMethod
     fun canUseFullScreenIntent(promise: Promise) {

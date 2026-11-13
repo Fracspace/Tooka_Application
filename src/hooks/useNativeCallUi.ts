@@ -401,11 +401,16 @@ const ASK_DELAY_MS = 10_000;
 const ASK_AGAIN_MS = 7 * 24 * 60 * 60 * 1000;
 const NOTIFICATIONS_ASKED_KEY = 'tooka_call_notifications_asked_at';
 const FULL_SCREEN_ASKED_KEY = 'tooka_full_screen_call_asked_at';
+const BACKGROUND_ASKED_KEY = 'tooka_background_calls_asked_at';
+const ASK_BACKGROUND_AGAIN_MS = 30 * 24 * 60 * 60 * 1000;
+// Makers whose phones stop apps from starting in the background after they are swiped
+// away, unless the user allows it - so calls would not ring.
+const STRICT_BACKGROUND_MAKERS = /xiaomi|redmi|poco|oppo|realme|oneplus|vivo|iqoo|huawei|honor|meizu|asus|tecno|infinix/i;
 
 /** At most once a week per key, so the user is reminded but not nagged. */
-async function dueToAsk(key: string): Promise<boolean> {
+async function dueToAsk(key: string, every = ASK_AGAIN_MS): Promise<boolean> {
   const last = Number(await AsyncStorage.getItem(key));
-  if (last && Date.now() - last < ASK_AGAIN_MS) return false;
+  if (last && Date.now() - last < every) return false;
   await AsyncStorage.setItem(key, String(Date.now()));
   return true;
 }
@@ -433,8 +438,25 @@ async function askForCallPermissions(notification: NonNullable<typeof androidCal
       return;
     }
   }
-  if (await notification.canUseFullScreenIntent()) return;
-  if (!(await dueToAsk(FULL_SCREEN_ASKED_KEY))) return;
+  if (!(await notification.canUseFullScreenIntent())) {
+    if (await dueToAsk(FULL_SCREEN_ASKED_KEY)) askFullScreen(notification);
+    return;
+  }
+  const maker = String((Platform.constants as { Manufacturer?: string }).Manufacturer ?? '');
+  if (!STRICT_BACKGROUND_MAKERS.test(maker)) return;
+  if (await notification.isIgnoringBatteryOptimizations()) return;
+  if (!(await dueToAsk(BACKGROUND_ASKED_KEY, ASK_BACKGROUND_AGAIN_MS))) return;
+  Alert.alert(
+    'Let spa calls reach you',
+    'Your phone can stop Tooka from starting in the background, so calls may not ring after you close the app. Allow Tooka to auto-start or run in the background.',
+    [
+      { text: 'Not now', style: 'cancel' },
+      { text: 'Open Settings', onPress: () => notification.openBackgroundSettings() },
+    ],
+  );
+}
+
+function askFullScreen(notification: NonNullable<typeof androidCallNotification>) {
   Alert.alert(
     'Show spa calls on your lock screen',
     'Allow Tooka to show incoming calls full screen, so you can answer a spa even when your phone is locked.',

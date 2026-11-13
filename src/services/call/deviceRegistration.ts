@@ -42,7 +42,7 @@ async function register(): Promise<void> {
   };
   if (fcmToken) body.fcmToken = fcmToken;
   if (voipToken) body.voipToken = voipToken;
-  if (Platform.OS === 'ios') body.apnsEnvironment = __DEV__ ? 'sandbox' : 'production';
+  if (Platform.OS === 'ios') body.apnsEnvironment = apnsEnvironment();
 
   const key = JSON.stringify(body);
   if (registered && key === lastSent) return;
@@ -54,6 +54,21 @@ async function register(): Promise<void> {
     registered = false;
     callConsole.warn('[DeviceRegistration] register failed', error?.response?.status ?? error?.message);
   }
+}
+
+/**
+ * iOS: the APNs server this build's VoIP pushes come from, read from how the app is
+ * signed (ios/Tooka/TookaPushEnvironment.m) - a Release build signed for development
+ * still needs sandbox. Falls back to the build type.
+ */
+function apnsEnvironment(): 'sandbox' | 'production' {
+  try {
+    const env = NativeModules.TookaPushEnvironment?.apnsEnvironment?.();
+    if (env === 'sandbox' || env === 'production') return env;
+  } catch {
+    // older native build without the module
+  }
+  return __DEV__ ? 'sandbox' : 'production';
 }
 
 /** Android: logged out, a call push still addressed to this phone does not ring. */
