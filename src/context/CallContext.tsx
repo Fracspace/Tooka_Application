@@ -19,7 +19,7 @@ import { callManager } from '../services/call/callManager';
 import { ringtoneService } from '../services/call/ringtoneService';
 import { AGORA_CONFIG } from '../config/agora';
 import { callLogger, callConsole } from '../services/call/callLogger';
-import { deviceRegistration } from '../services/call/deviceRegistration';
+import { deviceRegistration, getDeviceId } from '../services/call/deviceRegistration';
 import { deferToCallKit, shouldDeferToCallKit } from '../services/call/callPush';
 import { useNativeCallUi } from '../hooks/useNativeCallUi';
 import { promptForMicrophoneSettings } from '../utils/microphonePermission';
@@ -798,6 +798,18 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // races callManager.acceptCall() into a double joinChannel(), with the loser
       // promoting to CONNECTED before the join has actually completed.
       // callManager owns the answering flow; this handler is for the CALLER only.
+      // The payload names the device that answered: when it is another one, this phone
+      // is not the answering device and must stop ringing (it used to be ignored here).
+      const acceptedBy = payload?.callSession?.accepted_device_id;
+      if (
+        callStateRef.current === CallState.INCOMING &&
+        typeof acceptedBy === 'string' &&
+        acceptedBy !== getDeviceId() &&
+        !callManager.isAcceptInProgress()
+      ) {
+        handleAcceptedElsewhere(payload);
+        return;
+      }
       if (callStateRef.current === CallState.INCOMING || callManager.isAcceptInProgress()) {
         callConsole.log('[Socket] Ignoring call_accept echo on the answering device.');
         return;

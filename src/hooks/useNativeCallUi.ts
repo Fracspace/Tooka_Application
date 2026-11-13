@@ -304,6 +304,11 @@ export function useNativeCallUi({
       const ended = asCallEndedPush(message?.data);
       if (ended) {
         dismissNative(ended.callSessionId);
+        // App open: the call is ringing in the app too, so take that down as well. Not
+        // while this phone is answering it (accept in progress / already connecting).
+        if (callStateRef.current === CallState.INCOMING && !callManager.isAcceptInProgress()) {
+          callManager.handleRemoteEndOrCancel(ended.callSessionId, `fcm_${ended.reason ?? 'ended'}`);
+        }
         return;
       }
       const push = asIncomingCallPush(message?.data);
@@ -388,7 +393,14 @@ export function useNativeCallUi({
     if (Platform.OS === 'android') androidCallNotification?.cancel(id);
     else {
       const entry = pushesRef.current.get(id);
-      if (entry) RNCallKeep.reportEndCallWithUUID(entry.uuid, IOS_END_REMOTE);
+      // A call that rang out is "unanswered" (iOS counts it as missed); remote-ended is
+      // for a call that was answered and then finished.
+      if (entry) {
+        RNCallKeep.reportEndCallWithUUID(
+          entry.uuid,
+          callState === CallState.MISSED ? IOS_END_UNANSWERED : IOS_END_REMOTE,
+        );
+      }
       pushesRef.current.delete(id);
     }
     nativeCallIdRef.current = null;
