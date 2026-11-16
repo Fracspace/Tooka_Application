@@ -15,3 +15,10 @@
 -keep class com.cashfree.pg.** { *; }
 -keep class cashfree.** { *; }
 -dontwarn com.cashfree.**
+
+# Agora (calls): the SDK reaches its Java classes from native code.
+-keep class io.agora.** { *; }
+-dontwarn io.agora.**
+
+# The app's own native modules, services and receivers (calls, push).
+-keep class com.fracspace.tooka.** { *; }
