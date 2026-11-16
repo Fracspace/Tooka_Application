@@ -19,6 +19,34 @@ pod 'FirebaseCoreInternal', :modular_headers => true
 pod 'GoogleDataTransport', :modular_headers => true
 pod 'nanopb', :modular_headers => true
 
+# App size: calls are voice only, so Agora's optional add-ons (video, face,
+# lip sync, spatial audio, screen capture...) are not embedded. AgoraRtcKit
+# needs only the frameworks kept below, and the Iris wrapper links the add-ons
+# weakly, so leaving them out is safe. The AI noise-suppression and echo-
+# cancellation add-ons stay. Only the Ionicons icon font is used.
+AGORA_KEPT_FRAMEWORKS = %w[
+  AgoraRtcKit aosl Agoraffmpeg Agorafdkaac AgoraSoundTouch video_dec
+  AgoraAiEchoCancellationExtension AgoraAiEchoCancellationLLExtension
+  AgoraAiNoiseSuppressionExtension AgoraAiNoiseSuppressionLLExtension
+].map { |name| "#{name}.xcframework" }
+
+pre_install do |installer|
+  installer.pod_targets.each do |pod|
+    spec = pod.root_spec.attributes_hash
+    case pod.name
+    when 'AgoraVideo_Special_iOS'
+      all = Array(spec['vendored_frameworks'])
+      dropped = (all - AGORA_KEPT_FRAMEWORKS).map { |f| File.basename(f, '.xcframework') }
+      spec['vendored_frameworks'] = all & AGORA_KEPT_FRAMEWORKS
+      # The spec also weak-links every add-on by name; the linker fails on ones
+      # that are no longer there.
+      spec['weak_frameworks'] = Array(spec['weak_frameworks']) - dropped
+    when 'RNVectorIcons'
+      spec['resources'] = ['Fonts/Ionicons.ttf']
+    end
+  end
+end
+
 target 'Tooka' do
   config = use_native_modules!
 
