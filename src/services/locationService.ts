@@ -471,7 +471,23 @@ export async function hasLocationPermission(): Promise<boolean> {
 
 let locationReqCount = 0;
 
-export async function getCurrentLocation(): Promise<StoredLocation | null> {
+// One device lookup at a time. Startup and an app-resume refresh used to run
+// together on a fresh install: both asked for location permission while the
+// dialog was up, the first request never got an answer, and Home waited on it
+// forever (Curated stayed a skeleton until the app was restarted). Callers that
+// arrive while a lookup is running now share it.
+let currentLocationInFlight: Promise<StoredLocation | null> | null = null;
+
+export function getCurrentLocation(): Promise<StoredLocation | null> {
+  if (!currentLocationInFlight) {
+    currentLocationInFlight = lookUpCurrentLocation().finally(() => {
+      currentLocationInFlight = null;
+    });
+  }
+  return currentLocationInFlight;
+}
+
+async function lookUpCurrentLocation(): Promise<StoredLocation | null> {
   const reqId = ++locationReqCount;
   const startTime = Date.now();
   const startedForVersion = manualSelectionVersion;

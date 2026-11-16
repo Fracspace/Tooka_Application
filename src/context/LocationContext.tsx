@@ -131,6 +131,9 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({
           const refreshed = await refreshDeviceLocation(false);
           if (isMounted) {
             setLocation(refreshed);
+            // A finished lookup means location is known, even if the startup
+            // one has not returned yet.
+            setLoading(false);
           }
         } catch (error) {
           if (__DEV__) {
