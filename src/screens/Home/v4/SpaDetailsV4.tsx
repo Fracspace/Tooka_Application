@@ -522,18 +522,22 @@ function SpaDetailsV4({
               <Text variant="title">What's here</Text>
               <Text variant="caption" color={colors.muted}>{`${amenityCount} ${amenityCount === 1 ? 'amenity' : 'amenities'}`}</Text>
             </View>
-            <View style={styles.amen}>
-              {[...trustBadges.map((b) => ({ ...b, key: b.id })), ...amenitiesList.map((a) => ({ ...a, key: `amenity-${a.id}` }))].map(
-                (a, i) => (
-                  <Animated.View key={a.key} entering={rise(i * motion.stagger)} style={styles.am}>
-                    <View style={styles.amIcon}>
-                      <Ionicons name={a.icon} size={20} color={colors.cream} />
+            {/* The row rises in as one: per-card entering animations inside a horizontal
+                ScrollView got stuck part-way on Android, leaving the first card low and clipped. */}
+            <Animated.View entering={rise(0)} style={styles.amenScroll}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.amen}>
+                {[...trustBadges.map((b) => ({ ...b, key: b.id })), ...amenitiesList.map((a) => ({ ...a, key: `amenity-${a.id}` }))].map(
+                  (a) => (
+                    <View key={a.key} style={styles.am}>
+                      <View style={styles.amIcon}>
+                        <Ionicons name={a.icon} size={20} color={colors.cream} />
+                      </View>
+                      <Text style={styles.amText}>{a.label}</Text>
                     </View>
-                    <Text style={styles.amText}>{a.label}</Text>
-                  </Animated.View>
-                ),
-              )}
-            </View>
+                  ),
+                )}
+              </ScrollView>
+            </Animated.View>
           </View>
         ) : null}
 
@@ -880,11 +884,11 @@ const styles = StyleSheet.create({
   revRateText: { fontFamily: fonts.display, fontSize: 13 },
   revBody: { marginTop: 12, lineHeight: 20 },
 
-  amen: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  // One row that scrolls sideways, edge to edge (the section has a 12pt margin).
+  amenScroll: { marginHorizontal: -12, marginTop: 12 },
+  amen: { flexDirection: 'row', gap: 8, paddingHorizontal: 12 },
   am: {
-    width: '31.5%',
-    flexGrow: 1,
-    maxWidth: '32.5%',
+    width: 112,
     minHeight: 112,
     padding: 12,
     borderRadius: radii.xl,
