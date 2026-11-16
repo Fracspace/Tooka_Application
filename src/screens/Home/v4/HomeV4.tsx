@@ -27,7 +27,10 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Card, Chip, FitImage, Icon, PressableScale, Screen, Text } from '../../../components/ui';
+import { Button, Card, FitImage, Icon, PressableScale, Screen, Text } from '../../../components/ui';
+
+// Light-text version of the Tooka logo (the original's black wordmark disappears on the dark home).
+const TOOKA_LOGO = require('../../../assets/images/tooka-logo-wordmark.png');
 import { onSpotlightSpa } from './spotlightSync';
 import { brandAlpha, colors, fadeIn, fonts, motion, radii, rise, useReduceMotion } from '../../../theme';
 import { TypeIcon, type TypeIconName } from './typeIcons';
@@ -36,7 +39,6 @@ import { HomeSkeleton, SpotlightSkeleton } from './HomeSkeleton';
 import type {
   FeaturedSpaItem,
   NearbyListItem,
-  SpotlightSort,
   useHomeScreen,
 } from '../../../hooks/useHomeScreen';
 import type { BackendBookingListItem } from '../../../types/booking';
@@ -113,17 +115,6 @@ function TypeTile({ item, wide, onPress }: { item: TypeItem; wide?: boolean; onP
     </Pressable>
   );
 }
-
-const SORT_LABELS: Record<SpotlightSort, string> = {
-  recommended: 'Recommended',
-  priceLow: 'Price: low to high',
-  priceHigh: 'Price: high to low',
-};
-const NEXT_SORT: Record<SpotlightSort, SpotlightSort> = {
-  recommended: 'priceLow',
-  priceLow: 'priceHigh',
-  priceHigh: 'recommended',
-};
 
 const initials = (name: string) =>
   name
@@ -431,7 +422,6 @@ function Outlet({ item, delay, onPress }: { item: NearbyListItem; delay: number;
 
 export default function HomeV4(props: Props) {
   const {
-    profile,
     location,
     locationDisplay,
     resolvedCity,
@@ -468,22 +458,13 @@ export default function HomeV4(props: Props) {
     nextVisit,
     onboardingPicksLabel,
     spotlightSpas,
-    spotlightSort,
-    setSpotlightSort,
-    openTodayOnly,
-    setOpenTodayOnly,
-    couplesOnly,
-    setCouplesOnly,
-    hasCoupleRooms,
     nearbyClosestFirst,
     searchHasMore,
     loadMoreSearch,
   } = props;
   const insets = useSafeAreaInsets();
-  const [searchOpen, setSearchOpen] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const curatedY = useRef(0);
-  const showSearch = searchOpen || searchQuery.length > 0;
 
   // The full-page skeleton is only for a cold start with nothing to show. Once
   // the cached nearby spas are on screen, a later load (the curated list
@@ -493,25 +474,23 @@ export default function HomeV4(props: Props) {
     return <HomeSkeleton />;
   }
 
-  // Bring the results into view; the tiles sit above them.
+  // Bring the curated section up to the top: its search bar first, the result cards
+  // right under it, so whoever searches sees where the results show.
   const scrollToResults = () => {
-    scrollRef.current?.scrollTo({ y: Math.max(0, curatedY.current - insets.top - 80), animated: true });
+    scrollRef.current?.scrollTo({ y: Math.max(0, curatedY.current - insets.top - 8), animated: true });
   };
 
   const pickType = (query: string) => {
-    setSearchOpen(true);
     setSearchQuery(query);
     scrollToResults();
   };
 
   const closeSearch = () => {
-    setSearchOpen(false);
     clearSearch();
   };
 
   const nearest = nearbyClosestFirst.find((s) => s.distance);
   const spaCount = nearbyClosestFirst.length;
-  const avatar = profile?.displayName?.trim()?.[0]?.toUpperCase() ?? '';
 
   const renderStage = () => {
     if (shouldShowSearchLoading) return <SpotlightSkeleton />;
@@ -561,6 +540,14 @@ export default function HomeV4(props: Props) {
         {/* Header */}
         <View style={styles.gutter}>
           <View style={styles.headRow}>
+            <Image
+              source={TOOKA_LOGO}
+              style={styles.logo}
+              resizeMode="contain"
+              accessibilityRole="image"
+              accessibilityLabel="Tooka"
+            />
+            <View style={styles.flex} />
             <PressableScale
               onPress={handlePressLocation}
               style={styles.pill}
@@ -575,37 +562,7 @@ export default function HomeV4(props: Props) {
               </View>
               <Icon name="chevronDown" size={14} color={colors.muted} />
             </PressableScale>
-            <View style={styles.flex} />
-            <PressableScale
-              onPress={() => (showSearch ? closeSearch() : setSearchOpen(true))}
-              style={styles.roundBtn}
-              accessibilityRole="button"
-              accessibilityLabel={showSearch ? 'Close search' : 'Search'}>
-              <Icon name={showSearch ? 'close' : 'search'} size={18} color={colors.text} />
-            </PressableScale>
-            {avatar ? (
-              <View style={styles.roundBtn}>
-                <Text style={styles.avatar}>{avatar}</Text>
-              </View>
-            ) : null}
           </View>
-
-          {showSearch ? (
-            <Animated.View entering={rise(30, 8)} style={styles.searchBox}>
-              <Icon name="search" size={16} color={colors.muted} />
-              <TextInput
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder="Search spas or cities"
-                placeholderTextColor={colors.subtle}
-                style={styles.searchInput}
-                autoFocus={searchOpen && !searchQuery}
-                returnKeyType="search"
-                onSubmitEditing={scrollToResults}
-                selectionColor={colors.brand}
-              />
-            </Animated.View>
-          ) : null}
 
           <Text variant="h1" style={styles.h1}>What does your body need today?</Text>
 
@@ -639,27 +596,28 @@ export default function HomeV4(props: Props) {
               ) : undefined
             }
           />
-          {!isSearchActive && spotlightSpas.length + (openTodayOnly || couplesOnly ? 1 : 0) > 0 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-              <Chip
-                label={SORT_LABELS[spotlightSort]}
-                selected={spotlightSort !== 'recommended'}
-                onPress={() => setSpotlightSort(NEXT_SORT[spotlightSort])}
-                icon={
-                  <Ionicons
-                    name="swap-vertical"
-                    size={14}
-                    color={spotlightSort !== 'recommended' ? colors.onBrand : colors.text}
-                  />
-                }
-                accessibilityLabel={`Sort: ${SORT_LABELS[spotlightSort]}`}
+          <View style={[styles.gutter, styles.searchWrap]}>
+            <View style={styles.searchBox}>
+              <Icon name="search" size={16} color={colors.muted} />
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onFocus={scrollToResults}
+                placeholder="Search spas or cities"
+                placeholderTextColor={colors.subtle}
+                style={styles.searchInput}
+                returnKeyType="search"
+                onSubmitEditing={scrollToResults}
+                selectionColor={colors.brand}
+                accessibilityLabel="Search spas or cities. Results show below."
               />
-              <Chip label="Open today" selected={openTodayOnly} onPress={() => setOpenTodayOnly(!openTodayOnly)} />
-              {hasCoupleRooms ? (
-                <Chip label="Couples" selected={couplesOnly} onPress={() => setCouplesOnly(!couplesOnly)} />
+              {searchQuery ? (
+                <Pressable onPress={closeSearch} hitSlop={10} accessibilityRole="button" accessibilityLabel="Clear search">
+                  <Icon name="close" size={16} color={colors.muted} />
+                </Pressable>
               ) : null}
-            </ScrollView>
-          ) : null}
+            </View>
+          </View>
           <View style={styles.stage}>{renderStage()}</View>
         </View>
 
@@ -756,6 +714,8 @@ const styles = StyleSheet.create({
   content: { paddingBottom: 130 },
 
   headRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  // The logo's wordmark is 628x216: 36pt tall keeps it in line with the 44pt buttons.
+  logo: { height: 36, width: 105 },
   pill: {
     height: 44,
     maxWidth: 240,
@@ -780,9 +740,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatar: { fontFamily: fonts.display, fontSize: 16, color: colors.text },
+  searchWrap: { marginTop: 14 },
   searchBox: {
-    marginTop: 14,
     height: 46,
     borderRadius: radii.pill,
     backgroundColor: colors.s1,
