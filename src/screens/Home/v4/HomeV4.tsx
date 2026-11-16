@@ -4,6 +4,7 @@ import {
   FlatList,
   Image,
   Linking,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -58,6 +59,11 @@ const WIDE_TYPE: TypeItem = { title: 'Facial & skin', sub: 'Glow-up treatments',
  * A massage-type tile. As in the design, pressing shrinks the tile, rings it in
  * saffron and lifts and tilts the icon, which springs back on release.
  */
+// On Android an entering animation that is interrupted (a reload, the screen
+// covered while it runs) can stop part-way and leave a tile shifted down, out of
+// line with its row. The grid is static there; iOS keeps the rise.
+const tileEntering = (delay: number) => (Platform.OS === 'ios' ? rise(delay, 10) : undefined);
+
 function TypeTile({ item, wide, onPress }: { item: TypeItem; wide?: boolean; onPress: () => void }) {
   const reduceMotion = useReduceMotion();
   const pressed = useSharedValue(0);
@@ -435,6 +441,8 @@ export default function HomeV4(props: Props) {
     loadNextPage,
     loadingMore,
     pagination,
+    contextError,
+    retry,
     searchQuery,
     setSearchQuery,
     retrySearch,
@@ -603,11 +611,11 @@ export default function HomeV4(props: Props) {
 
           <View style={styles.types}>
             {TYPES.map((t, i) => (
-              <Animated.View key={t.title} entering={rise(30 + i * 40, 10)} style={styles.typeCell}>
+              <Animated.View key={t.title} entering={tileEntering(30 + i * 40)} style={styles.typeCell}>
                 <TypeTile item={t} onPress={() => pickType(t.query)} />
               </Animated.View>
             ))}
-            <Animated.View entering={rise(240, 10)} style={styles.typeWideCell}>
+            <Animated.View entering={tileEntering(240)} style={styles.typeWideCell}>
               <TypeTile item={WIDE_TYPE} wide onPress={() => pickType(WIDE_TYPE.query)} />
             </Animated.View>
           </View>
@@ -724,6 +732,15 @@ export default function HomeV4(props: Props) {
               ) : null}
             </View>
           </View>
+        ) : contextError ? (
+          // The nearby request failed with nothing cached: say so and offer a retry
+          // instead of quietly dropping the section.
+          <View style={[styles.section, styles.gutter, styles.nearbyError]} accessibilityRole="alert">
+            <Text variant="bodySm" color={colors.muted} style={styles.center}>
+              Couldn't load spas near you.
+            </Text>
+            <Button label="Try again" variant="secondary" size="md" onPress={retry} />
+          </View>
         ) : null}
       </ScrollView>
     </Screen>
@@ -733,6 +750,7 @@ export default function HomeV4(props: Props) {
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   center: { textAlign: 'center' },
+  nearbyError: { alignItems: 'center', gap: 12 },
   gutter: { paddingHorizontal: 16 },
   // Room for the current floating tab bar.
   content: { paddingBottom: 130 },
