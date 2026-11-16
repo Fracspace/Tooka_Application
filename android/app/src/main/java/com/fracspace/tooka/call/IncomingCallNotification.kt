@@ -6,8 +6,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.media.AudioAttributes
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.core.app.NotificationCompat
@@ -27,8 +25,17 @@ object IncomingCallNotification {
     const val ACTION_DECLINE = "com.fracspace.tooka.CALL_DECLINE"
     const val EXTRA_DATA = "tooka_call_data"
 
-    private const val CHANNEL_ID = "tooka_incoming_calls"
-    private const val TAG = "incoming-call"
+    // Silent channel: CallRinger rings (following the ringer mode, silenced by the
+    // volume / lock button). The old channel rang on its own and could not be silenced.
+    private const val CHANNEL_ID = "tooka_incoming_calls_v2"
+    private const val OLD_CHANNEL_ID = "tooka_incoming_calls"
+
+    // The call notification for each ringing call, for CallRingService's startForeground.
+    private val notifications = java.util.concurrent.ConcurrentHashMap<String, Notification>()
+
+    fun notificationFor(callSessionId: String): Notification? = notifications[callSessionId]
+
+    fun notificationId(callSessionId: String) = callSessionId.hashCode()
 
     // Calls already stopped here (declined, cancelled, ended). The same push reaches both
     // CallPushReceiver and the JS background handler; a late show() must not ring them again.
@@ -130,16 +137,25 @@ object IncomingCallNotification {
 
         builder.setTimeoutAfter(ringMs)
 
-        val notification = builder.build().apply { flags = flags or Notification.FLAG_INSISTENT }
+        val notification = builder.build()
         try {
             ringing.add(callSessionId)
-            NotificationManagerCompat.from(context).notify(TAG, code, notification)
-            // The notification times out on its own; the ringing screen must go with it.
+            notifications[callSessionId] = notification
+            NotificationManagerCompat.from(context).notify(code, notification)
+            CallRingService.start(context, callSessionId)
+            // The notification times out on its own; the ring and the ringing screen go with it.
             mainHandler.postDelayed({
-                if (ringing.remove(callSessionId)) IncomingCallActivity.close(callSessionId)
+                if (ringing.remove(callSessionId)) {
+                    notifications.remove(callSessionId)
+                    CallRinger.stop(callSessionId)
+                    CallRingService.stop(context)
+                    IncomingCallActivity.close(callSessionId)
+                }
             }, ringMs)
         } catch (e: SecurityException) {
             // POST_NOTIFICATIONS not granted: nothing we can show.
+            ringing.remove(callSessionId)
+            notifications.remove(callSessionId)
         }
     }
 
@@ -148,7 +164,10 @@ object IncomingCallNotification {
         rememberStopped(context, callSessionId)
         while (stopped.size > 50) stopped.remove(stopped.first())
         ringing.remove(callSessionId)
-        NotificationManagerCompat.from(context).cancel(TAG, callSessionId.hashCode())
+        notifications.remove(callSessionId)
+        CallRinger.stop(callSessionId)
+        CallRingService.stop(context)
+        NotificationManagerCompat.from(context).cancel(callSessionId.hashCode())
         IncomingCallActivity.close(callSessionId)
     }
 
@@ -202,19 +221,12 @@ object IncomingCallNotification {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return
-        val sound = Uri.parse("android.resource://${context.packageName}/${R.raw.incoming_ring}")
+        manager.deleteNotificationChannel(OLD_CHANNEL_ID)
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Incoming calls", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Rings when a spa calls you"
-                setSound(
-                    sound,
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build(),
-                )
-                enableVibration(true)
-                vibrationPattern = longArrayOf(0, 1000, 1000)
+                description = "Shows when a spa calls you"
+                setSound(null, null)
+                enableVibration(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             },
         )

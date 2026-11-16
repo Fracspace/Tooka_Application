@@ -8,6 +8,9 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Incoming calls while the app is closed: ring full-screen over the lock screen. -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -66,6 +69,10 @@
       <receiver
         android:name=".call.CallActionReceiver"
         android:exported="false" />
+      <service
+        android:name=".call.CallRingService"
+        android:exported="false"
+        android:foregroundServiceType="phoneCall" />
       <service
         android:name=".call.CallActionTaskService"
         android:exported="false" />

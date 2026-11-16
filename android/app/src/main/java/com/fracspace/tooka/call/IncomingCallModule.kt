@@ -54,6 +54,17 @@ class IncomingCallModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod(isBlockingSynchronousMethod = true)
     fun wasOpenedForCall(): Boolean = openedForCall
 
+    /** The in-app ringing screen's ring: same ringer as the notification (ringer mode, volume / lock silence). */
+    @ReactMethod
+    fun startInAppRing() {
+        CallRinger.start(reactContext, IN_APP_RING)
+    }
+
+    @ReactMethod
+    fun stopInAppRing() {
+        CallRinger.stop(IN_APP_RING)
+    }
+
     /** Logged in: pushes ring. Logged out: they do not, even if the backend still sends them. */
     @ReactMethod
     fun setCallsEnabled(enabled: Boolean) {
@@ -149,6 +160,7 @@ class IncomingCallModule(private val reactContext: ReactApplicationContext) :
         private var current: WeakReference<ReactApplicationContext>? = null
         private var pendingAction: Pair<String, Bundle>? = null
         private var openedForCall = false
+        private const val IN_APP_RING = "in-app"
 
         private fun toMap(action: String, data: Bundle) = Arguments.createMap().apply {
             putString("action", action)

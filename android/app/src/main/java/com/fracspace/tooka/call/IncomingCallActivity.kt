@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
@@ -51,6 +52,18 @@ class IncomingCallActivity : Activity() {
         }
         data = bundle
         setContentView(buildView(IncomingCallNotification.callerName(bundle)))
+    }
+
+    /** Volume buttons silence the ring; the screen stays so the call can still be answered. */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val volumeKey = event.keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
+            event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN ||
+            event.keyCode == KeyEvent.KEYCODE_VOLUME_MUTE
+        if (volumeKey && CallRinger.isSounding) {
+            if (event.action == KeyEvent.ACTION_DOWN) CallRinger.silence()
+            return true
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     private fun answer() {
