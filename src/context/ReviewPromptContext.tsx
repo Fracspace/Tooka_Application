@@ -15,6 +15,10 @@ import ReviewApi, { toReviewApiError } from '../api/ReviewApi';
 import SpaFeedbackModal, { type FeedbackDraft } from '../components/SpaFeedbackModal';
 import SpaFeedbackSheetV4 from '../components/v4/SpaFeedbackSheetV4';
 import { isV4 } from '../config/uiFlags';
+import { navigationRef } from '../navigation/NavigationService';
+
+/** Screens where a review push may open the feedback sheet straight away. */
+const PROMPT_ROUTES = new Set(['Home', 'Bookings', 'AllBooking']);
 import type { MyReview, PendingReview } from '../types/review';
 import { getDismissedReviewIds, markReviewDismissed } from '../utils/reviewPromptStorage';
 import {
@@ -287,7 +291,13 @@ export function ReviewPromptProvider({ children }: { children: React.ReactNode }
       }
     });
     const refreshSub = DeviceEventEmitter.addListener(REVIEW_PENDING_REFRESH_EVENT, () => {
-      checkPending();
+      // A review push can land mid-payment or mid-call: only prompt where the
+      // automatic prompts do (Home, Bookings); elsewhere the next focus of those
+      // screens picks it up.
+      const current = navigationRef.isReady() ? navigationRef.getCurrentRoute()?.name : undefined;
+      if (current && PROMPT_ROUTES.has(current)) {
+        checkPending();
+      }
     });
 
     return () => {

@@ -54,9 +54,13 @@ const getSpaId = (booking: BackendBookingListItem): string | undefined =>
   (booking.raw.spa_id as string | undefined) ||
   ((booking.raw.spa as { id?: string } | undefined)?.id ?? undefined);
 
-/** A payment is mid-flight (e.g. confirming in a UPI app): wait, do not pay again. */
+/**
+ * A payment is mid-flight (e.g. a UPI request waiting for approval): wait, do
+ * not pay again, or both payments can be captured.
+ */
+const IN_FLIGHT_PAYMENT_STATUSES = new Set(['processing', 'pending']);
 const isPaymentInFlight = (booking: BackendBookingListItem): boolean =>
-  (booking.paymentStatus ?? '').toString().trim().toLowerCase() === 'processing';
+  IN_FLIGHT_PAYMENT_STATUSES.has((booking.paymentStatus ?? '').toString().trim().toLowerCase());
 
 /** One booking card's data and actions, shared by the old and v4 cards. */
 export function useBookingCard(booking: BackendBookingListItem) {

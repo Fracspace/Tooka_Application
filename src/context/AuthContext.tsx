@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import { DeviceEventEmitter } from 'react-native';
 import { deviceRegistration } from '../services/call/deviceRegistration';
+import { callLogger } from '../services/call/callLogger';
 import Toast from 'react-native-toast-message';
 import AuthApi from '../api/AuthApi';
 import ProfileApi from '../api/ProfileApi';
@@ -22,6 +23,24 @@ import { Crashlytics, CrashlyticsKeys } from '../services/firebase/crashlytics';
 import { FirebaseMessaging } from '../services/firebase/messaging';
 import { removeFcmToken } from '../utils/fcmStorage';
 import { clearOnboardingAnswers } from '../utils/onboardingStorage';
+import { CommonActions } from '@react-navigation/native';
+import { navigationRef } from '../navigation/NavigationService';
+
+/**
+ * Screens that only work signed in. When the session expires on one of them the
+ * user is sent to Login; browsing screens (Home, Explore, Spa Details) already
+ * ask for a login when an action needs one, so they are left alone.
+ */
+const SESSION_ONLY_ROUTES = new Set([
+  'EditProfile',
+  'NoPayment',
+  'AllBooking',
+  'Bookings',
+  'Profile',
+  'BookingResult',
+  'PaymentScreen',
+  'CallScreen',
+]);
 
 /**
  * Everything on this device that belongs to the signed-in user. Logout used to clear
@@ -36,6 +55,7 @@ const clearUserDeviceState = async (): Promise<void> => {
     FirebaseMessaging.deleteToken(),
     removeFcmToken(),
     clearOnboardingAnswers(),
+    callLogger.clearStoredLogs(),
   ]);
 };
 
@@ -152,6 +172,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Delete account handler
   const deleteAccount = useCallback(async (): Promise<void> => {
+    // Stop calls ringing this phone while the JWT still works (as logout does);
+    // re-registered below if the delete does not go through.
+    await deviceRegistration.unregister();
     try {
       const response = await ProfileApi.deleteAccount();
       // A 200 can still say it did not happen; logging the user out and showing
@@ -167,6 +190,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (__DEV__) {
         console.warn('[AuthContext] deleteAccount error:', error);
       }
+      // Still signed in: let calls ring this phone again.
+      deviceRegistration.setLoggedIn(true);
       throw error;
     }
   }, []);
@@ -199,6 +224,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             text1: 'Session expired',
             text2: 'Please log in again to continue.',
           });
+          // Screens like Edit Profile would otherwise stay up with no session,
+          // every action failing. Back from Login lands on Home.
+          if (navigationRef.isReady()) {
+            const current = navigationRef.getCurrentRoute()?.name;
+            if (current && SESSION_ONLY_ROUTES.has(current)) {
+              navigationRef.dispatch(
+                CommonActions.reset({
+                  index: 1,
+                  routes: [
+                    { name: 'BottomNavigation' },
+                    { name: 'Login', params: { fromScreen: 'Home' } },
+                  ],
+                }),
+              );
+            }
+          }
         } finally {
           isHandlingUnauthorizedRef.current = false;
         }

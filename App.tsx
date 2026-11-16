@@ -16,6 +16,7 @@ import { SocketProvider } from './src/context/SocketContext';
 import { CallProvider } from './src/context/CallContext';
 import { ActiveCallBar } from './src/screens/Call/components/ActiveCallBar';
 import { OtaRestartManager } from './src/components/OtaRestartManager';
+import { AppErrorBoundary } from './src/components/AppErrorBoundary';
 import { SHOW_V4_GALLERY } from './src/config/uiFlags';
 import UiGallery from './src/components/ui/Gallery';
 
@@ -32,6 +33,7 @@ function App() {
   return (
     <GestureHandlerRootView style={styles.gestureRoot}>
       <SafeAreaProvider>
+        <AppErrorBoundary>
         <AuthProvider>
           <SocketProvider>
             <LocationProvider>
@@ -60,6 +62,7 @@ function App() {
             </LocationProvider>
           </SocketProvider>
         </AuthProvider>
+        </AppErrorBoundary>
         <Toast />
       </SafeAreaProvider>
     </GestureHandlerRootView>

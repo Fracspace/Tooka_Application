@@ -319,7 +319,7 @@ export default function ExploreV4({
           entering={fadeIn()}
           style={[styles.emptyCard, { bottom: cardListBottom, width: cardWidth }]}
           accessibilityRole="summary">
-          {emptyState.action ? null : <ActivityIndicator size="small" color={colors.brand} />}
+          {emptyState.busy ? <ActivityIndicator size="small" color={colors.brand} /> : null}
           <Text variant="cardTitle" style={styles.center}>{emptyState.title}</Text>
           {emptyState.subtitle ? (
             <Text variant="bodySm" color={colors.muted} style={styles.center}>{emptyState.subtitle}</Text>

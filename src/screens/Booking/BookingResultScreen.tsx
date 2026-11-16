@@ -98,7 +98,7 @@ const STATE_COPY: Record<
     icon: 'refresh',
     title: 'Payment Refunded',
     subtitle: 'Your payment was refunded.',
-    primaryLabel: 'Retry Payment',
+    primaryLabel: 'View My Bookings',
     secondaryLabel: 'Back To Home',
     color: COLORS.danger,
   },

@@ -66,6 +66,18 @@ export interface AudioStateSnapshot {
   volume: number;
 }
 
+const CALL_LOG_PREFIX = '@tooka:call_log:';
+const CALL_FAILURE_LOG_PREFIX = '@tooka:call_failure_log:';
+const CALL_LOG_INDEX_KEY = '@tooka:call_log_index';
+const MAX_STORED_CALL_LOGS = 5;
+
+/** The call's session id for a stored log key, or null for any other key. */
+const callLogSessionId = (key: string): string | null => {
+  if (key.startsWith(CALL_LOG_PREFIX)) return key.slice(CALL_LOG_PREFIX.length);
+  if (key.startsWith(CALL_FAILURE_LOG_PREFIX)) return key.slice(CALL_FAILURE_LOG_PREFIX.length);
+  return null;
+};
+
 class CallLogger {
   private sequenceNumbers: Record<string, number> = {};
   private sessionTimelines: Record<string, string[]> = {};
@@ -350,8 +362,50 @@ class CallLogger {
         await AsyncStorage.setItem(failKey, logContent);
         callConsole.log(`[CallLogger] Registered call failure log in ${failKey}`);
       }
+      await this.pruneStoredLogs(sessionId);
     } catch (e) {
       callConsole.error('[CallLogger] Failed to write logs to AsyncStorage', e);
+    }
+  }
+
+  /**
+   * Keeps only the last few calls' logs. Each call adds up to 300 lines, and
+   * AsyncStorage is capped (6 MB on Android): once full, every write in the
+   * app fails, login and onboarding included.
+   */
+  private async pruneStoredLogs(latestSessionId: string) {
+    const raw = await AsyncStorage.getItem(CALL_LOG_INDEX_KEY);
+    let ids: string[] = [];
+    try {
+      ids = raw ? JSON.parse(raw) : [];
+    } catch {
+      ids = [];
+    }
+    ids = [...ids.filter((id) => id !== latestSessionId), latestSessionId];
+    const keep = new Set(ids.slice(-MAX_STORED_CALL_LOGS));
+
+    // Also sweeps logs written before this index existed.
+    const allKeys = await AsyncStorage.getAllKeys();
+    const stale = allKeys.filter((k) => {
+      const id = callLogSessionId(k);
+      return id !== null && !keep.has(id);
+    });
+    if (stale.length > 0) {
+      await AsyncStorage.removeMany(stale);
+    }
+    await AsyncStorage.setItem(CALL_LOG_INDEX_KEY, JSON.stringify([...keep]));
+  }
+
+  /** Removes every stored call log, e.g. on logout so the next user can't see them. */
+  async clearStoredLogs() {
+    try {
+      const allKeys = await AsyncStorage.getAllKeys();
+      const keys = allKeys.filter((k) => callLogSessionId(k) !== null || k === CALL_LOG_INDEX_KEY);
+      if (keys.length > 0) {
+        await AsyncStorage.removeMany(keys);
+      }
+    } catch (e) {
+      callConsole.error('[CallLogger] Failed to clear stored logs', e);
     }
   }
 

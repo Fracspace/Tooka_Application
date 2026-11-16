@@ -77,6 +77,9 @@ function launchApp() {
     default: { isAxiosError: (e: any) => Boolean(e?.isAxiosError) },
   }));
   jest.doMock('../src/api/authAxiosClient', () => ({}));
+  jest.doMock('../src/navigation/NavigationService', () => ({
+    navigationRef: { isReady: () => true, getCurrentRoute: () => ({ name: 'Home' }) },
+  }));
 
   const ReviewApiModule = require('../src/api/ReviewApi');
   api = {

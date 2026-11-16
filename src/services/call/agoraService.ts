@@ -457,7 +457,9 @@ class AgoraService {
             resolve();
           } else {
             cleanup();
-            this.resetInternalState();
+            // Leave as the timeout path does: without it a late join success
+            // could put the user in the channel, mic on, with no call screen.
+            this.leaveChannel().catch(() => this.resetInternalState());
             reject(new Error(`Agora join error: ${err} - ${msg}`));
           }
         },

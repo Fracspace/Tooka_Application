@@ -165,6 +165,7 @@ export function useBookingResultScreen() {
 
         if (
           previousStatus === BackendPaymentStatus.Processing ||
+          previousStatus === BackendPaymentStatus.Pending ||
           previousStatus === BackendPaymentStatus.Unknown
         ) {
           const stillProcessing =
@@ -226,7 +227,8 @@ export function useBookingResultScreen() {
       return;
     }
 
-    if (isProcessing) {
+    // A refunded booking is closed: never start a new order for it.
+    if (isProcessing || type === 'refunded') {
       resetToBookings();
       return;
     }

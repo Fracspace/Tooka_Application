@@ -72,7 +72,8 @@ const COPY: Record<
     subtitle: 'Your payment was refunded.',
     icon: 'refresh',
     tone: colors.danger,
-    primary: 'Retry payment',
+    // A refunded booking is closed: paying again would charge for it twice.
+    primary: 'View My Bookings',
     secondary: 'Back to Home',
   },
 };
@@ -239,7 +240,7 @@ function BookingResultV4({
   const insets = useSafeAreaInsets();
   const copy = COPY[type];
   const success = type === 'success';
-  const retry = type === 'failure' || type === 'cancelled' || type === 'refunded';
+  const retry = type === 'failure' || type === 'cancelled';
 
   const day = formatDay(params?.appointmentDate);
   const time = formatTime(params?.appointmentTime);

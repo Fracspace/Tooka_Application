@@ -399,7 +399,7 @@ const ExploreLegacy: React.FC<{ screen: ReturnType<typeof useExploreScreen> }> =
         <View
           style={[styles.emptyCard, { bottom: cardListBottom, width: cardWidth }]}
           accessibilityRole="summary">
-          {emptyState.action ? null : <ActivityIndicator size="small" color="#FFB02E" />}
+          {emptyState.busy ? <ActivityIndicator size="small" color="#FFB02E" /> : null}
           <Text style={styles.emptyTitle}>{emptyState.title}</Text>
           {emptyState.subtitle ? (
             <Text style={styles.emptySubtitle}>{emptyState.subtitle}</Text>

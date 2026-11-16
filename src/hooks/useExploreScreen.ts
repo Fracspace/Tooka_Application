@@ -391,7 +391,7 @@ export function useExploreScreen() {
   // What to show where the carousel goes when there are no spas to list. A bare map
   // with no cards and no message used to be all the user got.
   const hasLocationAccess = location?.permission === 'granted';
-  const emptyState: { title: string; subtitle: string; action?: { label: string; onPress: () => void } } | null =
+  const emptyState: { title: string; subtitle: string; busy?: boolean; action?: { label: string; onPress: () => void } } | null =
     spas.length > 0
       ? null
       : !loading && location && !hasLocationAccess
@@ -407,7 +407,7 @@ export function useExploreScreen() {
           action: { label: 'Try again', onPress: retrySpas },
         }
       : spasLoading || loading
-      ? { title: 'Finding spas near you…', subtitle: '' }
+      ? { title: 'Finding spas near you…', subtitle: '', busy: true }
       : { title: 'No spas found nearby', subtitle: 'Try again later or explore another area.' };
 
   return {
