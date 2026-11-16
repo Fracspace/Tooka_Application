@@ -40,7 +40,7 @@ type BackProps = Omit<Props, 'children' | 'accessibilityLabel'> & {
   accessibilityLabel?: string;
 };
 
-/** The round back button at the top left of v4 screens. */
+/** The round back button at the top left of screens. */
 export function BackButton({ accessibilityLabel = 'Go back', ...rest }: BackProps) {
   return (
     <RoundButton accessibilityLabel={accessibilityLabel} {...rest}>

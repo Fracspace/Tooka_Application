@@ -12,8 +12,8 @@ export const MAX_ONBOARDING_PICKS = 3;
 
 /**
  * The two onboarding questions: up to three picks per step, then the answers
- * are saved and the user lands on the tabs. The old layout and the v4 layout
- * both read from here; each draws its own step transition.
+ * are saved and the user lands on the tabs. OnboardingView draws it, including
+ * the step transition.
  */
 export function useOnboardingScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();

@@ -20,16 +20,16 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, Path } from 'react-native-svg';
 
-import { Icon, Screen, Text } from '../../../components/ui';
-import { POPULAR_CITIES, type useLocationSelectionScreen } from '../../../hooks/useLocationSelectionScreen';
-import { colors, fonts, motion, rise, useReduceMotion } from '../../../theme';
+import { Icon, Screen, Text } from '../../components/ui';
+import { POPULAR_CITIES, type useLocationSelectionScreen } from '../../hooks/useLocationSelectionScreen';
+import { colors, fonts, motion, rise, useReduceMotion } from '../../theme';
 
 type Props = ReturnType<typeof useLocationSelectionScreen>;
 
 const MAP_HEIGHT = 300;
 const SELECTED_RING = 'rgba(251,243,232,0.6)';
 
-const LocationSelectionV4: React.FC<Props> = ({
+const LocationSelectionView: React.FC<Props> = ({
   location,
   query,
   setQuery,
@@ -461,4 +461,4 @@ const styles = StyleSheet.create({
   resultSub: { fontFamily: fonts.body, fontSize: 12, lineHeight: 17, color: colors.muted },
 });
 
-export default LocationSelectionV4;
+export default LocationSelectionView;

@@ -20,11 +20,11 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { Icon, Screen, Text } from '../../../components/ui';
-import type { useIncomingCallScreen } from '../../../hooks/useIncomingCallScreen';
-import { ENABLE_CALL_DIAGNOSTICS } from '../../../services/call/callLogger';
-import { colors, fonts, useReduceMotion } from '../../../theme';
-import { CallInspectorOverlay } from '../components/CallInspectorOverlay';
+import { Icon, Screen, Text } from '../../components/ui';
+import type { useIncomingCallScreen } from '../../hooks/useIncomingCallScreen';
+import { ENABLE_CALL_DIAGNOSTICS } from '../../services/call/callLogger';
+import { colors, fonts, useReduceMotion } from '../../theme';
+import { CallInspectorOverlay } from './components/CallInspectorOverlay';
 
 type Props = ReturnType<typeof useIncomingCallScreen>;
 
@@ -35,7 +35,7 @@ const KNOB_INSET = 6;
 const ANSWER_AT = 0.8;
 const END_RED = '#E5654F';
 
-const IncomingCallV4: React.FC<Props> = ({
+const IncomingCallView: React.FC<Props> = ({
   session,
   callState,
   accepting,
@@ -422,4 +422,4 @@ const styles = StyleSheet.create({
   connectingText: { fontFamily: fonts.display, fontSize: 16, lineHeight: 20, color: colors.text },
 });
 
-export default IncomingCallV4;
+export default IncomingCallView;

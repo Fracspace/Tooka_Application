@@ -1,4 +1,4 @@
-// Display formatters shared by the old and v4 Spa Details layouts.
+// Display formatters for the Spa Details layout.
 
 export const formatDateSubLabel = (dateStr: string): string => {
   if (!dateStr) return '';

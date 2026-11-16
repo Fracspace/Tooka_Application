@@ -14,10 +14,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, Path } from 'react-native-svg';
 
-import { Haze, Icon, PressableScale, RoundButton, Screen, Text, useTabBarSpace, type IconName } from '../../../components/ui';
-import type { useProfileScreen } from '../../../hooks/useProfileScreen';
-import { colors, fonts, motion, radii, shadows, type as typeStyles, useReduceMotion, useRise } from '../../../theme';
-import { ProfileSkeleton } from './ProfileSkeleton';
+import { Haze, Icon, PressableScale, RoundButton, Screen, Text, useTabBarSpace, type IconName } from '../../components/ui';
+import type { useProfileScreen } from '../../hooks/useProfileScreen';
+import { colors, fonts, motion, radii, shadows, type as typeStyles, useReduceMotion, useRise } from '../../theme';
+import { ProfileSkeleton } from './components/ProfileSkeleton';
 
 type Props = ReturnType<typeof useProfileScreen>;
 
@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
  * Shows the skeleton on the tab's first frame and while the profile loads, then
  * the page. The skeleton is cheap to draw, so the tab never sits blank.
  */
-const ProfileV4: React.FC<Props> = (props) => {
+const ProfileView: React.FC<Props> = (props) => {
   const [painted, setPainted] = useState(false);
   useEffect(() => {
     const frame = requestAnimationFrame(() => setPainted(true));
@@ -497,4 +497,4 @@ const ProfileV4: React.FC<Props> = (props) => {
   return <ProfileContent {...props} />;
 };
 
-export default ProfileV4;
+export default ProfileView;

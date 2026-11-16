@@ -11,11 +11,11 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 
-import { Button, Icon, Screen, Text } from '../../../components/ui';
-import { formatPaymentAmount } from '../../../payment/PaymentMapper';
-import { PaymentFlowState } from '../../../payment/PaymentTypes';
-import { colors, fonts, rise, useReduceMotion } from '../../../theme';
-import { FLOW_LABELS } from '../components/PaymentStatusBadge';
+import { Button, Icon, Screen, Text } from '../../components/ui';
+import { formatPaymentAmount } from '../../payment/PaymentMapper';
+import { PaymentFlowState } from '../../payment/PaymentTypes';
+import { colors, fonts, rise, useReduceMotion } from '../../theme';
+import { FLOW_LABELS } from './components/PaymentStatusBadge';
 
 type Props = {
   flowState: PaymentFlowState;
@@ -41,8 +41,8 @@ const RING = 88;
 const RING_R = 40;
 const ARC = 2 * Math.PI * RING_R;
 
-/** The waiting screen behind the Cashfree checkout, in the v4 dark theme. */
-const PaymentV4: React.FC<Props> = ({
+/** The waiting screen behind the Cashfree checkout. */
+const PaymentView: React.FC<Props> = ({
   flowState,
   message,
   userMessage,
@@ -283,4 +283,4 @@ const styles = StyleSheet.create({
   spacer: { flex: 1, minHeight: 24 },
 });
 
-export default PaymentV4;
+export default PaymentView;

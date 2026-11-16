@@ -38,7 +38,7 @@ const FOCUS_RING = 'rgba(251,243,232,0.55)';
 
 const stepIn = () => FadeInRight.duration(motion.enter).easing(motion.out).reduceMotion(ReduceMotion.System);
 
-const AuthenticationV4: React.FC<Props> = ({
+const AuthenticationView: React.FC<Props> = ({
   isEmbedded = false,
   step,
   phone,
@@ -393,4 +393,4 @@ const styles = StyleSheet.create({
   legalLink: { color: colors.muted, textDecorationLine: 'underline' },
 });
 
-export default AuthenticationV4;
+export default AuthenticationView;

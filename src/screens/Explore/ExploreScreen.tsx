@@ -1,11 +1,11 @@
 import React from 'react';
 
 import { useExploreScreen } from '../../hooks/useExploreScreen';
-import ExploreV4 from './v4/ExploreV4';
+import ExploreView from './ExploreView';
 
 const ExploreScreen: React.FC = () => {
   const screen = useExploreScreen();
-  return <ExploreV4 {...screen} />;
+  return <ExploreView {...screen} />;
 };
 
 export default ExploreScreen;

@@ -26,7 +26,7 @@ import ProfileScreen from '../screens/Profile/ProfileScreen';
 import { useAuth } from '../context/AuthContext';
 import AuthenticationScreen from '../authentication/screens/AuthenticationScreen';
 import { TabBar, type IconName } from '../components/ui';
-import { ProfileSkeleton } from '../screens/Profile/v4/ProfileSkeleton';
+import { ProfileSkeleton } from '../screens/Profile/components/ProfileSkeleton';
 import { colors } from '../theme';
 
 /** Explore can be reopened on a spa (e.g. after logging in to book it). */
@@ -48,7 +48,7 @@ export type BottomTabParamList = {
 
 const Tab = createBottomTabNavigator<BottomTabParamList>();
 
-const V4_ICONS: Record<string, IconName> = {
+const TAB_ICONS: Record<string, IconName> = {
   Home: 'home',
   Explore: 'explore',
   Bookings: 'bookings',
@@ -95,7 +95,7 @@ function CustomTabBar({
     <TabBar
       items={state.routes.map(route => {
         const label = labelFor(route);
-        return { key: route.key, label, icon: V4_ICONS[label] ?? 'home' };
+        return { key: route.key, label, icon: TAB_ICONS[label] ?? 'home' };
       })}
       activeKey={activeKey}
       onPress={key => {

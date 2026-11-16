@@ -36,7 +36,7 @@ export function useTabBarSpace(): number {
 const tabBarBottom = (insetBottom: number) => Math.max(16, insetBottom - 10);
 
 /**
- * The floating v4 tab bar. It only draws the tabs: the navigator decides what a
+ * The floating tab bar. It only draws the tabs: the navigator decides what a
  * press does, so it can sit behind the existing tab bar's logic unchanged.
  */
 export function TabBar({ items, activeKey, onPress, onLongPress }: Props) {

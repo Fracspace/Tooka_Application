@@ -13,7 +13,7 @@ import type { BottomTabParamList } from './BottomNavigation';
 import SplashScreen from '../screens/Splash/SplashScreen';
 import OnboardingScreen from '../screens/Onboarding/OnboardingScreen';
 import ExploreScreen from '../screens/Explore/ExploreScreen';
-import SpotlightDetailsScreen from '../screens/Home/v4/SpotlightDetailsScreen';
+import SpotlightDetailsScreen from '../screens/Home/SpotlightDetailsScreen';
 import PaymentHistoryScreen from '../screens/Payment/PaymentHistoryScreen';
 import EditProfileScreen from '../screens/Profile/EditProfile/EditProfileScreen';
 import AuthenticationScreen from '../authentication/screens/AuthenticationScreen';

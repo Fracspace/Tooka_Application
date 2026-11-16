@@ -9,7 +9,7 @@ type Props = ViewProps & {
   haze?: boolean;
 };
 
-/** The dark v4 page: espresso background and light status-bar text. */
+/** The dark page: espresso background and light status-bar text. */
 export function Screen({ haze = false, style, children, ...rest }: Props) {
   return (
     <View {...rest} style={[styles.screen, style]}>

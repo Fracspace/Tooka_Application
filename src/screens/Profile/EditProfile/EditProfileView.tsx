@@ -40,12 +40,12 @@ import {
   type as typeStyles,
   useReduceMotion,
 } from '../../../theme';
-import { GENDER_OPTIONS } from '../EditProfile/constants';
-import type { Gender } from '../EditProfile/types';
+import { GENDER_OPTIONS } from './constants';
+import type { Gender } from './types';
 
 type Props = ReturnType<typeof useEditProfileScreen>;
 
-const EditProfileV4: React.FC<Props> = ({
+const EditProfileView: React.FC<Props> = ({
   form,
   updateField,
   saving,
@@ -601,4 +601,4 @@ const styles = StyleSheet.create({
   placesDescription: { fontFamily: fonts.body, fontSize: 13, color: colors.muted },
 });
 
-export default EditProfileV4;
+export default EditProfileView;

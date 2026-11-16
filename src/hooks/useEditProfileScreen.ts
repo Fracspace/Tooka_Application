@@ -54,7 +54,7 @@ type Options = {
 };
 
 /**
- * Form state and actions for Edit profile, shared by the old and v4 layouts.
+ * Form state and actions for Edit profile.
  */
 export function useEditProfileScreen({ savedHoldMs = 0 }: Options = {}) {
   const isMounted = React.useRef(true);

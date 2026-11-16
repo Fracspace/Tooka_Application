@@ -1,9 +1,9 @@
 import React from 'react';
 
-import PoliciesV4 from './v4/PoliciesV4';
+import PoliciesView from './PoliciesView';
 
 function RefundPolicyScreen(): React.ReactElement {
-  return <PoliciesV4 initialTab="refund" />;
+  return <PoliciesView initialTab="refund" />;
 }
 
 export default RefundPolicyScreen;

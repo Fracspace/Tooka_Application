@@ -12,7 +12,7 @@ import Toast from 'react-native-toast-message';
 
 import { useAuth } from './AuthContext';
 import ReviewApi, { toReviewApiError } from '../api/ReviewApi';
-import SpaFeedbackSheetV4, { type FeedbackDraft } from '../components/v4/SpaFeedbackSheetV4';
+import SpaFeedbackSheet, { type FeedbackDraft } from '../components/SpaFeedbackSheet';
 import { navigationRef } from '../navigation/NavigationService';
 
 /** Screens where a review push may open the feedback sheet straight away. */
@@ -310,7 +310,7 @@ export function ReviewPromptProvider({ children }: { children: React.ReactNode }
   return (
     <ReviewPromptContext.Provider value={value}>
       {children}
-      <SpaFeedbackSheetV4
+      <SpaFeedbackSheet
         visible={Boolean(target)}
         spaName={target?.spaName ?? ''}
         serviceName={target?.serviceName}

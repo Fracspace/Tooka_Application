@@ -17,7 +17,7 @@ import { CallProvider } from './src/context/CallContext';
 import { ActiveCallBar } from './src/screens/Call/components/ActiveCallBar';
 import { OtaRestartManager } from './src/components/OtaRestartManager';
 import { AppErrorBoundary } from './src/components/AppErrorBoundary';
-import UiGallery, { SHOW_V4_GALLERY } from './src/components/ui/Gallery';
+import UiGallery, { SHOW_UI_GALLERY } from './src/components/ui/Gallery';
 
 function App() {
   const { isRestartRequired } = useStallionUpdate();
@@ -46,7 +46,7 @@ function App() {
                       {/* PR-5: a minimised call is always reachable again. The bar
                           sits above the navigator only while a call is live. */}
                       <ActiveCallBar>
-                        {__DEV__ && SHOW_V4_GALLERY ? (
+                        {__DEV__ && SHOW_UI_GALLERY ? (
                           <UiGallery />
                         ) : (
                           <ReviewPromptProvider>

@@ -4,8 +4,8 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { colors } from '../../theme';
 
 /**
- * Line icons drawn from the v4 designs (24×24, round caps). Add more here as
- * screens need them, so every v4 screen draws icons the same way.
+ * Line icons drawn from the designs (24×24, round caps). Add more here as
+ * screens need them, so every screen draws icons the same way.
  */
 const ICONS = {
   back: (

@@ -8,7 +8,7 @@ type Props = TextProps & {
   color?: string;
 };
 
-/** Text in one of the v4 styles. Defaults to body text in the warm white. */
+/** Text in one of the app's text styles. Defaults to body text in the warm white. */
 export function Text({ variant = 'body', color = colors.text, style, ...rest }: Props) {
   return <RNText {...rest} style={[typeStyles[variant], { color }, style]} />;
 }

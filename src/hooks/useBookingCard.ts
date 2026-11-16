@@ -62,7 +62,7 @@ const IN_FLIGHT_PAYMENT_STATUSES = new Set(['processing', 'pending']);
 const isPaymentInFlight = (booking: BackendBookingListItem): boolean =>
   IN_FLIGHT_PAYMENT_STATUSES.has((booking.paymentStatus ?? '').toString().trim().toLowerCase());
 
-/** One booking card's data and actions, shared by the old and v4 cards. */
+/** One booking card's data and actions. */
 export function useBookingCard(booking: BackendBookingListItem) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { initiatePayment, setBookingSummary } = usePaymentContext();

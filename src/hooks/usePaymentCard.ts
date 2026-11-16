@@ -13,7 +13,7 @@ export const FALLBACK_IMAGE = {
   uri: 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=400&q=60',
 };
 
-/** What a payment card shows, shared by the old and v4 layouts. */
+/** What a payment card shows. */
 export function usePaymentCard(booking: BackendBookingListItem) {
   // Spa Name
   const spaName =

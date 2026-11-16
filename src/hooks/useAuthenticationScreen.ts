@@ -23,8 +23,8 @@ export type AuthStep = 'phone' | 'name' | 'otp' | 'success';
 
 /**
  * Everything the login screen does: send the code, ask new users for a name,
- * verify, then send the user back to where they came from. The old layout and
- * the v4 layout both read from here.
+ * verify, then send the user back to where they came from. AuthenticationView
+ * draws it.
  */
 export function useAuthenticationScreen({ isEmbedded = false }: { isEmbedded?: boolean } = {}) {
   const navigation = useNavigation<any>();
@@ -332,7 +332,7 @@ export function useAuthenticationScreen({ isEmbedded = false }: { isEmbedded?: b
     }
   }, [step, loading, otpDigits, handleOtpSubmit]);
 
-  // v4 types the code into one field instead of six boxes. Same state, same rules.
+  // The view types the code into one field instead of six boxes. Same state, same rules.
   const setOtpCode = useCallback((value: string) => {
     const digits = value.replace(/[^0-9]/g, '').slice(0, AUTH_CONFIG.otpLength);
     setOtpDigits(digits);

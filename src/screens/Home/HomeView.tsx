@@ -27,21 +27,21 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Card, FitImage, Icon, PressableScale, Screen, Text } from '../../../components/ui';
+import { Button, Card, FitImage, Icon, PressableScale, Screen, Text } from '../../components/ui';
 
 // Light-text version of the Tooka logo (the original's black wordmark disappears on the dark home).
-const TOOKA_LOGO = require('../../../assets/images/tooka-logo-wordmark.png');
-import { onSpotlightSpa } from './spotlightSync';
-import { brandAlpha, colors, fadeIn, fonts, motion, radii, rise, useReduceMotion } from '../../../theme';
-import { TypeIcon, type TypeIconName } from './typeIcons';
-import { SIDE_SCALE, spotlightSizes } from './spotlightLayout';
-import { HomeSkeleton, SpotlightSkeleton } from './HomeSkeleton';
+const TOOKA_LOGO = require('../../assets/images/tooka-logo-wordmark.png');
+import { onSpotlightSpa } from './components/spotlightSync';
+import { brandAlpha, colors, fadeIn, fonts, motion, radii, rise, useReduceMotion } from '../../theme';
+import { TypeIcon, type TypeIconName } from './components/typeIcons';
+import { SIDE_SCALE, spotlightSizes } from './components/spotlightLayout';
+import { HomeSkeleton, SpotlightSkeleton } from './components/HomeSkeleton';
 import type {
   FeaturedSpaItem,
   NearbyListItem,
   useHomeScreen,
-} from '../../../hooks/useHomeScreen';
-import type { BackendBookingListItem } from '../../../types/booking';
+} from '../../hooks/useHomeScreen';
+import type { BackendBookingListItem } from '../../types/booking';
 
 type Props = ReturnType<typeof useHomeScreen>;
 
@@ -420,7 +420,7 @@ function Outlet({ item, delay, onPress }: { item: NearbyListItem; delay: number;
 
 // ---------- Screen ----------
 
-export default function HomeV4(props: Props) {
+export default function HomeView(props: Props) {
   const {
     location,
     locationDisplay,

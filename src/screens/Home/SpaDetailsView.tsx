@@ -22,13 +22,13 @@ import Animated, {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BackButton, Button, Card, Icon, PressableScale, RoundButton, Screen, Text } from '../../../components/ui';
-import { brandAlpha, colors, fonts, gradients, motion, radii, rise, useReduceMotion } from '../../../theme';
-import { useSpaDetailsContentState } from '../../../hooks/useSpaDetailsContentState';
-import type { useSpaDetailsScreen } from '../../../hooks/useSpaDetailsScreen';
-import type { TimeSlot } from '../../Booking/types';
-import SpaDetailsSkeleton, { SlotBones } from './SpaDetailsSkeleton';
-import { formatDateSubLabel, formatServicePrice } from '../spaDetailsFormat';
+import { BackButton, Button, Card, Icon, PressableScale, RoundButton, Screen, Text } from '../../components/ui';
+import { brandAlpha, colors, fonts, gradients, motion, radii, rise, useReduceMotion } from '../../theme';
+import { useSpaDetailsContentState } from '../../hooks/useSpaDetailsContentState';
+import type { useSpaDetailsScreen } from '../../hooks/useSpaDetailsScreen';
+import type { TimeSlot } from '../Booking/types';
+import SpaDetailsSkeleton, { SlotBones } from './components/SpaDetailsSkeleton';
+import { formatDateSubLabel, formatServicePrice } from './spaDetailsFormat';
 
 /**
  * Set when Spa Details is shown as a card in the Home spotlight pager: the
@@ -109,7 +109,7 @@ function LiveChip({ open }: { open: boolean }) {
   );
 }
 
-function SpaDetailsV4({
+function SpaDetailsView({
   spa,
   loading,
   refreshing,
@@ -686,7 +686,7 @@ function SpaDetailsV4({
   );
 }
 
-export default SpaDetailsV4;
+export default SpaDetailsView;
 
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },

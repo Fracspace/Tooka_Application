@@ -1,6 +1,6 @@
 /**
- * Development only: every v4 base piece on one screen, for checking them
- * against the design canvas. Turn on with SHOW_V4_GALLERY below.
+ * Development only: every base UI piece on one screen, for checking them
+ * against the design canvas. Turn on with SHOW_UI_GALLERY below.
  */
 import React, { useState } from 'react';
 import { Modal, ScrollView, StyleSheet, View } from 'react-native';
@@ -8,8 +8,8 @@ import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, rise, useReduceMotion } from '../../theme';
-import BookingSummarySheetV4 from '../../screens/Booking/components/v4/BookingSummarySheetV4';
-import BookingResultV4 from '../../screens/Booking/v4/BookingResultV4';
+import BookingSummarySheet from '../../screens/Booking/components/BookingSummarySheet';
+import BookingResultView from '../../screens/Booking/BookingResultView';
 import {
   BackButton,
   Button,
@@ -48,7 +48,7 @@ const SWATCHES: Array<[string, string]> = [
 ];
 
 /** Development only: show this gallery instead of the app. */
-export const SHOW_V4_GALLERY = false;
+export const SHOW_UI_GALLERY = false;
 
 export default function Gallery() {
   const insets = useSafeAreaInsets();
@@ -64,7 +64,7 @@ export default function Gallery() {
     <Screen haze>
       <Modal visible={result !== null} animationType="slide" onRequestClose={() => setResult(null)}>
         {result ? (
-          <BookingResultV4
+          <BookingResultView
             params={{
               spaName: 'The lemmon spa',
               spaImage: 'https://d2f15ematxpwp4.cloudfront.net/appImages/Spacover.jpg',
@@ -87,7 +87,7 @@ export default function Gallery() {
           />
         ) : null}
       </Modal>
-      <BookingSummarySheetV4
+      <BookingSummarySheet
         visible={sheetOpen}
         onClose={() => setSheetOpen(false)}
         onConfirm={() => setSheetOpen(false)}
@@ -106,7 +106,7 @@ export default function Gallery() {
         <View style={styles.header}>
           <BackButton onPress={() => {}} />
           <Text variant="title" style={styles.flex}>
-            v4 pieces
+            UI pieces
           </Text>
           <RoundButton variant="soft" accessibilityLabel="Search" onPress={() => {}}>
             <Icon name="search" size={19} strokeWidth={2.2} />

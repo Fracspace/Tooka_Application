@@ -23,15 +23,15 @@ import type { BottomSheetBackdropProps, ScrollEventsHandlersHookType } from '@go
 import Svg, { Circle, Path } from 'react-native-svg';
 import MapView, { Marker, PROVIDER_GOOGLE, type MapMarker } from 'react-native-maps';
 
-import { BackButton, Button, FitImage, PressableScale, RoundButton, Text } from '../../../components/ui';
-import { brandAlpha, colors, fadeIn, fonts, motion, radii, rise, shadows } from '../../../theme';
-import type { ExploreSpa } from '../../../types/explore';
-import type { useExploreScreen } from '../../../hooks/useExploreScreen';
-import { bookingOption } from '../../Booking/bookingData';
-import SpaDetailsV4, { type SpaDetailsSheet } from '../../Home/v4/SpaDetailsV4';
-import BookingSummarySheet from '../../Booking/components/BookingSummarySheet';
-import { slotMinutes } from '../../Booking/slotFormat';
-import { formatRatingLabel } from '../../../utils/number';
+import { BackButton, Button, FitImage, PressableScale, RoundButton, Text } from '../../components/ui';
+import { brandAlpha, colors, fadeIn, fonts, motion, radii, rise, shadows } from '../../theme';
+import type { ExploreSpa } from '../../types/explore';
+import type { useExploreScreen } from '../../hooks/useExploreScreen';
+import { bookingOption } from '../Booking/bookingData';
+import SpaDetailsView, { type SpaDetailsSheet } from '../Home/SpaDetailsView';
+import BookingSummarySheet from '../Booking/components/BookingSummarySheet';
+import { slotMinutes } from '../Booking/slotFormat';
+import { formatRatingLabel } from '../../utils/number';
 
 type Props = ReturnType<typeof useExploreScreen>;
 
@@ -46,7 +46,7 @@ const GLASS = 'rgba(29,25,21,0.88)';
 const GLASS_SHADOW = `${shadows.ringHi}, 0 8px 20px rgba(0,0,0,0.4)`;
 
 /**
- * The sheet's scroll view for v4 Spa Details. It keeps the sheet's own scroll
+ * The sheet's scroll view for Spa Details. It keeps the sheet's own scroll
  * handling (so drags pass between sheet and content) and also writes the
  * offset into `scrollY`, on the UI thread, for the page's fading header bar.
  */
@@ -120,7 +120,7 @@ const SpaPin = memo<PinProps>(({ spa, selected, onPress }) => {
   );
 });
 
-export default function ExploreV4({
+export default function ExploreView({
   booking,
   bookingDetails,
   bookingFeeText,
@@ -160,7 +160,7 @@ export default function ExploreV4({
   spasError,
   width,
 }: Props) {
-  // v4 Spa Details in the sheet: its header follows the sheet's scroll and
+  // Spa Details in the sheet: its header follows the sheet's scroll and
   // slides below the status bar as the sheet goes from 75% to full screen.
   const detailsScrollY = useSharedValue(0);
   const sheetIndexValue = useSharedValue(-1);
@@ -371,7 +371,7 @@ export default function ExploreV4({
         handleIndicatorStyle={styles.sheetHandle}
         backgroundStyle={styles.sheetBackground}>
         {selectedSpa ? (
-          <SpaDetailsV4
+          <SpaDetailsView
             // Remount per spa so the photo, scroll and "show all" start fresh.
             key={selectedSpa.id}
             isTablet={width >= 768}

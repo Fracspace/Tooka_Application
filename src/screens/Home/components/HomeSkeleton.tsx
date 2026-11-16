@@ -53,7 +53,7 @@ export function SpotlightSkeleton() {
   );
 }
 
-/** The whole v4 Home in grey blocks, shown until the first spas load. */
+/** The whole Home in grey blocks, shown until the first spas load. */
 export function HomeSkeleton() {
   const insets = useSafeAreaInsets();
   return (
@@ -107,7 +107,7 @@ export function HomeSkeleton() {
   );
 }
 
-// Spacing mirrors HomeV4's styles so nothing jumps when the content arrives.
+// Spacing mirrors HomeView's styles so nothing jumps when the content arrives.
 const styles = StyleSheet.create({
   abs: { position: 'absolute', top: 8 },
   flex: { flex: 1 },

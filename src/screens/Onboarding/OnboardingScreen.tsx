@@ -1,11 +1,11 @@
 import React from 'react';
 
-import OnboardingV4 from './v4/OnboardingV4';
+import OnboardingView from './OnboardingView';
 import { useOnboardingScreen } from '../../hooks/useOnboardingScreen';
 
 export const OnboardingScreen: React.FC = () => {
   const screen = useOnboardingScreen();
-  return <OnboardingV4 {...screen} />;
+  return <OnboardingView {...screen} />;
 };
 
 export default OnboardingScreen;

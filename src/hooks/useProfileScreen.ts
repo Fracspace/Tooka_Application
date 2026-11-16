@@ -40,7 +40,7 @@ const COMPLETION_STEPS: { hint: string; done: (profile: UserProfile) => boolean 
 ];
 
 /**
- * Data and actions for the Profile screen, shared by the old and v4 layouts.
+ * Data and actions for the Profile screen.
  */
 export function useProfileScreen() {
   const navigation = useNavigation<ProfileNavigationProp>();

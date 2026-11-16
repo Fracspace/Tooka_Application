@@ -12,9 +12,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 
-import { Icon, Screen, Text } from '../../../components/ui';
-import { colors, fadeIn, fonts, rise } from '../../../theme';
-import type { WellnessArticle } from '../types';
+import { Icon, Screen, Text } from '../../components/ui';
+import { colors, fadeIn, fonts, rise } from '../../theme';
+import type { WellnessArticle } from './types';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -25,7 +25,7 @@ const SOLID_AT = 180;
 
 type Props = { article: WellnessArticle };
 
-const WellnessArticleV4: React.FC<Props> = ({ article }) => {
+const WellnessArticleView: React.FC<Props> = ({ article }) => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [heroFailed, setHeroFailed] = useState(false);
@@ -248,4 +248,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default WellnessArticleV4;
+export default WellnessArticleView;

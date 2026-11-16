@@ -13,7 +13,7 @@ type Props = Omit<PressableProps, 'style'> & {
   scaleTo?: number;
 };
 
-/** A Pressable that shrinks slightly while held, as every v4 control does. */
+/** A Pressable that shrinks slightly while held, as every control does. */
 export function PressableScale({
   style,
   scaleTo = motion.pressScale,

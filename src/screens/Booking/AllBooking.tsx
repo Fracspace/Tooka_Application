@@ -1,10 +1,10 @@
 import React from 'react';
 import { useAllBookingScreen } from '../../hooks/useAllBookingScreen';
-import AllBookingV4 from './v4/AllBookingV4';
+import AllBookingView from './AllBookingView';
 
 const AllBookingScreen: React.FC = () => {
   const screen = useAllBookingScreen();
-  return <AllBookingV4 {...screen} />;
+  return <AllBookingView {...screen} />;
 };
 
 export default AllBookingScreen;

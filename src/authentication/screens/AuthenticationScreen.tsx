@@ -1,6 +1,6 @@
 import React from 'react';
 
-import AuthenticationV4 from '../v4/AuthenticationV4';
+import AuthenticationView from './AuthenticationView';
 import { useAuthenticationScreen } from '../../hooks/useAuthenticationScreen';
 
 interface AuthenticationScreenProps {
@@ -9,7 +9,7 @@ interface AuthenticationScreenProps {
 
 const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ isEmbedded = false }) => {
   const screen = useAuthenticationScreen({ isEmbedded });
-  return <AuthenticationV4 {...screen} isEmbedded={isEmbedded} />;
+  return <AuthenticationView {...screen} isEmbedded={isEmbedded} />;
 };
 
 export default AuthenticationScreen;

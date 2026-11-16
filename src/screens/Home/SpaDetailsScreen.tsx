@@ -3,7 +3,7 @@ import React from 'react';
 import { useSpaDetailsScreen } from '../../hooks/useSpaDetailsScreen';
 import BookingSummarySheet from '../Booking/components/BookingSummarySheet';
 import { slotMinutes } from '../Booking/slotFormat';
-import SpaDetailsV4 from './v4/SpaDetailsV4';
+import SpaDetailsView from './SpaDetailsView';
 
 type Screen = ReturnType<typeof useSpaDetailsScreen>;
 
@@ -35,7 +35,7 @@ function SpaDetailsScreen(): React.ReactElement {
   const screen = useSpaDetailsScreen();
   return (
     <>
-      <SpaDetailsV4 {...screen} />
+      <SpaDetailsView {...screen} />
       <SpaDetailsSummarySheet screen={screen} />
     </>
   );

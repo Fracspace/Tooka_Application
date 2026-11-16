@@ -14,16 +14,16 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
-import { Button, Icon, PressableScale, RoundButton, Text } from '../ui';
-import { brandAlpha, colors, fonts, radii, rise, shadows, space } from '../../theme';
+import { Button, Icon, PressableScale, RoundButton, Text } from './ui';
+import { brandAlpha, colors, fonts, radii, rise, shadows, space } from '../theme';
 import {
   REVIEW_CATEGORIES,
   type MyReview,
   type ReviewCategoryKey,
   type SubmitReviewBody,
-} from '../../types/review';
-import { formatVisitDate } from '../../utils/formatVisitDate';
-import { toStarCount } from '../../utils/spaRating';
+} from '../types/review';
+import { formatVisitDate } from '../utils/formatVisitDate';
+import { toStarCount } from '../utils/spaRating';
 
 const MAX_COMMENT = 1000;
 const STARS = [1, 2, 3, 4, 5];
@@ -99,9 +99,9 @@ function StarRow({
 }
 
 /**
- * v4 "How was your visit?" sheet, shown by ReviewPromptContext.
+ * The "How was your visit?" sheet, shown by ReviewPromptContext.
  */
-const SpaFeedbackSheetV4 = React.memo(function SpaFeedbackSheet({
+const SpaFeedbackSheet = React.memo(function SpaFeedbackSheetInner({
   visible,
   spaName,
   serviceName,
@@ -376,4 +376,4 @@ const styles = StyleSheet.create({
   replyText: { marginTop: space.xs },
 });
 
-export default SpaFeedbackSheetV4;
+export default SpaFeedbackSheet;

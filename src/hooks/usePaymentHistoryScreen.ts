@@ -8,8 +8,7 @@ import { getBookingPaymentStatus, getPaymentCategory } from '../screens/Payment/
 export type PaymentFilterTab = 'all' | 'completed' | 'cancelled';
 
 /**
- * Payments, filter tab and loading state for Payment history, shared by the
- * old and v4 layouts.
+ * Payments, filter tab and loading state for Payment history.
  */
 export function usePaymentHistoryScreen() {
   const [activeTab, setActiveTab] = useState<PaymentFilterTab>('all');
@@ -42,7 +41,7 @@ export function usePaymentHistoryScreen() {
     }
   }, [activeTab, allPayments]);
 
-  // How many payments each tab holds, for the v4 filter chips.
+  // How many payments each tab holds, for the filter chips.
   const tabCounts = useMemo(() => {
     const counts: Record<PaymentFilterTab, number> = { all: allPayments.length, completed: 0, cancelled: 0 };
     allPayments.forEach(item => {

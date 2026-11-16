@@ -38,7 +38,7 @@ function RowBones() {
   );
 }
 
-// Spacing mirrors AllBookingV4's styles so nothing jumps when the content arrives.
+// Spacing mirrors AllBookingView's styles so nothing jumps when the content arrives.
 export function BookingsSkeleton() {
   const bottomSpace = useTabBarSpace();
   return (

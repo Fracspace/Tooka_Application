@@ -1,5 +1,5 @@
 /**
- * v4 design tokens, taken from the approved `*4.dc.html` screens on the design
+ * Design tokens, taken from the approved `*4.dc.html` screens on the design
  * canvas (dark espresso surfaces, Tooka saffron as the one bright colour).
  *
  * Shadows and gradients are CSS strings: React Native's New Architecture

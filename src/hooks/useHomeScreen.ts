@@ -84,7 +84,7 @@ export interface NearbySpaItem {
 }
 
 
-/** A spotlight card: a curated spa plus what the v4 filters and tags need. */
+/** A spotlight card: a curated spa plus what the filters and tags need. */
 export interface SpotlightSpaItem extends FeaturedSpaItem {
   /** "MATCHES AYURVEDA", "PREMIUM", "NEW ON TOOKA" or ''. */
   tag: string;
@@ -367,7 +367,7 @@ export function useHomeScreen() {
 
   const handleFavoritePress = useCallback(() => undefined, []);
 
-  // v4 spotlight: open the tapped card as swipeable Spa Details cards.
+  // Spotlight: open the tapped card as swipeable Spa Details cards.
   const handleOpenSpotlight = useCallback(
     (items: FeaturedSpaItem[], index: number) => {
       navigation.navigate('SpotlightDetails', {
@@ -401,7 +401,7 @@ export function useHomeScreen() {
     (contextLoading && contextSpas.length === 0 && location?.permission === 'granted');
   const shouldRenderEmptyState = !loading && !error && featuredSpas.length === 0;
 
-  // v4 Home: next visit, spotlight ranked by the saved onboarding answers, and
+  // Home: next visit, spotlight ranked by the saved onboarding answers, and
   // the nearby list closest first.
   const { upcomingBookings } = useMyBookings();
   // Only a booking that is actually confirmed is a visit. Upcoming also holds

@@ -1,10 +1,10 @@
 import React from 'react';
 import { useHomeScreen } from '../../hooks/useHomeScreen';
-import HomeV4 from './v4/HomeV4';
+import HomeView from './HomeView';
 
 const HomeScreen: React.FC = () => {
   const screen = useHomeScreen();
-  return <HomeV4 {...screen} />;
+  return <HomeView {...screen} />;
 };
 
 export default HomeScreen;

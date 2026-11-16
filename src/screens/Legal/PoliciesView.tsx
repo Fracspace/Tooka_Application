@@ -9,13 +9,13 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { BackButton, Icon, PressableScale, Screen, Text } from '../../../components/ui';
-import { useLegalLinks } from '../../../hooks/useLegalLinks';
-import { brandAlpha, colors, fonts, motion, radii, rise, shadows, useReduceMotion } from '../../../theme';
-import { privacyData } from '../data/privacy';
-import { refundData } from '../data/refund';
-import { termsData } from '../data/terms';
-import type { LegalBullet, LegalContent, LegalSectionData } from '../types';
+import { BackButton, Icon, PressableScale, Screen, Text } from '../../components/ui';
+import { useLegalLinks } from '../../hooks/useLegalLinks';
+import { brandAlpha, colors, fonts, motion, radii, rise, shadows, useReduceMotion } from '../../theme';
+import { privacyData } from './data/privacy';
+import { refundData } from './data/refund';
+import { termsData } from './data/terms';
+import type { LegalBullet, LegalContent, LegalSectionData } from './types';
 
 export type PolicyTab = 'terms' | 'privacy' | 'refund';
 
@@ -55,7 +55,7 @@ function readTime(data: LegalContent): string {
 type Props = { initialTab: PolicyTab };
 
 /** Terms, Privacy and Refund in one screen, with a tab for each. */
-function PoliciesV4({ initialTab }: Props) {
+function PoliciesView({ initialTab }: Props) {
   const navigation = useNavigation();
   const { handleEmailPress, handleLinkPress } = useLegalLinks();
   const [tab, setTab] = useState<PolicyTab>(initialTab);
@@ -374,4 +374,4 @@ const styles = StyleSheet.create({
   helpButtonText: { fontFamily: fonts.bodySemiBold, fontSize: 13, lineHeight: 16, color: colors.onBrand },
 });
 
-export default PoliciesV4;
+export default PoliciesView;

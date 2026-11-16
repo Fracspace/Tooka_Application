@@ -18,10 +18,10 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { Button, Icon, PressableScale, Screen, Text, useTabBarSpace } from '../../../components/ui';
-import { BOOKING_FALLBACK_IMAGE, useBookingCard } from '../../../hooks/useBookingCard';
-import { useBookingReview } from '../../../hooks/useBookingReview';
-import type { useAllBookingScreen } from '../../../hooks/useAllBookingScreen';
+import { Button, Icon, PressableScale, Screen, Text, useTabBarSpace } from '../../components/ui';
+import { BOOKING_FALLBACK_IMAGE, useBookingCard } from '../../hooks/useBookingCard';
+import { useBookingReview } from '../../hooks/useBookingReview';
+import type { useAllBookingScreen } from '../../hooks/useAllBookingScreen';
 import {
   brandAlpha,
   colors,
@@ -32,9 +32,9 @@ import {
   shadows,
   type as typeStyles,
   useReduceMotion,
-} from '../../../theme';
-import { BookingsSkeleton } from './BookingsSkeleton';
-import type { BackendBookingListItem, BookingSection } from '../../../types/booking';
+} from '../../theme';
+import { BookingsSkeleton } from './components/BookingsSkeleton';
+import type { BackendBookingListItem, BookingSection } from '../../types/booking';
 
 type Props = ReturnType<typeof useAllBookingScreen>;
 
@@ -45,7 +45,7 @@ const EMPTY_MESSAGES: Record<BookingSection, string> = {
   'no-show': 'No cancelled bookings',
 };
 
-const AllBookingV4: React.FC<Props> = ({
+const AllBookingView: React.FC<Props> = ({
   activeBookings,
   availableTabs,
   effectiveActiveTab,
@@ -499,7 +499,7 @@ function StatusChip({ label, tone }: { label: string; tone: Tone }) {
   );
 }
 
-export default AllBookingV4;
+export default AllBookingView;
 
 const styles = StyleSheet.create({
   header: { paddingTop: 60, paddingHorizontal: 4 },

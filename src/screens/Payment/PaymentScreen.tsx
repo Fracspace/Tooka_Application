@@ -37,7 +37,7 @@ import {
   type PaymentResultType,
 } from '../../payment/PaymentTypes';
 import usePayment from '../../hooks/usePayment';
-import PaymentV4 from './v4/PaymentV4';
+import PaymentView from './PaymentView';
 import { buildBookingDateAndTime } from '../../utils/bookingDateTime';
 import { Analytics, AnalyticsEvents, AnalyticsParams } from '../../services/firebase/analytics';
 
@@ -632,7 +632,7 @@ function PaymentScreen(): React.ReactElement {
   }, [navigation, resetPaymentFlow, stopVerification]);
 
   return (
-    <PaymentV4
+    <PaymentView
       flowState={context.flowState}
       message={message}
       userMessage={context.userMessage}

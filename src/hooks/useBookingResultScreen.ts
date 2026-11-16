@@ -44,8 +44,7 @@ const parseResultType = (value: string | undefined): ResultType => {
 };
 
 /**
- * Data and actions for the booking result screen (Booked / failed / processing),
- * shared by the old and v4 layouts so both behave the same.
+ * Data and actions for the booking result screen (Booked / failed / processing).
  */
 export function useBookingResultScreen() {
   const navigation = useNavigation<BookingResultNavigationProp>();

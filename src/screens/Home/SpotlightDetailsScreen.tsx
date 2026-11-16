@@ -23,14 +23,14 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { RootStackParamList } from '../../../navigation/AppNavigator';
-import { useSpaDetailsScreen } from '../../../hooks/useSpaDetailsScreen';
-import { SpaDetailsSummarySheet } from '../SpaDetailsScreen';
-import SpaDetailsV4 from './SpaDetailsV4';
-import { SpaBodyBones } from './SpaDetailsSkeleton';
-import { FitImage, Text } from '../../../components/ui';
-import { reportSpotlightSpa } from './spotlightSync';
-import { colors, motion, radii, useReduceMotion } from '../../../theme';
+import type { RootStackParamList } from '../../navigation/AppNavigator';
+import { useSpaDetailsScreen } from '../../hooks/useSpaDetailsScreen';
+import { SpaDetailsSummarySheet } from './SpaDetailsScreen';
+import SpaDetailsView from './SpaDetailsView';
+import { SpaBodyBones } from './components/SpaDetailsSkeleton';
+import { FitImage, Text } from '../../components/ui';
+import { reportSpotlightSpa } from './components/spotlightSync';
+import { colors, motion, radii, useReduceMotion } from '../../theme';
 
 type SpotlightSpa = RootStackParamList['SpotlightDetails']['spas'][number];
 
@@ -69,7 +69,7 @@ function ActivePage({
   }
   return (
     <>
-      <SpaDetailsV4 {...screen} sheet={{ scrollY, expand, onClose }} />
+      <SpaDetailsView {...screen} sheet={{ scrollY, expand, onClose }} />
       <SpaDetailsSummarySheet screen={screen} />
     </>
   );

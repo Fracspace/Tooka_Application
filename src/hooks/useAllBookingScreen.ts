@@ -14,7 +14,7 @@ export const BOOKING_TABS: Array<{ label: string; section: BookingSection }> = [
   { label: 'Cancelled', section: 'cancelled' },
 ];
 
-/** My Bookings data and actions, shared by the old and v4 layouts. */
+/** My Bookings data and actions. */
 export function useAllBookingScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [activeTab, setActiveTab] = useState<BookingSection>('upcoming');

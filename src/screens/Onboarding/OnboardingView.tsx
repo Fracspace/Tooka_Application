@@ -4,10 +4,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInRight, ReduceMotion, ZoomIn } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 
-import { Button, Icon, Screen, Text } from '../../../components/ui';
-import { MAX_ONBOARDING_PICKS, type useOnboardingScreen } from '../../../hooks/useOnboardingScreen';
-import { colors, fonts, motion, rise } from '../../../theme';
-import type { OnboardingOption } from '../types';
+import { Button, Icon, Screen, Text } from '../../components/ui';
+import { MAX_ONBOARDING_PICKS, type useOnboardingScreen } from '../../hooks/useOnboardingScreen';
+import { colors, fonts, motion, rise } from '../../theme';
+import type { OnboardingOption } from './types';
 
 type Props = ReturnType<typeof useOnboardingScreen>;
 
@@ -32,7 +32,7 @@ const FALLBACK_ICON = OPTION_ICONS.beauty_skin;
 
 const stepIn = () => FadeInRight.duration(motion.enter).easing(motion.out).reduceMotion(ReduceMotion.System);
 
-const OnboardingV4: React.FC<Props> = ({
+const OnboardingView: React.FC<Props> = ({
   currentStepIndex,
   setCurrentStepIndex,
   currentStep,
@@ -294,4 +294,4 @@ const styles = StyleSheet.create({
   btn: { flex: 1 },
 });
 
-export default OnboardingV4;
+export default OnboardingView;

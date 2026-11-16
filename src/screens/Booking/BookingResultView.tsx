@@ -14,9 +14,9 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, PressableScale, Screen, Text } from '../../../components/ui';
-import { brandAlpha, colors, fonts, motion, radii, rise, useReduceMotion } from '../../../theme';
-import type { useBookingResultScreen } from '../../../hooks/useBookingResultScreen';
+import { Button, PressableScale, Screen, Text } from '../../components/ui';
+import { brandAlpha, colors, fonts, motion, radii, rise, useReduceMotion } from '../../theme';
+import type { useBookingResultScreen } from '../../hooks/useBookingResultScreen';
 
 type Props = ReturnType<typeof useBookingResultScreen>;
 type ResultType = Props['type'];
@@ -224,7 +224,7 @@ function NextStep({ title, sub, on, last }: { title: string; sub: string; on?: b
   );
 }
 
-function BookingResultV4({
+function BookingResultView({
   params,
   type,
   message,
@@ -357,7 +357,7 @@ function BookingResultV4({
   );
 }
 
-export default BookingResultV4;
+export default BookingResultView;
 
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },

@@ -25,8 +25,7 @@ const DEBOUNCE_MS = 350;
 
 /**
  * Picking the area spas are shown for: GPS, a search, or a popular city. Each
- * choice is stored and the screen goes back. The old layout and the v4 layout
- * both read from here.
+ * choice is stored and the screen goes back. LocationSelectionView draws it.
  */
 export function useLocationSelectionScreen() {
   const navigation = useNavigation<NavigationProp>();

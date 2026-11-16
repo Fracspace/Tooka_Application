@@ -8,8 +8,7 @@ import { callManager } from '../services/call/callManager';
 
 /**
  * The ringing screen: accept, reject, or cancel while connecting. It closes
- * itself once the call ends. The old layout and the v4 layout both read from
- * here.
+ * itself once the call ends. IncomingCallView draws it.
  */
 export function useIncomingCallScreen() {
   const { session, callState } = useCallContext();

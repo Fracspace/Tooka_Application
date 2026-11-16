@@ -1,7 +1,7 @@
 import React from 'react';
 import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 
-/** The massage-type illustrations from the v4 Home design (HomeBlocks4), 48×48. */
+/** The massage-type illustrations from the Home design (HomeBlocks4), 48×48. */
 export type TypeIconName = 'swedish' | 'deepTissue' | 'aroma' | 'thai' | 'ayurveda' | 'couples' | 'facial';
 
 const icons: Record<TypeIconName, React.ReactElement> = {

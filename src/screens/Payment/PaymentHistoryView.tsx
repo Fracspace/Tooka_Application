@@ -22,12 +22,12 @@ import {
   PressableScale,
   Screen,
   Text,
-} from '../../../components/ui';
-import { usePaymentCard } from '../../../hooks/usePaymentCard';
+} from '../../components/ui';
+import { usePaymentCard } from '../../hooks/usePaymentCard';
 import type {
   PaymentFilterTab,
   usePaymentHistoryScreen,
-} from '../../../hooks/usePaymentHistoryScreen';
+} from '../../hooks/usePaymentHistoryScreen';
 import {
   colors,
   fonts,
@@ -36,14 +36,14 @@ import {
   rise,
   shadows,
   useReduceMotion,
-} from '../../../theme';
-import type { BackendBookingListItem } from '../../../types/booking';
+} from '../../theme';
+import type { BackendBookingListItem } from '../../types/booking';
 import {
   extractPaymentDate,
   formatCurrency,
   getPaymentCategory,
   getPaymentStatusUI,
-} from '../utils/paymentFormatters';
+} from './utils/paymentFormatters';
 
 type Props = ReturnType<typeof usePaymentHistoryScreen>;
 
@@ -85,7 +85,7 @@ function monthOf(item: BackendBookingListItem): string {
     : 'EARLIER';
 }
 
-const PaymentHistoryV4: React.FC<Props> = ({
+const PaymentHistoryView: React.FC<Props> = ({
   activeTab,
   amountsPaid,
   setActiveTab,
@@ -507,4 +507,4 @@ const styles = StyleSheet.create({
   retry: { marginTop: 16 },
 });
 
-export default PaymentHistoryV4;
+export default PaymentHistoryView;
