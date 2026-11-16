@@ -61,7 +61,6 @@ function launchApp() {
       return null;
     },
   });
-  jest.doMock('../src/components/SpaFeedbackModal', captureModal);
   jest.doMock('../src/components/v4/SpaFeedbackSheetV4', captureModal);
   jest.doMock('@react-native-async-storage/async-storage', () => ({
     __esModule: true,

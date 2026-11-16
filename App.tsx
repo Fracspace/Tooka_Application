@@ -17,8 +17,7 @@ import { CallProvider } from './src/context/CallContext';
 import { ActiveCallBar } from './src/screens/Call/components/ActiveCallBar';
 import { OtaRestartManager } from './src/components/OtaRestartManager';
 import { AppErrorBoundary } from './src/components/AppErrorBoundary';
-import { SHOW_V4_GALLERY } from './src/config/uiFlags';
-import UiGallery from './src/components/ui/Gallery';
+import UiGallery, { SHOW_V4_GALLERY } from './src/components/ui/Gallery';
 
 function App() {
   const { isRestartRequired } = useStallionUpdate();

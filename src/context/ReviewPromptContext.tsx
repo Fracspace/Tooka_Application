@@ -12,9 +12,7 @@ import Toast from 'react-native-toast-message';
 
 import { useAuth } from './AuthContext';
 import ReviewApi, { toReviewApiError } from '../api/ReviewApi';
-import SpaFeedbackModal, { type FeedbackDraft } from '../components/SpaFeedbackModal';
-import SpaFeedbackSheetV4 from '../components/v4/SpaFeedbackSheetV4';
-import { isV4 } from '../config/uiFlags';
+import SpaFeedbackSheetV4, { type FeedbackDraft } from '../components/v4/SpaFeedbackSheetV4';
 import { navigationRef } from '../navigation/NavigationService';
 
 /** Screens where a review push may open the feedback sheet straight away. */
@@ -58,8 +56,6 @@ interface ReviewPromptContextValue {
   /** Visits the guest can rate now (last GET /reviews/pending), keyed by booking_id. */
   pendingReviews: ReadonlyMap<string, PendingReview>;
 }
-
-const FeedbackSheet = isV4('reviewPrompt') ? SpaFeedbackSheetV4 : SpaFeedbackModal;
 
 const ReviewPromptContext = createContext<ReviewPromptContextValue | null>(null);
 
@@ -314,7 +310,7 @@ export function ReviewPromptProvider({ children }: { children: React.ReactNode }
   return (
     <ReviewPromptContext.Provider value={value}>
       {children}
-      <FeedbackSheet
+      <SpaFeedbackSheetV4
         visible={Boolean(target)}
         spaName={target?.spaName ?? ''}
         serviceName={target?.serviceName}

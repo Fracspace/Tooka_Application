@@ -16,15 +16,37 @@ import Svg, { Path } from 'react-native-svg';
 
 import { Button, Icon, PressableScale, RoundButton, Text } from '../ui';
 import { brandAlpha, colors, fonts, radii, rise, shadows, space } from '../../theme';
-import { REVIEW_CATEGORIES, type MyReview, type ReviewCategoryKey } from '../../types/review';
+import {
+  REVIEW_CATEGORIES,
+  type MyReview,
+  type ReviewCategoryKey,
+  type SubmitReviewBody,
+} from '../../types/review';
 import { formatVisitDate } from '../../utils/formatVisitDate';
 import { toStarCount } from '../../utils/spaRating';
-import type { SpaFeedbackModalProps } from '../SpaFeedbackModal';
 
 const MAX_COMMENT = 1000;
 const STARS = [1, 2, 3, 4, 5];
 const STAR_PATH = 'm12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z';
 const RATING_WORDS = ['Tap a star to rate', 'Not good', 'Could be better', 'Good', 'Great', 'Loved it'];
+
+export type FeedbackDraft = Omit<SubmitReviewBody, 'booking_id'>;
+
+export interface SpaFeedbackSheetProps {
+  visible: boolean;
+  spaName: string;
+  serviceName?: string | null;
+  /** Spa cover photo. */
+  photoUrl?: string | null;
+  /** Visit time (appointment_at). */
+  visitAt?: string | null;
+  /** When set, the sheet shows the guest's submitted feedback instead of the form. */
+  review?: MyReview | null;
+  submitting?: boolean;
+  errorMessage?: string | null;
+  onSubmit: (draft: FeedbackDraft) => void;
+  onDismiss: () => void;
+}
 
 type CategoryRatings = Partial<Record<ReviewCategoryKey, number>>;
 
@@ -77,8 +99,7 @@ function StarRow({
 }
 
 /**
- * v4 "How was your visit?" sheet. Same props and behaviour as SpaFeedbackModal;
- * ReviewPromptContext picks this one when the reviewPrompt switch is on.
+ * v4 "How was your visit?" sheet, shown by ReviewPromptContext.
  */
 const SpaFeedbackSheetV4 = React.memo(function SpaFeedbackSheet({
   visible,
@@ -91,7 +112,7 @@ const SpaFeedbackSheetV4 = React.memo(function SpaFeedbackSheet({
   errorMessage,
   onSubmit,
   onDismiss,
-}: SpaFeedbackModalProps) {
+}: SpaFeedbackSheetProps) {
   const insets = useSafeAreaInsets();
   const [rating, setRating] = useState(0);
   const [categories, setCategories] = useState<CategoryRatings>({});

@@ -1,6 +1,6 @@
 /**
  * Development only: every v4 base piece on one screen, for checking them
- * against the design canvas. Turn on with SHOW_V4_GALLERY in src/config/uiFlags.
+ * against the design canvas. Turn on with SHOW_V4_GALLERY below.
  */
 import React, { useState } from 'react';
 import { Modal, ScrollView, StyleSheet, View } from 'react-native';
@@ -46,6 +46,9 @@ const SWATCHES: Array<[string, string]> = [
   ['brandTint', colors.brandTint],
   ['sage', colors.sage],
 ];
+
+/** Development only: show this gallery instead of the app. */
+export const SHOW_V4_GALLERY = false;
 
 export default function Gallery() {
   const insets = useSafeAreaInsets();

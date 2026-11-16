@@ -1,22 +1,14 @@
 import React, {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from 'react';
 import {
   Alert,
-  Animated,
   AppState,
   BackHandler,
   InteractionManager,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
   type AppStateStatus,
 } from 'react-native';
 import {
@@ -27,10 +19,6 @@ import {
   type RouteProp,
 } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
 
 import PaymentApi from '../../api/PaymentApi';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
@@ -49,12 +37,7 @@ import {
   type PaymentResultType,
 } from '../../payment/PaymentTypes';
 import usePayment from '../../hooks/usePayment';
-import PaymentProcessingScreen from './PaymentProcessingScreen';
-import PaymentStatusBadge from './components/PaymentStatusBadge';
-import PaymentSummary from './components/PaymentSummary';
-import RetryPaymentButton from './components/RetryPaymentButton';
 import PaymentV4 from './v4/PaymentV4';
-import { isV4 } from '../../config/uiFlags';
 import { buildBookingDateAndTime } from '../../utils/bookingDateTime';
 import { Analytics, AnalyticsEvents, AnalyticsParams } from '../../services/firebase/analytics';
 
@@ -75,13 +58,6 @@ type FinalizeParams = {
   resultType: PaymentResultType;
   message?: string;
   paymentCompletedAt?: string;
-};
-
-const COLORS = {
-  background: '#FFF8F0',
-  text: '#242424',
-  muted: '#9A9A9A',
-  danger: '#D94A45',
 };
 
 const isPendingBackendStatus = (status: BackendPaymentStatus): boolean =>
@@ -110,10 +86,6 @@ const VERIFICATION_UNAVAILABLE_MESSAGE =
 function PaymentScreen(): React.ReactElement {
   const navigation = useNavigation<PaymentScreenNavigationProp>();
   const route = useRoute<PaymentScreenRouteProp>();
-  const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const maxWidth = Math.min(width - 40, 430);
-  const spin = useRef(new Animated.Value(0)).current;
   const mountedRef = useRef(true);
   const navigationLockRef = useRef(false);
   const launchAttemptedRef = useRef(false);
@@ -458,20 +430,6 @@ function PaymentScreen(): React.ReactElement {
     [verifyPayment],
   );
 
-  const spinStyle = useMemo(
-    () => ({
-      transform: [
-        {
-          rotate: spin.interpolate({
-            inputRange: [0, 1],
-            outputRange: ['0deg', '360deg'],
-          }),
-        },
-      ],
-    }),
-    [spin],
-  );
-
   useEffect(() => {
     mountedRef.current = true;
     hydrateSession(
@@ -537,21 +495,6 @@ function PaymentScreen(): React.ReactElement {
       subscription.remove();
     };
   }, [clearPollTimer, verifyPayment]);
-
-  useEffect(() => {
-    const animation = Animated.loop(
-      Animated.timing(spin, {
-        toValue: 1,
-        duration: 900,
-        useNativeDriver: true,
-      }),
-    );
-    animation.start();
-
-    return () => {
-      animation.stop();
-    };
-  }, [spin]);
 
   // Wait for this screen's open transition to finish before launching Cashfree.
   //
@@ -688,169 +631,27 @@ function PaymentScreen(): React.ReactElement {
     );
   }, [navigation, resetPaymentFlow, stopVerification]);
 
-  if (isV4('payment')) {
-    return (
-      <PaymentV4
-        flowState={context.flowState}
-        message={message}
-        userMessage={context.userMessage}
-        isBusy={isBusy}
-        gatewayHelp={gatewayHelp}
-        amount={route.params.amount}
-        currency={route.params.currency}
-        bookingRef={route.params.bookingRef}
-        spaName={route.params.spaName}
-        spaImage={route.params.spaImage}
-        location={route.params.location}
-        serviceName={route.params.serviceName}
-        serviceDurationMinutes={route.params.serviceDurationMinutes}
-        dateTime={bookingDateAndTime}
-        onReopenGateway={handleReopenGateway}
-        onCancelGateway={handleCancelGateway}
-        onBackToHome={handleBackToHome}
-      />
-    );
-  }
-
   return (
-    <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
-      <ScrollView
-        bounces={false}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.content,
-          {
-            paddingTop: Math.max(insets.top + 16, 24),
-            paddingBottom: Math.max(insets.bottom + 24, 32),
-          },
-        ]}
-      >
-        <View style={[styles.inner, { maxWidth }]}>
-          <Text style={styles.heading} accessibilityRole="header">
-            Complete Payment
-          </Text>
-          <Text style={styles.subheading}>
-            Secure payment powered by Cashfree
-          </Text>
-
-          <View style={styles.badgeRow}>
-            <PaymentStatusBadge flowState={context.flowState} />
-          </View>
-
-          <PaymentSummary
-            amount={route.params.amount}
-            currency={route.params.currency}
-            bookingRef={route.params.bookingRef}
-            spaName={route.params.spaName}
-            spaImage={route.params.spaImage}
-            location={route.params.location}
-            serviceName={route.params.serviceName}
-            serviceDurationMinutes={route.params.serviceDurationMinutes}
-            appointmentDate={route.params.appointmentDate}
-            appointmentTime={route.params.appointmentTime}
-            bookingDateAndTime={bookingDateAndTime}
-          />
-
-          <PaymentProcessingScreen spinStyle={spinStyle} message={message} />
-
-          {context.userMessage ? (
-            <Text style={styles.errorText} accessibilityRole="alert">
-              {context.userMessage}
-            </Text>
-          ) : null}
-
-          {gatewayHelp ? (
-            <View style={styles.helpBox} accessibilityLiveRegion="polite">
-              <Text style={styles.helpTitle}>Payment window closed?</Text>
-              <Text style={styles.helpText}>
-                If the Cashfree window closed before you finished, open it again or
-                cancel this payment. Your slot is held while you decide.
-              </Text>
-              <View style={styles.helpActions}>
-                <RetryPaymentButton label="Open payment again" onPress={handleReopenGateway} />
-                <RetryPaymentButton label="Cancel payment" onPress={handleCancelGateway} />
-              </View>
-            </View>
-          ) : null}
-
-          <View style={styles.actions}>
-            <RetryPaymentButton
-              label="Back To Home"
-              onPress={handleBackToHome}
-              disabled={isBusy}
-            />
-          </View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+    <PaymentV4
+      flowState={context.flowState}
+      message={message}
+      userMessage={context.userMessage}
+      isBusy={isBusy}
+      gatewayHelp={gatewayHelp}
+      amount={route.params.amount}
+      currency={route.params.currency}
+      bookingRef={route.params.bookingRef}
+      spaName={route.params.spaName}
+      spaImage={route.params.spaImage}
+      location={route.params.location}
+      serviceName={route.params.serviceName}
+      serviceDurationMinutes={route.params.serviceDurationMinutes}
+      dateTime={bookingDateAndTime}
+      onReopenGateway={handleReopenGateway}
+      onCancelGateway={handleCancelGateway}
+      onBackToHome={handleBackToHome}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  helpBox: {
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#F0E2CF',
-  },
-  helpTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  helpText: {
-    marginTop: 6,
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#5C5C5C',
-  },
-  helpActions: {
-    marginTop: 12,
-    gap: 10,
-  },
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  content: {
-    flexGrow: 1,
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  inner: {
-    width: '100%',
-  },
-  heading: {
-    fontFamily: 'Sora-SemiBold',
-    fontSize: 18,
-    color: COLORS.text,
-    textAlign: 'center',
-  },
-  subheading: {
-    fontFamily: 'WorkSans-Regular',
-    fontSize: 14,
-    color: COLORS.muted,
-    textAlign: 'center',
-    marginBottom: 14,
-  },
-  badgeRow: {
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  errorText: {
-    fontFamily: 'WorkSans-Regular',
-    fontSize: 14,
-    color: COLORS.danger,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  actions: {
-    width: '100%',
-    gap: 12,
-  },
-});
 
 export default PaymentScreen;
