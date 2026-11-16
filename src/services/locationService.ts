@@ -305,7 +305,26 @@ const getPositionWithOptions = (options: typeof LOCATION_OPTIONS_FAST, label: st
     );
   });
 
+// Android: a network fix comes back in about a second, while GPS indoors can
+// use its whole timeout. A fix up to 5 minutes old is close enough to pick the
+// city and sort spas by distance, so ask for that first and fall back to GPS.
+const ANDROID_LOCATION_OPTIONS_QUICK = {
+  enableHighAccuracy: false,
+  timeout: 4000,
+  maximumAge: 5 * 60 * 1000,
+};
+
 const getPosition = (): Promise<GeolocationResponse> =>
+  Platform.OS === 'android'
+    ? getPositionWithOptions(ANDROID_LOCATION_OPTIONS_QUICK, 'quick').catch((firstErr) => {
+        if (__DEV__) {
+          console.log('[LOCATION] getPosition quick failed, trying highAccuracy...', firstErr?.message);
+        }
+        return getPositionWithOptions(LOCATION_OPTIONS_FAST, 'highAccuracy');
+      })
+    : getPositionIos();
+
+const getPositionIos = (): Promise<GeolocationResponse> =>
   getPositionWithOptions(LOCATION_OPTIONS_FAST, 'highAccuracy').catch((firstErr) => {
     if (__DEV__) {
       console.log('[LOCATION] getPosition highAccuracy failed, trying balanced fallback...', firstErr?.message);

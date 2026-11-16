@@ -71,6 +71,20 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({
           return;
         }
 
+        // Last launch's place shows at once, so Home can load spas without
+        // waiting for GPS (up to ~20s on Android) and the address lookup. The
+        // fresh fix below replaces it; spas reload only if the city changed.
+        if (
+          saved?.permission === 'granted' &&
+          saved.city &&
+          saved.latitude !== null &&
+          saved.longitude !== null &&
+          isMounted
+        ) {
+          setLocation(saved);
+          setLoading(false);
+        }
+
         const nextLocation = await refreshDeviceLocation(false);
         if (
           __DEV__ &&
