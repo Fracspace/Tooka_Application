@@ -10,6 +10,7 @@
 
 import { Alert, Linking, PermissionsAndroid, Platform } from 'react-native';
 import { callConsole } from '../services/call/callLogger';
+import { requestAndroidPermission } from './permissionQueue';
 
 export type MicPermissionResult = 'granted' | 'denied' | 'blocked';
 
@@ -35,7 +36,7 @@ export const ensureMicrophonePermission = async (): Promise<MicPermissionResult>
       return 'granted';
     }
 
-    const result = await PermissionsAndroid.request(
+    const result = await requestAndroidPermission(
       PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
       {
         title: 'Microphone Permission',

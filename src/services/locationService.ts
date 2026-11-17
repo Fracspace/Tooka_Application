@@ -4,6 +4,7 @@ import Geolocation, {
   type GeolocationResponse,
 } from '@react-native-community/geolocation';
 import { PermissionsAndroid, Platform } from 'react-native';
+import { requestAndroidPermission as requestQueuedPermission } from '../utils/permissionQueue';
 import type {
   LocationPermissionStatus,
   StoredLocation,
@@ -174,7 +175,7 @@ const requestAndroidPermission = async (): Promise<LocationPermissionStatus> => 
       return 'granted';
     }
 
-    const result = await PermissionsAndroid.request(
+    const result = await requestQueuedPermission(
       PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
     );
 
