@@ -8,6 +8,8 @@ import react_native_stallion
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate, PKPushRegistryDelegate {
+  // Set by SceneDelegate. Libraries still read the app delegate's window
+  // (Firebase Messaging crashes at launch without this property).
   var window: UIWindow?
 
   var reactNativeDelegate: ReactNativeDelegate?
@@ -36,15 +38,19 @@ class AppDelegate: UIResponder, UIApplicationDelegate, PKPushRegistryDelegate {
     reactNativeDelegate = delegate
     reactNativeFactory = factory
 
-    window = UIWindow(frame: UIScreen.main.bounds)
-
-    factory.startReactNative(
-      withModuleName: "Tooka",
-      in: window,
-      launchOptions: launchOptions
-    )
-
+    // The window and React Native start in SceneDelegate: apps built with the
+    // iOS 27 SDK must use the scene lifecycle or UIKit stops them at launch.
     return true
+  }
+
+  func application(
+    _ application: UIApplication,
+    configurationForConnecting connectingSceneSession: UISceneSession,
+    options: UIScene.ConnectionOptions
+  ) -> UISceneConfiguration {
+    let configuration = UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+    configuration.delegateClass = SceneDelegate.self
+    return configuration
   }
 
   // MARK: - PushKit (VoIP pushes for incoming calls)
@@ -89,6 +95,28 @@ class AppDelegate: UIResponder, UIApplicationDelegate, PKPushRegistryDelegate {
       withCompletionHandler: nil
     )
     completion()
+  }
+}
+
+/// Creates Tooka's one window and starts React Native in it.
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+  var window: UIWindow?
+
+  func scene(
+    _ scene: UIScene,
+    willConnectTo session: UISceneSession,
+    options connectionOptions: UIScene.ConnectionOptions
+  ) {
+    guard
+      let windowScene = scene as? UIWindowScene,
+      let appDelegate = UIApplication.shared.delegate as? AppDelegate,
+      let factory = appDelegate.reactNativeFactory
+    else { return }
+
+    let window = UIWindow(windowScene: windowScene)
+    self.window = window
+    appDelegate.window = window
+    factory.startReactNative(withModuleName: "Tooka", in: window, launchOptions: nil)
   }
 }
 
