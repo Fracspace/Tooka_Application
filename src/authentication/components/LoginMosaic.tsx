@@ -12,7 +12,7 @@ import Animated, {
 import { colors, useReduceMotion } from '../../theme';
 
 const IMAGE_BASE = 'https://d2f15ematxpwp4.cloudfront.net/appImages/';
-const lm = (n: number) => ({ uri: `${IMAGE_BASE}LM${n}.png` });
+const lm = (n: number) => ({ uri: `${IMAGE_BASE}LM${n}.webp` });
 
 type Column = { duration: number; reverse: boolean; tiles: Array<[number, number]> };
 
